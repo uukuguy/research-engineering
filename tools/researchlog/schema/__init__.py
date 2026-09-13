@@ -20,6 +20,7 @@ from researchlog.schema.registry import (
     require_writable,
     schema_dir,
     schema_versions_in_use,
+    version_findings,
 )
 from researchlog.schema.validator import SUPPORTED_KEYWORDS, SchemaValidator, load_schema
 
@@ -42,4 +43,5 @@ __all__ = [
     "require_writable",
     "schema_dir",
     "schema_versions_in_use",
+    "version_findings",
 ]

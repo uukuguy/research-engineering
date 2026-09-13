@@ -17,7 +17,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from researchlog.errors import SEVERITY_ERROR, Finding, RefusedByPolicy, StateInvalid
+from researchlog.errors import (
+    SEVERITY_ERROR,
+    SEVERITY_WARNING,
+    Finding,
+    RefusedByPolicy,
+    StateInvalid,
+)
 from researchlog.schema.validator import SchemaValidator, load_schema
 
 CLASS_CURRENT = "CURRENT"
@@ -92,6 +98,47 @@ def require_writable(kind: str, path: Path, raw: Mapping[str, Any]) -> None:
                 f"{major_now[0]} is registered",
                 "register a migration that only adds or renames keys, preserving everything else",
             )
+
+
+def version_findings(kind: str, document: Mapping[str, Any], *, where: str) -> list[Finding]:
+    """Report a canonical document written by a different version of this tool.
+
+    Reading a newer document is allowed and writing it is refused — but neither of those is
+    a *report*. `validate` used to exit 0 on a document it could not fully interpret, which
+    is the same silence the rest of this tool exists to remove: the refusal only arrives
+    when someone tries to write, by which point a session has already acted on its reading.
+    """
+    klass, detail = classify(kind, document)
+    if klass == CLASS_CURRENT:
+        return []
+    if klass == CLASS_INVALID:
+        return [
+            Finding(
+                "SCHEMA_VERSION_INVALID",
+                SEVERITY_ERROR,
+                where,
+                detail,
+                "a canonical document must declare a major.minor schema_version",
+            )
+        ]
+    if klass == CLASS_NEWER:
+        return [
+            Finding(
+                "SCHEMA_NEWER",
+                SEVERITY_WARNING,
+                where,
+                f"{detail}; this tool may not understand all of it",
+                "writes to it are refused; upgrade the tool, or move the file aside deliberately",
+            )
+        ]
+    return [
+        Finding(
+            "SCHEMA_OLDER",
+            SEVERITY_WARNING,
+            where,
+            f"{detail}; read and written conservatively, unknown fields preserved",
+        )
+    ]
 
 
 def schema_versions_in_use() -> dict[str, str]:

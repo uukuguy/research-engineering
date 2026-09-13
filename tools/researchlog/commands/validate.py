@@ -46,6 +46,8 @@ def run(args: argparse.Namespace) -> Result:
         result.add(finding)
     for finding in schema.load_validator("active").check(active.raw):
         result.add(finding)
+    for finding in schema.version_findings("active", active.raw, where="ACTIVE.json"):
+        result.add(finding)
 
     ledger = state.load_ledger(paths)
     for finding in ledger.unreadable:
@@ -59,6 +61,7 @@ def run(args: argparse.Namespace) -> Result:
 
     _check_evidence(paths, ledger, result)
     _check_findings(ledger, result)
+    _check_manifests(ledger, result)
     _check_block(active, ledger, result)
     _check_signals(paths, result)
 
@@ -84,6 +87,8 @@ def _check_evidence(paths: repo.ResearchPaths, ledger: state.Ledger, result: Res
             allowed_hypotheses=allowed or None,
         ):
             result.add(finding)
+        for finding in schema.version_findings("evidence", record, where=evidence_id):
+            result.add(finding)
         evidence_path = paths.evidence(evidence_id)
         if not evidence_path.is_file():
             result.add(
@@ -103,6 +108,24 @@ def _check_findings(ledger: state.Ledger, result: Result) -> None:
         for finding in validator.check(entry):
             result.add(finding)
         for finding in constraints.check_finding(entry, evidence_levels=levels):
+            result.add(finding)
+        for finding in schema.version_findings("findings-entry", entry, where=str(entry.get("id") or "?")):
+            result.add(finding)
+
+
+def _check_manifests(ledger: state.Ledger, result: Result) -> None:
+    """The fourth kind.
+
+    `validate` offers `--print-schema manifest` and never checked a manifest against it:
+    `_load_manifests` catches a parse error and says nothing about a document that parses
+    while violating its own schema. A manifest is the run's identity, so an unvalidated one
+    is exactly the kind of thing that quietly misleads every detector downstream.
+    """
+    validator = schema.load_validator("manifest")
+    for experiment_id, manifest in sorted(ledger.manifests.items()):
+        for finding in validator.check(manifest):
+            result.add(finding)
+        for finding in schema.version_findings("manifest", manifest, where=experiment_id):
             result.add(finding)
 
 

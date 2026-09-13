@@ -87,10 +87,12 @@ def _active_load_findings(paths: repo.ResearchPaths) -> list[Finding]:
     too, so a state that had to be recovered is never mistaken for an untouched one.
     """
     try:
-        _active, findings = state.load_active_with_findings(paths)
+        active, findings = state.load_active_with_findings(paths)
     except StateInvalid as exc:
         return list(exc.findings)
-    return list(findings)
+    # A pointer written by a newer tool is readable and cannot be written, so a resume has
+    # to hear about it now rather than on its first attempt to update something.
+    return [*findings, *schema.version_findings("active", active.raw, where="ACTIVE.json")]
 
 
 def _orphan_runs(paths: repo.ResearchPaths, ledger: state.Ledger, _args: argparse.Namespace) -> list[Finding]:

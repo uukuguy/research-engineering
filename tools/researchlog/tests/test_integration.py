@@ -244,6 +244,60 @@ class BlockCountTests(GitRepoCase):
         )
 
 
+class SchemaVersionVisibilityTests(GitRepoCase):
+    """A document from another tool version must be reported when it is read.
+
+    Reading a newer document is allowed and writing it is refused, but neither of those is a
+    *report*: `validate` used to exit 0 on a document it could not fully interpret, and the
+    refusal only arrived when someone tried to write — by which point a session had already
+    acted on its reading of the file.
+    """
+
+    def bump_active_version(self, version: str) -> None:
+        path = self.root / "research" / "ACTIVE.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["schema_version"] = version
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+    def test_a_newer_pointer_is_reported_on_read(self) -> None:
+        self.init_state()
+        self.bump_active_version("9.0")
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn("SCHEMA_NEWER", [f["code"] for f in envelope["findings"]])
+
+    def test_the_resume_path_reports_a_newer_pointer_too(self) -> None:
+        self.init_state()
+        self.bump_active_version("9.0")
+
+        _, envelope = self.run_cli("reconcile", "--json")
+        self.assertFalse(envelope["payload"]["clean"])
+        self.assertIn("SCHEMA_NEWER", [f["code"] for f in envelope["findings"]])
+
+    def test_a_newer_pointer_is_still_never_written(self) -> None:
+        self.init_state()
+        self.bump_active_version("9.0")
+        target = self.root / "research" / "ACTIVE.json"
+        before = target.read_bytes()
+
+        code, envelope = self.run_cli("active", "--set-status", "idle", "--json")
+        self.assertEqual(code, 4, envelope)
+        self.assertEqual(target.read_bytes(), before)
+
+    def test_a_manifest_that_violates_its_schema_is_reported(self) -> None:
+        """`validate` offers `--print-schema manifest` and never checked a manifest."""
+        self.init_state()
+        run = self.root / "research" / "runs" / "EXP-9999"
+        run.mkdir(parents=True)
+        (run / "manifest.json").write_text(
+            json.dumps({"schema_version": "1.0", "experiment_id": "EXP-9999", "status": "running"}),
+            encoding="utf-8",
+        )
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
+
+
 class ResumePathVisibilityTests(GitRepoCase):
     """The resume entry point must not call a file it could not read `clean`.
 
