@@ -69,15 +69,19 @@ def run(args: argparse.Namespace) -> Result:
 
 def _check_evidence(paths: repo.ResearchPaths, ledger: state.Ledger, result: Result) -> None:
     validator = schema.load_validator("evidence")
-    known = sorted(ledger.records)
-    allowed = set(active_hypotheses(paths))
+    # The declared hypotheses are the only registry V0 has, and they are the same set the
+    # block covers. This used to pass `sorted(ledger.records)` — the evidence IDs — as
+    # `known_hypotheses`, which made UNKNOWN_HYPOTHESIS fire on every record that named a
+    # hypothesis at all, since an H-* is never an EV-*. A check whose registry is the wrong
+    # ID space does not report a fact about the record; it reports that it was wired wrong.
+    allowed = sorted(active_hypotheses(paths))
     for evidence_id, record in sorted(ledger.records.items()):
         for finding in validator.check(record):
             result.add(finding)
         for finding in constraints.check_evidence(
             record,
-            known_hypotheses=known if known else None,
-            allowed_hypotheses=sorted(allowed) if allowed else None,
+            known_hypotheses=allowed or None,
+            allowed_hypotheses=allowed or None,
         ):
             result.add(finding)
         evidence_path = paths.evidence(evidence_id)

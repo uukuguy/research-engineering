@@ -117,6 +117,58 @@ class InitReconciliationTests(GitRepoCase):
         self.assertIn("ACTIVE_GIT_MISMATCH", [f["code"] for f in envelope["findings"]])
 
 
+class HypothesisRegistryTests(GitRepoCase):
+    """`known_hypotheses` is the declared hypotheses, not the evidence IDs.
+
+    `validate` passed `sorted(ledger.records)` — an evidence-ID space — as the hypothesis
+    registry, so `UNKNOWN_HYPOTHESIS` fired on every record that named a hypothesis, since
+    an H-* is never an EV-*. It reported a fact about the wiring rather than about the
+    record, and it fired on the ordinary path of recording evidence about a hypothesis.
+    """
+
+    def record_naming(self, hypothesis: str) -> None:
+        """An inconclusive record, so the block contract is not what is under test."""
+        code, envelope = self.record(
+            "--question",
+            "Does the residual separate release timing from measurement noise?",
+            "--subject-type",
+            "harness",
+            "--subject-id",
+            "HRN-001",
+            "--level",
+            "E2",
+            "--execution-status",
+            "completed",
+            "--research-outcome",
+            "inconclusive",
+            "--confidence",
+            "low",
+            "--hypothesis",
+            hypothesis,
+            "--belief-delta",
+            "none",
+            "--observation",
+            "obs",
+        )
+        self.assertEqual(code, 0, envelope)
+
+    def test_a_declared_hypothesis_is_known(self) -> None:
+        self.init_state()
+        self.run_cli("active", "--set", 'hypothesis_ids=["H-037"]')
+        self.record_naming("H-037")
+
+        _, envelope = self.run_cli("validate")
+        self.assertNotIn("UNKNOWN_HYPOTHESIS", [f["code"] for f in envelope["findings"]])
+
+    def test_an_undeclared_hypothesis_is_reported(self) -> None:
+        self.init_state()
+        self.run_cli("active", "--set", 'hypothesis_ids=["H-037"]')
+        self.record_naming("H-999")
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn("UNKNOWN_HYPOTHESIS", [f["code"] for f in envelope["findings"]])
+
+
 class ArchitectSignalTests(GitRepoCase):
     """A boundary signal must not lose the wording it was given.
 
