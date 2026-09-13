@@ -61,6 +61,10 @@ into "do not modify the navigation planner" quietly changes the scope, and the
 translation is exactly what a later dispute would turn on. `final: true` on a `DECISION`
 marks it as not open to challenge.
 
+If the decision arrived as a selection from a question you wrote, the option's text is your
+wording, not the architect's: ask for a sentence and record that. An option you authored has
+already been through the normalisation `source_text` exists to preserve.
+
 `validate` and `reconcile` check this contract on every run.
 
 ## After a correction

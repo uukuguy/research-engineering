@@ -62,7 +62,13 @@ reviewing / blocked / interrupted`. `execution.status` is the separate, finer ax
 the non-scientific outcomes — see `evidence-model.md § The two axes`. A disagreement like
 `execution.status: env_unsupported` with `ACTIVE.status: reviewing` is worth reconciling.
 The block fields are documented in the main `SKILL.md § Block contract`, including why
-`max_tokens` is telemetry and why `completed_evidence_iterations` is derived.
+`max_tokens` is telemetry, why `completed_evidence_iterations` is derived, and why setting
+`block.id` to a new value resets the summary rather than inheriting the last block's.
+
+Evidence records carry a `block_id` stamped by `record` from the `block.id` open at the
+time. That is what makes a block's iteration budget its own: membership is the records
+stamped with its id, not the records that happen to name the same hypotheses. A record made
+with no block open has `block_id: null` and is charged to no block.
 
 ## Write-ahead ordering
 

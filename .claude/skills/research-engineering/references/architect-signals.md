@@ -112,6 +112,22 @@ is worth asking, because the two differ in whether you may ever ask to amend: gu
 changes the answer. Echoing is for the four boundary types only — the challengeable
 signals have the protocol below, and routine research decisions stay autonomous.
 
+### When the architect answered a question you wrote
+
+Asking is often right — a `DECISION` that changes direction or commits resource is the
+architect's to make, and a multiple-choice question is a cheap way to put it to them. But
+the **wording** of a chosen option is yours, not theirs. Recording it as `source_text`
+satisfies the letter of the requirement and defeats the point: the field exists to preserve
+*the architect's* phrasing against your normalisation, and an option you authored has
+already been through it.
+
+So after a selection, `source_text` holds the architect's own words — ask for them in a
+sentence if the selection did not include any ("say it in your own words and I will record
+that verbatim"), and if there really are none, leave `source_text` out and let
+`SIGNAL_SOURCE_TEXT_REQUIRED` report it rather than filling the field with your own text.
+The `statement` can still be your rendering; the difference between the two fields is the
+whole reason both exist.
+
 ## Challenge protocol
 
 `OBSERVE`, `SUSPECT`, `DIRECTION`, and `IMPLEMENT` allow exactly one technical push-back,

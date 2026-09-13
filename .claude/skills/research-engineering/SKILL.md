@@ -130,11 +130,20 @@ Long autonomous batches are bounded in `ACTIVE.json`:
 }
 ```
 
+- **A block owns the evidence recorded while it was open.** `record` stamps each evidence
+  record with the `block.id` that was current, so the budget counts this block's work and
+  not the work of the block before it. A record made with no block open carries
+  `block_id: null` and belongs to no block. Setting `block.id` to a new value **resets the
+  block summary** — the previous `belief_delta` and count describe the block that just
+  ended, and carrying them forward would hold the new block to a budget for work it did not
+  do. Opening a block is what resets the bound; nothing else does.
 - `max_evidence_iterations` counts belief-changing valid evidence. `INFRA_FAILED` and
   friends are not progress. The count is derived from the ledger on every check, so
   exceeding the limit is reported **while the block is still running** —
   `BLOCK_ITERATION_BUDGET_EXCEEDED`. That is the point of the bound: grinding happens
-  during the block, not at its close.
+  during the block, not at its close. Recording more evidence after the block is closed
+  still charges it to that block and is reported as drift; the evidence belongs to a new
+  block, so open one.
 - `completed_evidence_iterations` and `belief_delta` are **derived**. `belief_delta` stays
   `null` for the whole life of an open block and is written once, at close, as `none`,
   `refined`, or `overturned`; `completed_evidence_iterations` is written at the same
