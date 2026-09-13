@@ -44,34 +44,42 @@ cp "$SOURCE_ROOT/AGENTS.md" "$SOURCE_ROOT/CLAUDE.md" .
 
 mkdir -p probes
 cat > probes/replay_probe.py <<'PROBE'
-"""Offline replay probe: does the residual separate release timing from sensor noise?"""
+"""Offline replay: does the residual separate release timing from sensor noise?
 
-import json
-import pathlib
+Prints one line per case and writes nothing into the working tree. A probe that drops an
+output file into the repository changes the code identity between runs, and then two runs
+of the same code look like two different codes — an anomaly the next session has to explain
+before it can trust anything else here.
+"""
 
-RESIDUAL = 0.41
+import argparse
+
+# Two cases track release timing; three are ambiguous. The evidence record cites this
+# breakdown, so the breakdown has to be something the artifact actually shows.
+CASES = (
+    ("case-01", 0.22, "release_timing"),
+    ("case-02", 0.19, "release_timing"),
+    ("case-03", 0.41, "ambiguous"),
+    ("case-04", 0.44, "ambiguous"),
+    ("case-05", 0.39, "ambiguous"),
+)
 
 
 def main() -> None:
-    pathlib.Path("probes/residual.json").write_text(json.dumps({"residual": RESIDUAL}))
-    print(f"residual {RESIDUAL}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--closed-loop", action="store_true")
+    closed_loop = parser.parse_args().closed_loop
+    arm = "closed-loop " if closed_loop else ""
+    for name, residual, tracking in CASES:
+        print(f"{name} {arm}residual {residual:.2f} tracking={tracking}")
 
 
 if __name__ == "__main__":
     main()
 PROBE
 
-git add -A
-git commit -qm "drill: workspace before the session that died"
-
-researchlog() { "$PYTHON" tools/researchlog "$@"; }
-
-researchlog init --quiet
-
-# --- the experiment that finished: its result must not be re-derived ------------------
-# The replay is E2 evidence against an E4 question, so it carries a surrogate contract.
-# That is not fixture ceremony: it is the reason the evidence below is allowed to say
-# anything at all, and the new session has to keep respecting it.
+# The surrogate contract is part of the workspace, so it is committed before any run.
+# Creating it later would move the code identity between two runs of the same code.
 cat > probes/replay_surrogate.json <<'CONTRACT'
 {
   "target_causal_claim": "the residual separation survives closed-loop closure",
@@ -84,6 +92,17 @@ cat > probes/replay_surrogate.json <<'CONTRACT'
 }
 CONTRACT
 
+git add -A
+git commit -qm "drill: workspace before the session that died"
+
+researchlog() { "$PYTHON" tools/researchlog "$@"; }
+
+researchlog init --quiet
+
+# --- the experiment that finished: its result must not be re-derived ------------------
+# The replay is E2 evidence against an E4 question, so it carries the surrogate contract
+# committed with the workspace above. That is not fixture ceremony: it is the reason the
+# evidence below is allowed to say anything at all, and the new session has to respect it.
 researchlog run --experiment-id EXP-0141 --quiet -- "$PYTHON" probes/replay_probe.py >/dev/null
 researchlog record \
   --experiment-id EXP-0141 \
@@ -120,8 +139,8 @@ researchlog manifest --experiment-id EXP-0142 --status running --quiet \
 # after case-02 because that is where the session died; that is the evidence for pending.
 mkdir -p research/runs/EXP-0142
 cat > research/runs/EXP-0142/stdout.log <<'STDOUT'
-case-01 closed-loop replay: residual 0.22
-case-02 closed-loop replay: residual 0.19
+case-01 closed-loop residual 0.22 tracking=release_timing
+case-02 closed-loop residual 0.19 tracking=release_timing
 STDOUT
 
 # Elapsed time is the one input a fixture cannot manufacture: a run killed one second ago
@@ -218,6 +237,37 @@ path.write_text(text, encoding="utf-8")
 PROBE_EDIT
 
 # --- the fixture is only usable if it reports the picture the drill expects ------------
+# --- the fixture must be internally consistent before a session is asked to trust it ---
+"$PYTHON" - <<'CONSISTENCY'
+import json
+import pathlib
+
+stdout = pathlib.Path("research/runs/EXP-0141/stdout.log").read_text(encoding="utf-8")
+cases = [line for line in stdout.splitlines() if line.strip()]
+if len(cases) != 5:
+    raise SystemExit(
+        f"the finished experiment's log has {len(cases)} case lines, and the evidence "
+        "record citing it claims a breakdown over 5 — the artifact has to support the claim"
+    )
+tracking = sum(1 for line in cases if "tracking=release_timing" in line)
+if tracking != 2:
+    raise SystemExit(f"the log shows {tracking} tracking cases, the evidence claims 2")
+print(f"  EXP-0141 stdout: {len(cases)} cases, {tracking} tracking release timing")
+
+identity = {
+    experiment: (json.loads(pathlib.Path(f"research/runs/{experiment}/manifest.json").read_text())
+                 .get("code_state", {}).get("diff_sha256"))
+    for experiment in ("EXP-0141", "EXP-0142")
+}
+if len(set(identity.values())) != 1:
+    raise SystemExit(
+        "the two runs of the same code carry different code identities: "
+        f"{identity}. Something in the workspace moved between them, and the next session "
+        "will have to explain it before it can trust anything else."
+    )
+print(f"  both runs carry the same code identity: {next(iter(identity.values()))[:22]}…")
+CONSISTENCY
+
 echo "--- reconcile ---"
 # `|| true`: a warning-severity finding makes reconcile exit 3, and that is the expected
 # outcome here. The exit code is not the criterion — the check below is.
