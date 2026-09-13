@@ -299,6 +299,39 @@ class SignalTests(unittest.TestCase):
                     constraints.check_signal(self.signal(type=signal_type, source_text=None)), []
                 )
 
+    def test_every_known_type_is_recognised(self) -> None:
+        for signal_type in constraints.SIGNAL_TYPES:
+            with self.subTest(type=signal_type):
+                codes_ = codes(constraints.check_signal(self.signal(type=signal_type)))
+                self.assertNotIn("SIGNAL_TYPE_UNKNOWN", codes_)
+
+    def test_an_unknown_type_is_rejected_rather_than_skipped(self) -> None:
+        """A mistyped type would otherwise skip every requirement below it."""
+        findings = constraints.check_signal(self.signal(type="CONSTRAINTS"))
+        self.assertIn("SIGNAL_TYPE_UNKNOWN", codes(findings))
+
+    def test_decision_final_is_a_modifier_not_a_type(self) -> None:
+        findings = constraints.check_signal(self.signal(type="DECISION FINAL", source_text=None))
+        self.assertIn("SIGNAL_TYPE_UNKNOWN", codes(findings))
+
+    def test_a_constraint_must_say_what_it_bounds_and_until_when(self) -> None:
+        findings = codes(constraints.check_signal(self.signal(scope=None, expiry=None)))
+        self.assertIn("SIGNAL_SCOPE_REQUIRED", findings)
+        self.assertIn("SIGNAL_EXPIRY_REQUIRED", findings)
+
+    def test_only_a_constraint_needs_scope_and_expiry(self) -> None:
+        """A VETO is permanent until repealed; it has no window to declare."""
+        findings = constraints.check_signal(self.signal(type="VETO", scope=None, expiry=None))
+        self.assertEqual(findings, [])
+
+    def test_a_decision_is_covered_whether_or_not_it_is_final(self) -> None:
+        for extra in ({}, {"final": True}):
+            with self.subTest(final=extra.get("final")):
+                findings = constraints.check_signal(
+                    self.signal(type="DECISION", source_text=None, **extra)
+                )
+                self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()

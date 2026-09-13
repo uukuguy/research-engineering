@@ -287,21 +287,23 @@ def _expired_signals(
 ) -> list[Finding]:
     """Only mechanically checkable expiries are enforced.
 
-    A free-text expiry such as "recovery checkpoint" is a promise a human keeps, and the
-    tool says so by ignoring it rather than pretending to evaluate it.
+    `expiry` carries one of two things. An ISO 8601 timestamp is a date, and a date is
+    exactly what a machine is for. A free-text promise such as "recovery checkpoint" is
+    kept by a human, and the tool says so by ignoring it rather than pretending to
+    evaluate it.
     """
     now = datetime.now(timezone.utc)
     findings: list[Finding] = []
     for signal in _signal_blocks(paths):
         if signal.get("active") is False:
             continue
-        expires_at = signal.get("expires_at")
-        if not isinstance(expires_at, str):
+        expiry = signal.get("expiry")
+        if not isinstance(expiry, str):
             continue
         try:
-            deadline = datetime.fromisoformat(expires_at)
+            deadline = datetime.fromisoformat(expiry)
         except ValueError:
-            continue
+            continue  # a free-text expiry; a promise, deliberately not evaluated
         if deadline.tzinfo is None:
             deadline = deadline.replace(tzinfo=timezone.utc)
         if deadline < now:
@@ -310,7 +312,7 @@ def _expired_signals(
                     "EXPIRED_ARCHITECT_SIGNAL",
                     SEVERITY_WARNING,
                     str(signal.get("id", "?")),
-                    f"{signal.get('type')} signal expired at {expires_at} but is still active",
+                    f"{signal.get('type')} signal expired at {expiry} but is still active",
                     "re-confirm it or let it lapse; a temporary constraint must not become doctrine",
                 )
             )

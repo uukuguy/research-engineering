@@ -24,7 +24,7 @@ Normal research should stay in the top half of that table. Architect experience 
 abnormal-situation awareness, search-space pruning, and architectural invariants;
 algorithm internals should stay with you.
 
-## Every signal carries scope and expiry
+## The signal contract
 
 ```
 type: CONSTRAINT
@@ -34,36 +34,52 @@ statement: Do not modify navigation planner.
 source_text: 导航 planner 先别改，等复盘完再评估。
 ```
 
-Without `scope` and `expiry`, a temporary remark hardens into unchallengeable dogma. The
-constraint above is legitimate. `NEVER MODIFY NAVIGATION` is not the same statement, and
-writing it that way is a defect.
-
 ```json
 {
-  "type": "CONSTRAINT",
   "id": "C-009",
+  "type": "CONSTRAINT",
   "statement": "Do not modify navigation planner.",
   "scope": "recovery research",
   "expiry": "recovery checkpoint",
   "source_text": "导航 planner 先别改，等复盘完再评估。",
-  "recorded_at": "2026-09-10T19:28:41+08:00",
-  "final": false
+  "created_at": "2026-09-10T19:28:41+08:00",
+  "active": true
 }
 ```
 
+- **`type`** — required, one of the eight above. `DECISION FINAL:` is how the architect
+  writes a non-challengeable decision in chat; what you record is `DECISION` with
+  `final: true`. It is not a ninth type, and writing it as one is reported as
+  `SIGNAL_TYPE_UNKNOWN`.
+- **`scope` and `expiry`** — required on a `CONSTRAINT`. Without them a temporary remark
+  hardens into unchallengeable dogma: the constraint above is legitimate, and
+  `NEVER MODIFY NAVIGATION` is not the same statement. `expiry` takes either an ISO 8601
+  timestamp, which `reconcile` enforces at resume, or free text such as
+  `recovery checkpoint`, which is a promise you keep and the tool deliberately does not
+  evaluate.
+- **`source_text`** — required for `CONSTRAINT`, `DECISION`, and `VETO`; see below.
+- **`active`** — set `false` when the signal lapses or is superseded. An expired signal is
+  no longer steering and does not belong in `ARCHITECT.md` as live state.
+
 Each signal is its own `research:signal` fenced block in `research/ARCHITECT.md` — signals
-append and expire independently, so the file has many blocks rather than one. Like every
-other canonical block, it is written through `researchlog`, never by hand.
+append and expire independently, so the file has many blocks rather than one. There is **no
+`researchlog` command for signals**: append the block by hand, and let `validate` and
+`reconcile` check it. Both report a malformed block rather than skipping it, so the
+hand-edit is audited rather than merely trusted.
+
+The design document's §5.2 sketches the type field as `strength`. The field is `type`
+everywhere in the tool and in the templates; `strength` was an earlier name for it.
 
 Two rules the tool enforces or reports:
 
 - **Expiry is recomputed at resume.** A constraint whose expiry has passed is no longer
   binding, and leaving it in force is as wrong as forgetting it. `reconcile` reports
   `EXPIRED_ARCHITECT_SIGNAL`; the resume protocol is where that report gets acted on.
-- **`source_text` is mandatory for `CONSTRAINT`, `DECISION`, `DECISION FINAL`, and
-  `VETO`.** The wording of a boundary *is* its scope. Architect input may be Chinese, so
+- **`source_text` is mandatory for `CONSTRAINT`, `DECISION`, and `VETO`** — a `DECISION`
+  with `final: true` included, since finality is a reason to keep the wording, not a reason
+  to drop it. The wording of a boundary *is* its scope. Architect input may be Chinese, so
   the English rendering goes in `statement` and the original sentence is kept verbatim in
-  `source_text` — both, always, for these four types. Paraphrasing a boundary into English
+  `source_text` — both, always, for these three types. Paraphrasing a boundary into English
   and discarding the original is not translation: "先别改，等复盘完再评估" recorded as
   "do not modify the navigation planner" has silently lost its time box and become
   permanent doctrine. That is the one dispute a later session cannot reconstruct. If what
@@ -73,11 +89,11 @@ Two rules the tool enforces or reports:
 
 ## Echo back before you record a boundary
 
-`CONSTRAINT`, `DECISION`, `DECISION FINAL`, and `VETO` are recorded and executed, not
-argued. That is exactly what makes the recording itself the risk: you choose the type, the
-scope, the expiry, and the English rendering, and every one of those choices can widen what
-was actually said. A `VETO` softened into a `CONSTRAINT` is a silent change, and so is a
-constraint whose expiry quietly disappears.
+`CONSTRAINT`, `DECISION` (including `final: true`), and `VETO` are recorded and executed,
+not argued. That is exactly what makes the recording itself the risk: you choose the type,
+the scope, the expiry, and the English rendering, and every one of those choices can widen
+what was actually said. A `VETO` softened into a `CONSTRAINT` is a silent change, and so is
+a constraint whose expiry quietly disappears.
 
 So for these four types, state back what you are about to record **before** acting on it:
 

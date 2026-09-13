@@ -164,6 +164,53 @@ class ArchitectSignalTests(GitRepoCase):
         _, envelope = self.run_cli("validate")
         self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", [f["code"] for f in envelope["findings"]])
 
+    def test_an_iso_expiry_is_enforced_at_resume(self) -> None:
+        """`expiry` is the field; an ISO timestamp in it is what makes the check fire."""
+        self.commit_state()
+        self.append_signal(
+            id="C-013",
+            type="CONSTRAINT",
+            statement="Do not modify the navigation planner.",
+            scope="recovery research",
+            expiry="2020-01-01T00:00:00+00:00",
+            source_text="导航 planner 先别改。",
+            active=True,
+        )
+
+        _, envelope = self.run_cli("reconcile")
+        self.assertIn("EXPIRED_ARCHITECT_SIGNAL", [f["code"] for f in envelope["findings"]])
+
+    def test_a_free_text_expiry_is_recorded_but_not_evaluated(self) -> None:
+        """A promise a human keeps; the tool says so by not pretending to evaluate it."""
+        self.commit_state()
+        self.append_signal(
+            id="C-014",
+            type="CONSTRAINT",
+            statement="Do not modify the navigation planner.",
+            scope="recovery research",
+            expiry="recovery checkpoint",
+            source_text="导航 planner 先别改。",
+            active=True,
+        )
+
+        _, envelope = self.run_cli("reconcile")
+        self.assertEqual([f["code"] for f in envelope["findings"]], [])
+
+    def test_a_constraint_without_scope_or_expiry_is_reported(self) -> None:
+        self.commit_state()
+        self.append_signal(
+            id="C-015",
+            type="CONSTRAINT",
+            statement="Do not modify the navigation planner.",
+            source_text="导航 planner 先别改。",
+            active=True,
+        )
+
+        _, envelope = self.run_cli("validate")
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("SIGNAL_SCOPE_REQUIRED", codes)
+        self.assertIn("SIGNAL_EXPIRY_REQUIRED", codes)
+
     def test_a_malformed_signal_block_is_an_error_not_a_silent_pass(self) -> None:
         """The check that reads the signals is the only thing that can notice this."""
         self.commit_state()

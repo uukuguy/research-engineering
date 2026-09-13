@@ -49,15 +49,35 @@ BELIEF_DELTAS: frozenset[str] = frozenset({"none", "refined", "overturned"})
 
 FINDING_STATUSES_REQUIRING_REPLACEMENT: frozenset[str] = frozenset({"Superseded"})
 
+# The eight Architect Signals, in the order ARCHITECT.md's table presents them. This is
+# the whole vocabulary: `DECISION FINAL` is not a ninth type, it is the form the architect
+# types in chat for a DECISION carrying `final: true`.
+SIGNAL_TYPES: tuple[str, ...] = (
+    "OBSERVE",
+    "SUSPECT",
+    "DIRECTION",
+    "CHALLENGE",
+    "CONSTRAINT",
+    "DECISION",
+    "IMPLEMENT",
+    "VETO",
+)
+
 # Signal types whose exact wording carries scope, so the original must survive verbatim.
 # A boundary is a statement about the world as the architect phrased it: normalising
 # "do not touch the planner's recovery branch" into "do not modify the navigation
-# planner" is not a translation, it is a quiet widening of what is forbidden. The
-# English rendering belongs in `statement`; both are kept. `DECISION FINAL` is listed
-# separately because ARCHITECT.md's table names it as its own type.
-SIGNAL_TYPES_REQUIRING_SOURCE_TEXT: frozenset[str] = frozenset(
-    {"CONSTRAINT", "DECISION", "DECISION FINAL", "VETO"}
-)
+# planner" is not a translation, it is a quiet widening of what is forbidden. The English
+# rendering belongs in `statement`; both are kept.
+#
+# This deliberately overrides the older rule in the design's §9.3, which kept the original
+# only "when the wording matters for a diagnosis or a physical observation". That is right
+# for OBSERVE and SUSPECT and wrong for a boundary, where the wording is the scope.
+SIGNAL_TYPES_REQUIRING_SOURCE_TEXT: frozenset[str] = frozenset({"CONSTRAINT", "DECISION", "VETO"})
+
+# A CONSTRAINT is the signal that goes stale — it is a boundary that holds *now*. Without
+# scope and expiry it hardens into unchallengeable doctrine by accident, which is the one
+# failure ARCHITECT.md's own heading warns about.
+SIGNAL_TYPES_REQUIRING_SCOPE_AND_EXPIRY: frozenset[str] = frozenset({"CONSTRAINT"})
 
 
 def evidence_level_rank(level: Any) -> int:
@@ -213,28 +233,84 @@ def check_signal(signal: Mapping[str, Any]) -> list[Finding]:
     """Coherence checks for one `research:signal` block in ARCHITECT.md.
 
     Signals carry no schema — they are independent blocks in a human-readable file, not a
-    versioned document — so the rules they must satisfy live here with the other meanings
-    the schema cannot express.
+    versioned document — so the contract they must satisfy is stated here, in one place,
+    and read by every command that touches them:
+
+        type         required, one of the eight. `DECISION FINAL:` is how the architect
+                     writes it in chat; what is recorded is DECISION with `final: true`
+        id           optional, but this is what EXPIRED_ARCHITECT_SIGNAL names
+        statement    the English rendering of what the architect meant
+        scope        required for CONSTRAINT
+        expiry       required for CONSTRAINT; an ISO 8601 timestamp is enforced at
+                     resume, free text is a human promise the tool does not evaluate
+        source_text  required for CONSTRAINT, DECISION and VETO
+        final        boolean, meaningful only on DECISION
+        created_at   when the agent recorded it
+        active       false once the signal has lapsed or been superseded
+
+    The type check is not decoration. Without it a mistyped type — `CONSTRAINTS`, or
+    `DECISION FINAL` used as a type — would quietly skip every requirement below, which
+    is the same silent widening the boundary rules exist to prevent.
     """
-    signal_type = str(signal.get("type") or "").strip().upper()
-    if signal_type not in SIGNAL_TYPES_REQUIRING_SOURCE_TEXT:
-        return []
+    identifier = str(signal.get("id") or "?")
+    raw_type = signal.get("type")
+    signal_type = str(raw_type or "").strip().upper()
 
-    source_text = signal.get("source_text")
-    if isinstance(source_text, str) and source_text.strip():
-        return []
+    if signal_type not in SIGNAL_TYPES:
+        return [
+            Finding(
+                "SIGNAL_TYPE_UNKNOWN",
+                SEVERITY_ERROR,
+                identifier,
+                f"signal type {raw_type!r} is not one of the eight Architect Signals",
+                f"use one of {', '.join(SIGNAL_TYPES)}. `DECISION FINAL` is not a type: "
+                "record it as DECISION with `final: true`",
+            )
+        ]
 
-    return [
-        Finding(
-            "SIGNAL_SOURCE_TEXT_REQUIRED",
-            SEVERITY_ERROR,
-            str(signal.get("id") or "?"),
-            f"a {signal_type} signal must keep the architect's original wording in source_text",
-            "the wording carries the scope, so normalising it changes what was decided; "
-            "keep the sentence as written in source_text and put the English rendering in "
-            "`statement` — never manufacture a quotation you do not have",
+    findings: list[Finding] = []
+
+    if signal_type in SIGNAL_TYPES_REQUIRING_SOURCE_TEXT and not _has_text(signal.get("source_text")):
+        findings.append(
+            Finding(
+                "SIGNAL_SOURCE_TEXT_REQUIRED",
+                SEVERITY_ERROR,
+                identifier,
+                f"a {signal_type} signal must keep the architect's original wording in source_text",
+                "the wording carries the scope, so normalising it changes what was decided; "
+                "keep the sentence as written in source_text and put the English rendering in "
+                "`statement` — never manufacture a quotation you do not have",
+            )
         )
-    ]
+
+    if signal_type in SIGNAL_TYPES_REQUIRING_SCOPE_AND_EXPIRY:
+        if not _has_text(signal.get("scope")):
+            findings.append(
+                Finding(
+                    "SIGNAL_SCOPE_REQUIRED",
+                    SEVERITY_ERROR,
+                    identifier,
+                    "a CONSTRAINT must say what it is a boundary on",
+                    "scope is what stops a temporary remark becoming permanent architecture",
+                )
+            )
+        if not _has_text(signal.get("expiry")):
+            findings.append(
+                Finding(
+                    "SIGNAL_EXPIRY_REQUIRED",
+                    SEVERITY_ERROR,
+                    identifier,
+                    "a CONSTRAINT must say when it stops holding",
+                    "an ISO 8601 timestamp is enforced at resume; free text is recorded as "
+                    "a promise the tool will not evaluate",
+                )
+            )
+
+    return findings
+
+
+def _has_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _check_execution_vs_outcome(record: Mapping[str, Any], identifier: str) -> list[Finding]:
