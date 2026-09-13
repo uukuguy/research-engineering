@@ -179,6 +179,33 @@ session 的行为是对的；错的是 fixture 自相矛盾。已修：EXP-0142 
 为止的 `stdout.log`，使"已完成两个 case"有 artifact 可依、且 pending 的起点有据可查。
 判据 4 要在**当前** fixture 上重跑才算数。
 
+## §26.4 状态持久性探测结果
+
+这一组不需要 session，直接在 CLI/文件系统层打就够——所以 Claude 能自己跑，也确实跑了。
+每一行都是**实测**，不是读代码得出的。
+
+| 注入 | 设计规定的行为 | 实测 | 状态 |
+|---|---|---|---|
+| canonical 被截断 + 存在合法 `.tmp` | 从 `.tmp` 恢复并报告 | `RECOVERED_FROM_TMP`（warning，exit 3） | 通过 |
+| canonical 被截断、无 `.tmp`、Git HEAD 有合法副本 | 从 Git 恢复（§12.17） | `RECOVERY_REQUIRED`（error）—— Git 回退**从未接线** | 已修 |
+| canonical 被截断、无 Git 历史 | `RECOVERY_REQUIRED`，不静默 | `RECOVERY_REQUIRED`（error，exit 2） | 通过 |
+| **`reconcile`（resume 真正跑的入口）面对不可读的 ACTIVE** | 绝不能说 clean | **exit 0、`clean: true`、零 finding** | 已修 |
+| 结构合法但 `schema_version: 9.0`（更新版本） | 可读 + 报告不兼容；拒绝写入 | 写入正确拒绝（`SCHEMA_NEWER_REFUSED`，exit 4，文件字节不变）；但**读取静默**：`validate` exit 0 | **未修** |
+| mutable-input lineage：只改一个 key input | `ATTRIBUTION_FORBIDDEN`；身份相同则 `COMPARABLE` | **任何两条记录都判 `ATTRIBUTION_FORBIDDEN`**（code identity 把 `research/` 也算进去了） | 已修 |
+
+最后一行修好之后端到端复验：身份相同 → `COMPARABLE`（exit 0）；`replay_suite` 变动 →
+`ATTRIBUTION_FORBIDDEN`（exit 3）；环境变动 → `REBASELINE_REQUIRED`（exit 3）。这把 V0
+complete 的 **#14（comparison 中的 stable identity）** 从"声称"变成"已实测"。
+
+仍未做的两项 §26.4 注入需要 session 而非 CLI：**#3**（跨 session rotation 的 long-running
+run：新 session 应先识别已有 job 再决定 observe/finalize，而不是重复启动）与 **#4**（故意让
+local proxy metric 与 E4/人工观察冲突，确认触发 evaluator investigation 而不是盲目优化
+proxy）。#3 的 CLI 层一半可由 `job` 覆盖，判定权一半仍需新 session。
+
+`#11`（canonical JSON 带 `schema_version` 且中断写入后安全恢复）因此只完成一半：crash-safe
+与"无历史时不静默"都通过，"更新版本被读取时报告不兼容"未修。修它没有明显的单一落点
+（`validator` 不能 import `registry`，会成环），所以是一个待决策项而不是一个补丁。
+
 ## 准备 fixture 时在正常路径上撞到的三个缺陷（全部已修）
 
 验收清单的价值在于真去跑它。这三个都不是边界情况 —— 它们在任何一次"记录一条证据"的
