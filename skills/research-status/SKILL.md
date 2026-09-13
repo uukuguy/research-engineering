@@ -41,9 +41,12 @@ By default this skill does **not**:
 - alter architect decisions;
 - reset, clean, or check out over Git state.
 
-If the state is inconsistent, report it and let `research-engineering` reconcile. Producing
-a status report must never be the thing that dirties the working tree — a query that
-manufactures a dirty diff makes the next resume trip over its own footprints.
+If the state is inconsistent, report it, and then **name the next step** — see *When the
+state is inconsistent*. This skill never reconciles, but it is the entry point the
+architect reads most often, so a report that only reports is how an inconsistency stays in
+place indefinitely. Producing a status report must never be the thing that dirties the
+working tree — a query that manufactures a dirty diff makes the next resume trip over its
+own footprints.
 
 ## Sources, in order
 
@@ -173,18 +176,54 @@ that reads the status report and starts editing.
 
 ## Snapshot basis
 
-End with:
+Sections 1–14 are Chinese prose for the architect. End the report with an **English-keyed
+YAML block** instead of prose, so that a new session parses the state rather than
+re-deriving it from Chinese narration:
+
+```yaml
+generated_at: 2026-09-14T10:22:31+08:00
+git:
+  head: 8c1a2f0
+  branch: main
+  worktree: /absolute/path/to/worktree
+  baseline: null                 # tag or frozen baseline this report is relative to
+environment_id: null             # ENVIRONMENT.md's current environment, or null if unset
+maturity:
+  system: <what exists and runs>
+  evidence: <highest stable level, e.g. E2>
+  research_environment: <what this lab can currently verify>
+active:
+  status: idle                   # ACTIVE.status verbatim
+  experiment_id: null
+  block_id: null
+evidence_cutoff:
+  key_ids: []                    # the EV-* records this report actually rests on
+  highest_level: null
+  records: 0
+integrity:
+  reconcile_exit: 0
+  state: clean                   # clean | inconsistent
+  findings: []                   # findings[].code verbatim, empty when clean
+```
+
+Emit it on every report, including — especially — when the state is inconsistent. Then
+`integrity.state` is `inconsistent` and `integrity.findings` lists the codes. The block
+is not optional: a capsule with no integrity block reads as clean, which is the one thing
+it must never say by accident.
+
+## When the state is inconsistent
+
+This skill reports; it does not repair. But it is the highest-frequency entry point — the
+architect may read nothing else that day — so the report has to close with the concrete
+next step rather than a description of who owns the problem:
 
 ```
-generated_at
-Git HEAD
-branch / worktree
-current baseline or tag, if any
-evidence cutoff — key EV-* IDs
-environment ID
-ACTIVE status
-state-integrity status
+→ 建议下一步: /research-engineering 执行 RECOVERY_RECONCILIATION
 ```
+
+Use that line whenever `integrity.state` is `inconsistent`. When the state is clean, close
+with the next empirical action instead. Either way the resume protocol still runs before
+any code is touched.
 
 ## Persisting the report
 

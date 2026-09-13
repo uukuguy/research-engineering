@@ -71,6 +71,31 @@ Two rules the tool enforces or reports:
   as `source_text`; never manufacture a quotation. `validate` and `reconcile` both report
   `SIGNAL_SOURCE_TEXT_REQUIRED`.
 
+## Echo back before you record a boundary
+
+`CONSTRAINT`, `DECISION`, `DECISION FINAL`, and `VETO` are recorded and executed, not
+argued. That is exactly what makes the recording itself the risk: you choose the type, the
+scope, the expiry, and the English rendering, and every one of those choices can widen what
+was actually said. A `VETO` softened into a `CONSTRAINT` is a silent change, and so is a
+constraint whose expiry quietly disappears.
+
+So for these four types, state back what you are about to record **before** acting on it:
+
+> Recording as `CONSTRAINT`, scope `current_recovery_research`, expiry
+> `recovery_checkpoint`:
+> *"导航 planner 先别改，等复盘完再评估。"* → `statement`: "Do not modify the navigation
+> planner." One risk: the original ties this to the retrospective, the rendering reads as
+> unconditional.
+
+Read the type, the `statement`, the `scope`, the `expiry`, and the retained `source_text`
+back together, in one message. Then execute. Silence is assent — this is not a request for
+permission and not a second guess about whether to comply.
+
+If you cannot tell a `VETO` from a `CONSTRAINT`, that is a question about the type and it
+is worth asking, because the two differ in whether you may ever ask to amend: guessing
+changes the answer. Echoing is for the four boundary types only — the challengeable
+signals have the protocol below, and routine research decisions stay autonomous.
+
 ## Challenge protocol
 
 `OBSERVE`, `SUSPECT`, `DIRECTION`, and `IMPLEMENT` allow exactly one technical push-back,
@@ -145,5 +170,6 @@ latency must not increase materially.
 | "Is this a world model?" → full system rewrite | `SUSPECT` read as `DECISION` |
 | every threshold specified by the architect | you escalated routine choices, or accepted `IMPLEMENT` when `SUSPECT` was meant |
 | a constraint from three weeks ago still binding | `expiry` never recomputed at resume |
+| a `VETO` that quietly became a `CONSTRAINT`, or a bounded constraint that lost its expiry | no echo-back before recording a boundary |
 | a correction followed by ten confirmation requests | no autonomy return |
 | an architect observation cited as established fact | `OBSERVE` treated as a causal conclusion instead of evidence |

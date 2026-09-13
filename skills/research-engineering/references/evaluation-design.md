@@ -85,9 +85,24 @@ human observation in the ledger alongside it, not to explain the observation awa
   simply fires more often cannot look better.
 - Keep generated adversarial scenarios out of the tuning set. Tuning against cases
   generated to break the system converts a red-team suite into an overfit surface.
-- Development and holdout separation where it is feasible at all. At E4 the separation may
-  be a held-out slice; at E5 it is the official judge. The point is that the candidate can
-  be optimized hard against one surface while the other stays independent.
+- Development and holdout separation wherever it is feasible, **at the level the claim is
+  actually being made at**. A comparative claim starts at E2, and E2/E3 is where proxy
+  overfit is manufactured: the metric is cheap enough to optimize against and has never
+  been checked against the behaviour it stands for. Separation is not an E4 concern that
+  arrives late — by then the overfit has already happened.
+
+  | Level | Separation that makes the claim honest |
+  |---|---|
+  | E0/E1 | none. A feasibility spike and a visualization compare nothing. |
+  | E2/E3 | frozen replay snapshot, hashed, with the dev/holdout split read-only to the candidate. |
+  | E4 | a held-out slice the candidate is not tuned against. |
+  | E5 | the official judge. |
+
+  At E2/E3 the hash matters as much as the split. Without it, "the same replay" is an
+  assumption rather than a fact, and a metric that moved cannot be attributed to the
+  candidate instead of to the inputs having shifted underneath it. The point throughout is
+  that the candidate can be optimized hard against one surface while another stays
+  independent of it.
 
 ## Comparability
 
