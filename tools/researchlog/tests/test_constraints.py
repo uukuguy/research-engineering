@@ -301,26 +301,25 @@ class BlockBudgetTests(unittest.TestCase):
 
 
 class BlockMembershipTests(unittest.TestCase):
-    def test_a_declared_hypothesis_selects_the_records_that_bear_on_it(self) -> None:
-        active = {"hypothesis_ids": ["H-037"]}
-        mine = evidence()
-        other = evidence(hypotheses_differentiated=["H-999"])
-        self.assertEqual(constraints.block_members(active, [mine, other]), [mine])
+    def test_a_block_owns_the_records_stamped_with_its_id(self) -> None:
+        mine = evidence(block_id="RB-030")
+        other = evidence(block_id="RB-031")
+        self.assertEqual(constraints.block_members("RB-030", [mine, other]), [mine])
 
-    def test_either_hypothesis_field_makes_a_record_a_member(self) -> None:
-        """A record may name its hypotheses through `hypotheses_differentiated` alone.
-
-        Reading only `hypothesis_ids` dropped those records, and a block that drops members
-        under-counts the budget it is supposed to be held to.
+    def test_a_later_block_does_not_inherit_an_earlier_blocks_records(self) -> None:
+        """The bug this replaced: membership came from the global hypothesis registry, so a
+        block opened later on the same hypotheses started at the previous block's count and
+        was held to a budget for work it had not done.
         """
-        active = {"hypothesis_ids": ["H-037"]}
-        only_differentiated = evidence(hypothesis_ids=[], hypotheses_differentiated=["H-037"])
-        self.assertEqual(constraints.block_members(active, [only_differentiated]), [only_differentiated])
+        earlier = evidence(block_id="RB-030")
+        self.assertEqual(constraints.block_members("RB-031", [earlier]), [])
 
-    def test_with_no_hypotheses_declared_the_whole_ledger_is_the_block(self) -> None:
-        """A limit of V0, stated rather than hidden: there is nothing to tell blocks apart by."""
-        records = [evidence(), evidence(hypothesis_ids=["H-999"])]
-        self.assertEqual(constraints.block_members({}, records), records)
+    def test_a_record_made_with_no_block_open_belongs_to_no_block(self) -> None:
+        loose = evidence(block_id=None)
+        self.assertEqual(constraints.block_members("RB-030", [loose]), [])
+
+    def test_no_block_open_means_no_members(self) -> None:
+        self.assertEqual(constraints.block_members(None, [evidence(block_id="RB-030")]), [])
 
     def test_the_count_ignores_records_that_change_no_belief(self) -> None:
         quiet = evidence(research_outcome="inconclusive", hypotheses_differentiated=[], belief_delta="none")

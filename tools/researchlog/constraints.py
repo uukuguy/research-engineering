@@ -208,19 +208,22 @@ def identified_hypotheses(record: Mapping[str, Any]) -> set[str]:
 
 
 def block_members(
-    active: Mapping[str, Any], records: Sequence[Mapping[str, Any]]
+    block_id: Any, records: Sequence[Mapping[str, Any]]
 ) -> list[Mapping[str, Any]]:
-    """The evidence records a block covers.
+    """The evidence records a block produced.
 
-    A block covers the records bearing on the hypotheses ACTIVE declares. With none
-    declared there is no way to tell one block's evidence from another's, so the whole
-    ledger is the block. That is a limit of V0 rather than a definition, and it is why the
-    membership rule lives here instead of being re-derived by each caller.
+    A record belongs to the block that was open when it was recorded, and `record` stamps
+    that into `block_id`. Records with `block_id: null` belong to no block: they were
+    recorded with no block open, or before the field existed.
+
+    This replaces deriving membership from the global hypothesis registry, which could not
+    tell two successive blocks on the same hypotheses apart — so a newly opened block
+    inherited the previous block's records, started at their count, and was held to a budget
+    for work it had not done. Opening a block is supposed to reset the bound.
     """
-    hypothesis_ids = set(active.get("hypothesis_ids") or [])
-    if not hypothesis_ids:
-        return list(records)
-    return [record for record in records if hypothesis_ids & identified_hypotheses(record)]
+    if block_id is None:
+        return []
+    return [record for record in records if record.get("block_id") == block_id]
 
 
 def check_block_contract(
@@ -249,7 +252,8 @@ def check_block_contract(
                 identifier,
                 f"block claims {declared} evidence iterations, its evidence shows {counted}",
                 "the count is derived from the ledger when the block closes; do not maintain "
-                "it by hand",
+                "it by hand. If this block is already closed, the extra evidence belongs to "
+                "a new block — open one before recording against it",
             )
         )
 

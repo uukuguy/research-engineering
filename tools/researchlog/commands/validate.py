@@ -152,7 +152,7 @@ def _check_block(active: object, ledger: state.Ledger, result: Result) -> None:
     block = active.get("block")  # type: ignore[attr-defined]
     if not isinstance(block, dict):
         return
-    members = constraints.block_members(active.raw, list(ledger.records.values()))  # type: ignore[attr-defined]
+    members = constraints.block_members(block.get("id"), list(ledger.records.values()))
     for finding in constraints.check_block_contract(block, member_records=members):
         result.add(finding)
 

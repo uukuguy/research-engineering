@@ -206,6 +206,14 @@ class BlockCountTests(GitRepoCase):
     def declare_hypothesis(self) -> None:
         self.run_cli("active", "--set", 'hypothesis_ids=["H-037"]')
 
+    def open_block(self, block_id: str = "RB-024") -> None:
+        """Open a block before recording, which is what makes the evidence its own.
+
+        With no block open, `record` stamps `block_id: null` and the record belongs to no
+        block — correctly, since there is no block for it to be charged to.
+        """
+        self.run_cli("active", "--set", f"block.id={block_id}")
+
     def test_an_open_block_is_not_accused_of_drifting(self) -> None:
         self.init_state()
         self.declare_hypothesis()
@@ -219,6 +227,7 @@ class BlockCountTests(GitRepoCase):
     def test_closing_the_block_writes_the_derived_count(self) -> None:
         self.init_state()
         self.declare_hypothesis()
+        self.open_block()
         self.record_a_counting_iteration()
 
         code, envelope = self.run_cli("active", "--close-block", "--belief-delta", "refined")
@@ -230,10 +239,39 @@ class BlockCountTests(GitRepoCase):
         _, envelope = self.run_cli("validate")
         self.assertEqual([f["code"] for f in envelope["findings"]], [])
 
+    def test_a_new_block_does_not_start_where_the_last_one_finished(self) -> None:
+        """Opening a block is supposed to reset the bound.
+
+        Membership came from the global hypothesis registry and the stored summary was never
+        cleared, so a block opened later on the same hypotheses started at the previous
+        block's count and delta — held to a budget for work it had not done.
+        """
+        self.init_state()
+        self.declare_hypothesis()
+        self.open_block("RB-030")
+        self.record_a_counting_iteration()
+        self.record_a_counting_iteration()
+        self.run_cli("active", "--close-block", "--belief-delta", "refined")
+
+        self.open_block("RB-031")
+        _, document = self.run_cli("active", "--get-json")
+        block = document["payload"]["active"]["block"]
+        self.assertEqual(block["id"], "RB-031")
+        self.assertIsNone(block["belief_delta"], "the previous block's delta carried over")
+        self.assertEqual(
+            block["completed_evidence_iterations"], 0, "the previous block's count carried over"
+        )
+
+        self.run_cli("active", "--set", "block.max_evidence_iterations=1")
+        _, envelope = self.run_cli("validate")
+        self.assertNotIn(
+            "BLOCK_ITERATION_BUDGET_EXCEEDED", [f["code"] for f in envelope["findings"]]
+        )
+
     def test_a_block_that_overspends_its_budget_is_reported_while_it_runs(self) -> None:
         self.init_state()
         self.declare_hypothesis()
-        self.run_cli("active", "--set", "block.id=RB-024")
+        self.open_block()
         self.run_cli("active", "--set", "block.max_evidence_iterations=1")
         self.record_a_counting_iteration()
         self.record_a_counting_iteration()

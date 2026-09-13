@@ -95,7 +95,9 @@ def run(args: argparse.Namespace) -> Result:
         # case pay for the rare one, and `_apply` would still have to be told which is which.
         members: list[Mapping[str, Any]] = []
         if args.belief_delta is not None:
-            members = constraints.block_members(record.raw, list(state.load_ledger(paths).records.values()))
+            members = constraints.block_members(
+                record.get("block.id"), list(state.load_ledger(paths).records.values())
+            )
         changed = _apply(record, args, members=members)
         record.set("updated_at", _now())
         ioutil.write_json_atomic(
@@ -150,6 +152,14 @@ def _apply(
         changed.append("status")
     for expression in args.assignments:
         field, value = _parse_assignment(expression)
+        if field == "block.id" and value != record.get("block.id"):
+            # Opening a block resets its summary. `belief_delta` and the derived count
+            # describe the block that just ended; carrying them into the next one is how a
+            # new block inherits work it did not do — the count would start where the last
+            # block finished and the budget it is held to would belong to someone else.
+            record.set("block.belief_delta", None)
+            record.set("block.completed_evidence_iterations", 0)
+            changed.extend(["block.belief_delta", "block.completed_evidence_iterations"])
         record.set(field, value)
         changed.append(field)
     if args.set_next_action is not None:

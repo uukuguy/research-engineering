@@ -159,12 +159,30 @@ def _build(
     document.setdefault("created_at", _now())
     if document.get("code_state") is None:
         document["code_state"] = jgit.code_state(paths.root).to_dict()
+    if document.get("block_id") is None:
+        # Which block this evidence was produced under. Without it, membership has to be
+        # guessed from the hypotheses the record names, and a block opened later on the same
+        # hypotheses silently inherits this one's iterations.
+        document["block_id"] = _current_block_id(paths)
     if document.get("environment") is None:
         _snapshot_environment(document, paths)
     if args.from_orphan is not None:
         _require_scientific(document, args.from_orphan)
     _derive_counts(document)
     return document, warnings
+
+
+def _current_block_id(paths: repo.ResearchPaths) -> Any:
+    """The id of the block that is open, or None.
+
+    Tolerant on purpose: a record must still be writable when ACTIVE is missing or
+    unreadable, because refusing to record evidence is worse than recording it with no
+    block. The block is bookkeeping; the evidence is the product.
+    """
+    try:
+        return state.load_active(paths).get("block.id")
+    except Exception:  # noqa: BLE001 - a broken ACTIVE must not block a record
+        return None
 
 
 def _snapshot_environment(document: dict[str, Any], paths: repo.ResearchPaths) -> None:
