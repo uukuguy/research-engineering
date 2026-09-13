@@ -16,6 +16,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+# The research state directory is a layout fact, not a git fact, and `repo` is where that
+# layout is defined. `repo` does not import this module, so there is no cycle.
+from researchlog import repo
+
 TIMEOUT_SECONDS = 30
 _TRAILER_KEY = "Evidence"
 
@@ -83,21 +87,24 @@ def current_branch(root: Path) -> str | None:
     return None if name == "HEAD" else name  # detached
 
 
-def status_porcelain(root: Path) -> tuple[str, ...]:
-    result = git(["status", "--porcelain"], cwd=root)
+def status_porcelain(root: Path, *, exclude: Sequence[str] = ()) -> tuple[str, ...]:
+    arguments = ["status", "--porcelain"]
+    arguments.extend(_pathspec(exclude))
+    result = git(arguments, cwd=root)
     if not result.ok:
         return ()
     return tuple(line for line in result.stdout.splitlines() if line.strip())
 
 
-def is_dirty(root: Path) -> bool:
-    return bool(status_porcelain(root))
+def is_dirty(root: Path, *, exclude: Sequence[str] = ()) -> bool:
+    return bool(status_porcelain(root, exclude=exclude))
 
 
-def diff_sha256(root: Path) -> str | None:
+def diff_sha256(root: Path, *, exclude: Sequence[str] = ()) -> str | None:
     """Hash of the working tree delta, so a dirty run still has a stable code identity."""
-    tracked = git(["diff", "HEAD"], cwd=root)
-    untracked = git(["ls-files", "--others", "--exclude-standard"], cwd=root)
+    pathspec = _pathspec(exclude)
+    tracked = git(["diff", "HEAD", "--", *pathspec], cwd=root)
+    untracked = git(["ls-files", "--others", "--exclude-standard", "--", *pathspec], cwd=root)
     if not tracked.ok and not untracked.ok:
         return None
     digest = hashlib.sha256()
@@ -107,14 +114,37 @@ def diff_sha256(root: Path) -> str | None:
 
 
 def code_state(root: Path) -> CodeState:
-    dirty = is_dirty(root)
+    """The identity of the *code*, not of the research record.
+
+    The canonical state directory is excluded. It is what the research wrote down, not what
+    the research ran, and hashing it made every evidence record's identity unique: writing a
+    shard moved the identity of the run that produced it. So no two records were ever
+    comparable, and `compare` answered `ATTRIBUTION_FORBIDDEN` every time — the verdict that
+    exists to stop unattributable deltas from becoming findings was on permanently, which is
+    the same as not having it.
+
+    `is_dirty` is left with its whole-repository meaning and is called without an exclusion
+    by `ACTIVE.git.dirty_expected`, which is about uncommitted work of any kind, bookkeeping
+    included.
+    """
+    exclude = (repo.RESEARCH_DIR,)
+    changed = status_porcelain(root, exclude=exclude)
     return CodeState(
         branch=current_branch(root),
         commit=head_commit(root),
-        dirty=dirty,
-        diff_sha256=diff_sha256(root) if dirty else None,
-        changed_files=status_porcelain(root),
+        dirty=bool(changed),
+        diff_sha256=diff_sha256(root, exclude=exclude) if changed else None,
+        changed_files=changed,
     )
+
+
+def _pathspec(exclude: Sequence[str]) -> list[str]:
+    """`git` arguments selecting the whole tree minus the excluded directories.
+
+    Anchored at the repository root, so a directory that merely shares the name — a
+    `templates/research/` skeleton, say — is not excluded along with it.
+    """
+    return [".", *(f":(exclude){pattern}/**" for pattern in exclude)]
 
 
 def check_ignore(root: Path, path: str) -> str | None:

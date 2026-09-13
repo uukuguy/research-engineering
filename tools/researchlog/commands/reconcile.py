@@ -23,6 +23,7 @@ from researchlog.errors import (
     Result,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
+    StateInvalid,
 )
 
 NAME = "reconcile"
@@ -48,6 +49,8 @@ def run(args: argparse.Namespace) -> Result:
 
     for finding in ledger.unreadable:
         result.add(finding)
+    for finding in _active_load_findings(paths):
+        result.add(finding)
 
     detectors = (
         _orphan_runs,
@@ -72,6 +75,22 @@ def run(args: argparse.Namespace) -> Result:
     result.payload["manifests"] = len(ledger.manifests)
     result.payload["clean"] = not result.findings
     return result
+
+
+def _active_load_findings(paths: repo.ResearchPaths) -> list[Finding]:
+    """What happened while reading ACTIVE, reported rather than swallowed.
+
+    Every detector below reads ACTIVE through a loader that catches its own failure, so an
+    unreadable execution pointer used to produce `clean: true` — the one answer a resume
+    must never give, since it declares the state intact at the exact moment the file the
+    session resumes from cannot be parsed. Recovery from the last commit is reported here
+    too, so a state that had to be recovered is never mistaken for an untouched one.
+    """
+    try:
+        _active, findings = state.load_active_with_findings(paths)
+    except StateInvalid as exc:
+        return list(exc.findings)
+    return list(findings)
 
 
 def _orphan_runs(paths: repo.ResearchPaths, ledger: state.Ledger, _args: argparse.Namespace) -> list[Finding]:

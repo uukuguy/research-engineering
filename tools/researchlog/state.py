@@ -10,12 +10,12 @@ it is needed most.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from researchlog import ioutil, repo, schema
+from researchlog import ioutil, jgit, repo, schema
 from researchlog.errors import SEVERITY_ERROR, SEVERITY_WARNING, Finding, StateInvalid
 from researchlog.model import Record
 
@@ -56,16 +56,45 @@ class Ledger:
         }
 
 
+def _git_recover(paths: repo.ResearchPaths, path: Path) -> Callable[[], str | None] | None:
+    """Recover a canonical document from the last commit.
+
+    The design's recovery order is canonical → `.tmp` → Git, and the third step was
+    implemented in `ioutil` from the beginning but never wired up: no caller passed the
+    callable, so a corrupted `ACTIVE.json` was unrecoverable by the tool even in a
+    repository whose last commit held a perfectly good copy.
+
+    Returns None when there is genuinely nothing to recover from, rather than a callable
+    that returns None — a repository with no commits has no history to fall back on, and
+    saying so is different from offering it.
+    """
+    if not jgit.is_repository(paths.root):
+        return None
+    commit = jgit.head_commit(paths.root)
+    if commit is None:
+        return None
+    try:
+        relative = path.relative_to(paths.root).as_posix()
+    except ValueError:
+        return None
+    return lambda: jgit.show_file(paths.root, commit, relative)
+
+
 def load_active(paths: repo.ResearchPaths) -> Record:
     outcome = ioutil.load_json_with_recovery(
         paths.active,
         validator=schema.load_validator("active"),
+        git_recover=_git_recover(paths, paths.active),
     )
     return Record(outcome.data, paths.active)
 
 
 def load_active_with_findings(paths: repo.ResearchPaths) -> tuple[Record, list[Finding]]:
-    outcome = ioutil.load_json_with_recovery(paths.active, validator=schema.load_validator("active"))
+    outcome = ioutil.load_json_with_recovery(
+        paths.active,
+        validator=schema.load_validator("active"),
+        git_recover=_git_recover(paths, paths.active),
+    )
     return Record(outcome.data, paths.active), list(outcome.findings)
 
 

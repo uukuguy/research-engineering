@@ -244,6 +244,110 @@ class BlockCountTests(GitRepoCase):
         )
 
 
+class ResumePathVisibilityTests(GitRepoCase):
+    """The resume entry point must not call a file it could not read `clean`.
+
+    `reconcile` is what the resume protocol actually runs, and every detector reads ACTIVE
+    through a loader that catches its own failure. So a corrupt `ACTIVE.json` produced exit
+    0, `clean: true` and no findings — the state declared intact at the exact moment the
+    file the session resumes from could not be parsed. The Git fallback the design
+    specifies was implemented but never wired, so the corruption could not be recovered
+    from either.
+    """
+
+    CORRUPT = '{"schema_version": "1.0", "stat'
+
+    def commit_valid_state(self) -> None:
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "valid state")
+
+    def corrupt_active(self) -> None:
+        (self.root / "research" / "ACTIVE.json").write_text(self.CORRUPT, encoding="utf-8")
+
+    def test_a_pointer_recovered_from_the_last_commit_is_reported(self) -> None:
+        self.commit_valid_state()
+        self.corrupt_active()
+
+        code, envelope = self.run_cli("reconcile", "--json")
+        self.assertEqual(code, 3, envelope)
+        self.assertFalse(envelope["payload"]["clean"])
+        self.assertIn("RECOVERED_FROM_GIT", [f["code"] for f in envelope["findings"]])
+
+    def test_with_no_history_to_fall_back_on_it_is_an_error_not_a_clean(self) -> None:
+        self.init_state()  # nothing committed: no revision to recover from
+        self.corrupt_active()
+
+        code, envelope = self.run_cli("reconcile", "--json")
+        self.assertEqual(code, 2, envelope)
+        self.assertFalse(envelope["payload"]["clean"])
+        self.assertIn("RECOVERY_REQUIRED", [f["code"] for f in envelope["findings"]])
+
+    def test_a_healthy_pointer_still_reconciles_clean(self) -> None:
+        """The recovery report must not turn a working resume into a warning."""
+        self.commit_valid_state()
+
+        code, envelope = self.run_cli("reconcile", "--json")
+        self.assertEqual(code, 0, envelope)
+        self.assertTrue(envelope["payload"]["clean"])
+
+
+class ComparisonIdentityTests(GitRepoCase):
+    """`compare` has to be able to say COMPARABLE, or its blocking verdicts mean nothing.
+
+    `code_state.diff_sha256` hashed the whole working tree, canonical state included.
+    Writing an evidence shard changes that tree, so every record's code identity was unique
+    and no two records were ever comparable: `ATTRIBUTION_FORBIDDEN` was on permanently.
+    The unit tests missed it because they inject a synthetic `code_state`, which is exactly
+    the field under test — so they pass while the real path cannot produce two equal ones.
+    """
+
+    def record_with(self, *, replay_suite: str, fingerprint: str = "fp-1") -> str:
+        document = {
+            "schema_version": "1.0",
+            "question": "which of A and B?",
+            "subject": {"type": "mechanism", "id": "M-001"},
+            "evidence_level": "E2",
+            "observations": ["ran"],
+            "execution_status": "completed",
+            "research_outcome": "inconclusive",
+            "confidence": "low",
+            "counts_as_evidence_iteration": False,
+            "environment": {"fingerprint": fingerprint},
+            "inputs": {"replay_suite": replay_suite},
+        }
+        code, envelope = self.run_cli("record", "--from-json", json.dumps(document), "--json")
+        self.assertEqual(code, 0, envelope)
+        return envelope["payload"]["evidence_id"]
+
+    def test_two_records_of_the_same_identity_are_comparable(self) -> None:
+        self.init_state()
+        first = self.record_with(replay_suite="replay-v3")
+        second = self.record_with(replay_suite="replay-v3")
+
+        code, envelope = self.run_cli("compare", first, second, "--json")
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(envelope["payload"]["attribute_verdict"], "COMPARABLE")
+
+    def test_a_moved_key_input_still_forbids_attribution(self) -> None:
+        self.init_state()
+        first = self.record_with(replay_suite="replay-v3")
+        second = self.record_with(replay_suite="replay-v4")
+
+        code, envelope = self.run_cli("compare", first, second, "--json")
+        self.assertEqual(code, 3, envelope)
+        self.assertEqual(envelope["payload"]["attribute_verdict"], "ATTRIBUTION_FORBIDDEN")
+
+    def test_a_moved_environment_still_demands_a_rebaseline(self) -> None:
+        self.init_state()
+        first = self.record_with(replay_suite="replay-v3", fingerprint="fp-1")
+        second = self.record_with(replay_suite="replay-v3", fingerprint="fp-2")
+
+        code, envelope = self.run_cli("compare", first, second, "--json")
+        self.assertEqual(code, 3, envelope)
+        self.assertEqual(envelope["payload"]["attribute_verdict"], "REBASELINE_REQUIRED")
+
+
 class ArchitectSignalTests(GitRepoCase):
     """A boundary signal must not lose the wording it was given.
 
