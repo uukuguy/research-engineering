@@ -284,6 +284,38 @@ class SchemaVersionVisibilityTests(GitRepoCase):
         self.assertEqual(code, 4, envelope)
         self.assertEqual(target.read_bytes(), before)
 
+    def test_findings_entries_are_not_mistaken_for_foreign_documents(self) -> None:
+        """The version lives on the block, not on each entry.
+
+        `findings-entry` entries carry no `schema_version` field — the `research:findings`
+        block carries it — so checking each entry reported every finding in the file as a
+        document from another tool. Found by running the evaluator-conflict drill, whose
+        session created the first two findings any drill had produced.
+        """
+        self.init_state()
+        code, envelope = self.record(
+            "--question", "Does the proxy track the behaviour or the trace?",
+            "--subject-type", "evaluation_surface", "--subject-id", "EVAL-004",
+            "--level", "E2",
+            "--execution-status", "completed", "--research-outcome", "inconclusive",
+            "--confidence", "low", "--belief-delta", "none",
+            "--observation", "obs",
+        )
+        self.assertEqual(code, 0, envelope)
+        evidence_id = envelope["payload"]["evidence_id"]
+
+        code, envelope = self.run_cli(
+            "findings", "add",
+            "--title", "The proxy tracks the intervention trace, not the behaviour",
+            "--status", "Refuted",
+            "--confidence", "moderate",
+            "--evidence", evidence_id,
+        )
+        self.assertEqual(code, 0, envelope)
+
+        _, envelope = self.run_cli("validate")
+        self.assertEqual([f["code"] for f in envelope["findings"]], [])
+
     def test_a_manifest_that_violates_its_schema_is_reported(self) -> None:
         """`validate` offers `--print-schema manifest` and never checked a manifest."""
         self.init_state()

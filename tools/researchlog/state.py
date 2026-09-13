@@ -26,6 +26,10 @@ class Ledger:
     findings: list[dict[str, Any]] = field(default_factory=list)
     manifests: dict[str, dict[str, Any]] = field(default_factory=dict)
     findings_entries: list[dict[str, Any]] = field(default_factory=list)
+    # The `research:findings` block itself. It is the document that carries
+    # `schema_version`; the entries inside it do not, which is why the version check
+    # belongs here rather than on each entry.
+    findings_block: dict[str, Any] | None = None
     unreadable: list[Finding] = field(default_factory=list)
 
     def evidence_levels(self) -> dict[str, str]:
@@ -202,6 +206,7 @@ def _load_findings(paths: repo.ResearchPaths, ledger: Ledger) -> None:
         return
     if block is None:
         return
+    ledger.findings_block = block
     entries = block.get("entries")
     if isinstance(entries, list):
         ledger.findings_entries = [entry for entry in entries if isinstance(entry, dict)]

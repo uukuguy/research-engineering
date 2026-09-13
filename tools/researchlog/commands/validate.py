@@ -109,7 +109,13 @@ def _check_findings(ledger: state.Ledger, result: Result) -> None:
             result.add(finding)
         for finding in constraints.check_finding(entry, evidence_levels=levels):
             result.add(finding)
-        for finding in schema.version_findings("findings-entry", entry, where=str(entry.get("id") or "?")):
+    # `schema_version` lives on the `research:findings` block, not on each entry — the
+    # entries have no such field, so checking them one by one reports every finding in the
+    # file as a foreign document. The block is the thing that carries the version.
+    if ledger.findings_block is not None:
+        for finding in schema.version_findings(
+            "findings-entry", ledger.findings_block, where="FINDINGS.md"
+        ):
             result.add(finding)
 
 
