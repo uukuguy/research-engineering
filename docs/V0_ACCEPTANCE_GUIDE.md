@@ -80,10 +80,13 @@ fixture 里有什么（每一项对应 §12.16 的一条判据）：
 - 一条 `env_unsupported` 记录：本机没有 actuator，问题在这里**测不了**；
 - `EXP-0142` 的 manifest 仍是 `running`，无 `result.json`，heartbeat 回写了 150 分钟
   （脚本里唯一一处刻意改动 —— "一个 150 分钟前的尸体"是 fixture 造不出来的，时间不能伪造）；
-- `ARCHITECT.md` 里一条真实的 `CONSTRAINT` signal（C-014，带 `source_text`）。注意文件里
-  **还有第二条** `CONSTRAINT`（C-009），那是模板骨架自带的示例 —— 见文末"演练已经发现的
-  问题"第 3 条。判据 5 只要求保住 C-014；顺带提到 C-009 不算错，但把 C-009 当成真实约束
-  来遵守，说明恢复是对的、模型判断不了示例与实况的区别；
+- `EXP-0142` 的 `stdout.log` 里有 `case-01`/`case-02` 两行输出 —— 这是 ACTIVE 声称"已完成
+  两个 case"的**唯一依据**，也是判据 4 可判的前提。日志停在 case-02，正因如此 `case-03` 起
+  才是 pending。这一条是第一次演练之后补的：原本 fixture 没有它，于是"已完成"没有任何东西
+  支撑，而 session **正确地**不信这个声明 —— 那测的是 fixture 而不是 session；
+- `ARCHITECT.md` 里**唯一**一条 live signal：`CONSTRAINT` C-014（带 `source_text`）。文件里
+  还能读到 C-009 的字段，但它在普通 `json` 块里，是**形状说明而非信号** —— 骨架不再自带任何
+  live signal（见文末第 3 条）；
 - 一处**未提交**的 `probes/replay_probe.py` 改动，其意图只能靠 manifest 的 `--command`
   与 `ACTIVE.intent` 交叉推断 —— 脚本刻意没有留下任何解释性注释，否则测的就不是推断能力。
 
@@ -141,41 +144,77 @@ Continue current research.
 
 ---
 
-## 演练已经发现的问题
+## D1 第一次执行结果（2026-09-14）
 
-验收清单的价值在于真去跑它。准备 D1 的 fixture 时，在**正常路径**上撞到两个缺陷：
+架构师在 `/tmp/re-drill` 跑了一次，只给 §26.2 那两行。它以 `validate` exit 0、`reconcile`
+exit 0 clean 收尾。
 
-**1. `UNKNOWN_HYPOTHESIS` 100% 误报（已修，见 `validate.py`）。** `validate` 把
-`sorted(ledger.records)`（EV id 空间）当作 `known_hypotheses` 传入，而 `H-*` 永远不等于
-`EV-*`。于是任何记录了 hypothesis 的证据都会报"引用了不存在的假说"。判据本身没错，是它
-的注册表接错了 ID 空间。修法是改用 `ACTIVE.hypothesis_ids`（V0 唯一的假说注册表）。
+**这次跑的是"补 case artifact 之前"的 fixture 版本**（见上文 fixture 说明的最后一条）。所以
+下面的结论只对该版本成立；判据 4 因此无法判定，要拿到干净的 7/7 需要用当前 fixture 重跑一次。
 
-**2. `completed_evidence_iterations` 没有任何写入路径（未修，待决策）。** 该字段被
-`check_block_contract` 校验、文档明令"derived，不得手写"，但**没有任何命令会写它** ——
-`active --close-block` 只写 `belief_delta`。复现：
+以下是**只读检查产物**能核实的事实。限制必须说清：只读检查看不到 transcript，所以判据 1/2/5
+里"说出……"那一半无法由此确认 —— 它们需要 transcript。可核实的部分是：
 
-```bash
-# 任意 repo：init → record 一条改变信念的证据 → validate
-researchlog record ... --belief-delta refined ...
-researchlog validate      # EVIDENCE_ITERATION_COUNT_DRIFT，subject 为 block id
-researchlog active --close-block --belief-delta refined
-researchlog validate      # 依旧 DRIFT：count 仍是 0
-```
+| 判据 | 可核实的证据 | 结果 |
+|---|---|---|
+| 1 | 两个新 commit 落在同一 branch 的同一 repo；其中一条明确把 ACTIVE 指向 checkpoint commit | 过 |
+| 2 | `git status` 仍显示 ` M probes/replay_probe.py` —— **未完成工作没有被 `git checkout --` 丢掉**；commit body 记录了该改动**跑不起来**（两个分支同样失败） | 过 |
+| 3 | ACTIVE 保留 `H-037`/`H-039`，并给出新的 `experiment_id` 与 intent | 过 |
+| 4 | 它读取了 case 进度并判定**无据** —— 就当时的 fixture 而言判得对，据此清空。判据本身因此无法判定 | 无法判定 |
+| 5 | `ARCHITECT.md` 里 C-014 仍在；actuator 缺失被当作**环境限制**处理 | 过 |
+| 6 | `EXP-0141` 的 started 时间戳与 fixture 一致、仍为 `completed` —— **没有重跑** | 过 |
+| 7 | `EXP-0142` 被定案为 `interrupted`（不是删除、不是重新 launch）；`ACTIVE.next_action` 写明"缺的是输入不是算法" | 过 |
 
-任何记了改变信念的证据的项目都会拿到一个**无法消除**的 error，唯一出路是手改一个文档禁止
-手改的字段。这直接冲击 V0 complete 的 #11/#12。本文件的 D1 fixture 因此只用
-"不计入迭代"的记录（`inconclusive` + `belief_delta: none`），让演练的失败可归因到
-skill 层而不是这个已知缺陷。
+最值得记下的一条：**6 条证据记录里没有一条 `refuted`。** 它撞了三次墙（2×`infra_failed`、
+1×`interrupted`），三次都记为 `informative_failure`，且每条 `belief_delta: none`，commit
+body 明确写 "No belief change: H-037 and H-039 are weakened in neither direction"。环境不可行
+没有被转化成科学结论 —— 这条设计第一不变量在真实压力下成立。
 
-修法待定，因为它是设计层选择而非实现细节：让工具在写 `ACTIVE` 时按 ledger 重算该字段
-（即兑现"工具会重算"的既有说法），还是让块契约只在**关闭时**校验。
+**这次执行暴露的 fixture 缺陷（已修）**：判据 4 无法判定，原因在 fixture 而不是 session。
+fixture 让 ACTIVE 声称 `case-01,02` 已完成，但 EXP-0142 没有任何 artifact —— 于是这个声明
+没有东西支撑，session **正确地**不信它，并据此清空了两组 case（commit body: "the ACTIVE
+capsule claiming progress that no artifact supported"）。
 
-**3. 骨架自带一条"没人下过的约束"（未修，待决策）。** `templates/research/ARCHITECT.md`
-里的示例 signal C-009 是一个**真实的块**，不是注释。所以从模板建立的每个新项目，`ARCHITECT.md`
-一开头就有一条 scope 为 `recovery research`、expiry 为 `recovery checkpoint` 的 `CONSTRAINT`
-—— 没有任何架构师下过它。`validate`/`reconcile` 把它当实况处理（`check_signal` 会检查它的
-`source_text`，而 `expiry` 一旦写成 ISO 就会被 `EXPIRED_ARCHITECT_SIGNAL` 强制执行）。示例
-与实况在机器看来没有区别，因为**它们本来就是同一种东西**。
+session 的行为是对的；错的是 fixture 自相矛盾。已修：EXP-0142 现在带着一份写到 case-02
+为止的 `stdout.log`，使"已完成两个 case"有 artifact 可依、且 pending 的起点有据可查。
+判据 4 要在**当前** fixture 上重跑才算数。
 
-修法要么让示例不可执行（例如放进普通代码块而非 `research:signal` 块），要么让 `init` 在
-建立新项目时剥掉它。前者更符合"骨架教形状"的用途。
+## 准备 fixture 时在正常路径上撞到的三个缺陷（全部已修）
+
+验收清单的价值在于真去跑它。这三个都不是边界情况 —— 它们在任何一次"记录一条证据"的
+普通研究里都会遇到。
+
+**1. `UNKNOWN_HYPOTHESIS` 100% 误报。** `validate` 把 `sorted(ledger.records)`（**EV id
+空间**）当作 `known_hypotheses` 传入，而 `H-*` 永远不等于 `EV-*`。于是任何记录了 hypothesis
+的证据都会报"引用了不存在的假说"。判据本身没错，是它的注册表接错了 ID 空间。改用
+`ACTIVE.hypothesis_ids`（V0 唯一的假说注册表）。
+
+**2. `completed_evidence_iterations` 没有任何写入路径，且块预算根本没实现。** 这比"没人写
+这个字段"更严重：`max_evidence_iterations` **没有任何代码消费者**，所以 V0 验收 #12（Block
+Contract 阻止无界重复）其实并不成立 —— 字段存在只是为了让另一个检查拿它自比。
+
+根因是生命周期搞错了。`belief_delta` 的规则是"开块期间为 null，关闭时写一次"，而 count 被
+当成活计数器：开块期间拿一个永远为 0 的值去比对，于是每个记过改变信念的证据的项目都拿到一个
+**无法消除**的 error，而 finding 的修法提示又写着"不要手写这个字段"。
+
+修法让两者同生命周期：
+
+- count **只在块关闭时**由 `active --close-block` 从 ledger 派生并写入（与 `belief_delta`
+  同一次写入）。没有活计数器，因为没有东西会让它保持诚实；
+- 开块期间**不做**漂移比较（无可比之物）；
+- 新增 `BLOCK_ITERATION_BUDGET_EXCEEDED`：用**派生**的 count 与 `max_evidence_iterations`
+  比较，**在块运行期间**就报 —— 那才是 grinding 发生的时候。这补上了 #12 缺的那一半。
+
+顺带修掉同族的第二处：块成员判定只读 `hypothesis_ids`，于是只填
+`hypotheses_differentiated` 的记录会被漏掉，**块会少算自己的预算**。现在两者取并集，且与
+`_check_hypotheses` 共用同一个 `identified_hypotheses`，使"成员"与"引用"不可能再分叉。
+
+**3. 骨架自带一条"没人下过的约束"。** `templates/research/ARCHITECT.md` 的示例 signal
+C-009 是一个**真实的块**，不是注释。于是从模板建立的每个项目一开头就有一条 `CONSTRAINT`，
+而且它**完全合规** —— 所以没有任何检查能看见它。工具区分不了示例与实况，因为它们本来就是
+同一种东西。
+
+修法：示例改放进普通 `json` 块，并在正文里点明**围栏就是形状与状态的全部差别**。骨架因此
+自带 0 条 live signal。回归测试只能断言结构（文本里不得出现 ```` ```json research:signal ````），
+因为一个合规的幽灵对检查层是隐形的。
+

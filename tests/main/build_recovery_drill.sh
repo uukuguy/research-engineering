@@ -113,6 +113,17 @@ researchlog manifest --experiment-id EXP-0142 --status running --quiet \
   --input replay_suite=replay-v3 --input mock_closure=true \
   --expected-output probes/residual.json
 
+# Partial output from the cases the dead session did reach, so that ACTIVE's
+# `completed_cases` is backed by an artifact. Without this the fixture contradicts itself:
+# it claims progress nothing supports, and a careful session is *right* to distrust the
+# claim — which turns the case-progress criterion into a test of the fixture. The log stops
+# after case-02 because that is where the session died; that is the evidence for pending.
+mkdir -p research/runs/EXP-0142
+cat > research/runs/EXP-0142/stdout.log <<'STDOUT'
+case-01 closed-loop replay: residual 0.22
+case-02 closed-loop replay: residual 0.19
+STDOUT
+
 # Elapsed time is the one input a fixture cannot manufacture: a run killed one second ago
 # has a fresh heartbeat, and this drill is about a session that died 150 minutes ago. So
 # the heartbeat is written back. This is the single deliberate mutation in this script,
