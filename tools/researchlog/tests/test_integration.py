@@ -117,6 +117,73 @@ class InitReconciliationTests(GitRepoCase):
         self.assertIn("ACTIVE_GIT_MISMATCH", [f["code"] for f in envelope["findings"]])
 
 
+class ArchitectSignalTests(GitRepoCase):
+    """A boundary signal must not lose the wording it was given.
+
+    Signals carry no schema, so this rule lives in the meaning layer — and it has to fire
+    on the path a session actually takes. The resume protocol runs `reconcile` and not
+    `validate`, so a rule checked only by `validate` is a rule that never fires.
+    """
+
+    def append_signal(self, **signal: object) -> None:
+        path = self.root / "research" / "ARCHITECT.md"
+        block = (
+            "```json research:signal\n"
+            + json.dumps(signal, ensure_ascii=False, indent=2)
+            + "\n```\n"
+        )
+        path.write_text(path.read_text(encoding="utf-8") + "\n" + block, encoding="utf-8")
+
+    def commit_state(self) -> None:
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "research state")
+
+    def test_a_boundary_that_lost_its_wording_is_reported_on_resume(self) -> None:
+        self.commit_state()
+        self.append_signal(
+            id="C-010",
+            type="CONSTRAINT",
+            statement="Do not modify the navigation planner.",
+            scope="recovery research",
+            expiry="recovery checkpoint",
+            source_text=None,
+            active=True,
+        )
+
+        code, envelope = self.run_cli("reconcile")
+        self.assertEqual(code, 2)
+        self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", [f["code"] for f in envelope["findings"]])
+
+    def test_validate_reports_the_same_rule(self) -> None:
+        self.commit_state()
+        self.append_signal(
+            id="C-011", type="VETO", statement="Do not train on the held-out split.", source_text=""
+        )
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", [f["code"] for f in envelope["findings"]])
+
+    def test_a_malformed_signal_block_is_an_error_not_a_silent_pass(self) -> None:
+        """The check that reads the signals is the only thing that can notice this."""
+        self.commit_state()
+        path = self.root / "research" / "ARCHITECT.md"
+        path.write_text(
+            path.read_text(encoding="utf-8") + '\n```json research:signal\n{"id": "C-012",}\n```\n',
+            encoding="utf-8",
+        )
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn("BLOCK_MALFORMED", [f["code"] for f in envelope["findings"]])
+
+    def test_the_shipped_template_satisfies_the_rule_it_teaches(self) -> None:
+        """A new project bootstraps from the template; it must not start on an error."""
+        self.init_state()
+        _, envelope = self.run_cli("validate")
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("SIGNAL_SOURCE_TEXT_REQUIRED", codes)
+
+
 class EnvironmentSnapshotTests(GitRepoCase):
     def _baseline(self, hz: int = 30) -> None:
         change = self.write(f"chg-{hz}.json", {"capability": "baseline", "changes": {"sim_physics_hz": hz}})

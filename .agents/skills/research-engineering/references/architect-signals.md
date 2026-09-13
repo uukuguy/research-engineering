@@ -31,6 +31,7 @@ type: CONSTRAINT
 scope: current_recovery_research
 expiry: recovery_checkpoint
 statement: Do not modify navigation planner.
+source_text: 导航 planner 先别改，等复盘完再评估。
 ```
 
 Without `scope` and `expiry`, a temporary remark hardens into unchallengeable dogma. The
@@ -44,6 +45,7 @@ writing it that way is a defect.
   "statement": "Do not modify navigation planner.",
   "scope": "recovery research",
   "expiry": "recovery checkpoint",
+  "source_text": "导航 planner 先别改，等复盘完再评估。",
   "recorded_at": "2026-09-10T19:28:41+08:00",
   "final": false
 }
@@ -58,10 +60,16 @@ Two rules the tool enforces or reports:
 - **Expiry is recomputed at resume.** A constraint whose expiry has passed is no longer
   binding, and leaving it in force is as wrong as forgetting it. `reconcile` reports
   `EXPIRED_ARCHITECT_SIGNAL`; the resume protocol is where that report gets acted on.
-- **`source_text` is preserved only when the exact wording carries scope.** Architect
-  input may be Chinese. Persist the normalized meaning in English; keep the original
-  wording when a diagnosis or a physical observation depends on it. `DECISION` and `VETO`
-  usually do. For a paraphrase, keep the paraphrase — do not manufacture a quotation.
+- **`source_text` is mandatory for `CONSTRAINT`, `DECISION`, `DECISION FINAL`, and
+  `VETO`.** The wording of a boundary *is* its scope. Architect input may be Chinese, so
+  the English rendering goes in `statement` and the original sentence is kept verbatim in
+  `source_text` — both, always, for these four types. Paraphrasing a boundary into English
+  and discarding the original is not translation: "先别改，等复盘完再评估" recorded as
+  "do not modify the navigation planner" has silently lost its time box and become
+  permanent doctrine. That is the one dispute a later session cannot reconstruct. If what
+  you were given is a paraphrase rather than a sentence you may quote, keep the paraphrase
+  as `source_text`; never manufacture a quotation. `validate` and `reconcile` both report
+  `SIGNAL_SOURCE_TEXT_REQUIRED`.
 
 ## Challenge protocol
 

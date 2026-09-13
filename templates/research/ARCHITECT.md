@@ -34,7 +34,7 @@ algorithmic detail is better left to the agent.
   "statement": "Do not modify the navigation planner.",
   "scope": "recovery research",
   "expiry": "recovery checkpoint",
-  "source_text": null,
+  "source_text": "导航 planner 先别改，等复盘完再评估。",
   "created_at": null,
   "active": true
 }

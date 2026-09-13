@@ -49,6 +49,16 @@ BELIEF_DELTAS: frozenset[str] = frozenset({"none", "refined", "overturned"})
 
 FINDING_STATUSES_REQUIRING_REPLACEMENT: frozenset[str] = frozenset({"Superseded"})
 
+# Signal types whose exact wording carries scope, so the original must survive verbatim.
+# A boundary is a statement about the world as the architect phrased it: normalising
+# "do not touch the planner's recovery branch" into "do not modify the navigation
+# planner" is not a translation, it is a quiet widening of what is forbidden. The
+# English rendering belongs in `statement`; both are kept. `DECISION FINAL` is listed
+# separately because ARCHITECT.md's table names it as its own type.
+SIGNAL_TYPES_REQUIRING_SOURCE_TEXT: frozenset[str] = frozenset(
+    {"CONSTRAINT", "DECISION", "DECISION FINAL", "VETO"}
+)
+
 
 def evidence_level_rank(level: Any) -> int:
     return EVIDENCE_LEVELS.index(level) if level in EVIDENCE_LEVELS else -1
@@ -197,6 +207,34 @@ def check_block_contract(
             )
         )
     return findings
+
+
+def check_signal(signal: Mapping[str, Any]) -> list[Finding]:
+    """Coherence checks for one `research:signal` block in ARCHITECT.md.
+
+    Signals carry no schema — they are independent blocks in a human-readable file, not a
+    versioned document — so the rules they must satisfy live here with the other meanings
+    the schema cannot express.
+    """
+    signal_type = str(signal.get("type") or "").strip().upper()
+    if signal_type not in SIGNAL_TYPES_REQUIRING_SOURCE_TEXT:
+        return []
+
+    source_text = signal.get("source_text")
+    if isinstance(source_text, str) and source_text.strip():
+        return []
+
+    return [
+        Finding(
+            "SIGNAL_SOURCE_TEXT_REQUIRED",
+            SEVERITY_ERROR,
+            str(signal.get("id") or "?"),
+            f"a {signal_type} signal must keep the architect's original wording in source_text",
+            "the wording carries the scope, so normalising it changes what was decided; "
+            "keep the sentence as written in source_text and put the English rendering in "
+            "`statement` — never manufacture a quotation you do not have",
+        )
+    ]
 
 
 def _check_execution_vs_outcome(record: Mapping[str, Any], identifier: str) -> list[Finding]:

@@ -14,6 +14,7 @@ from researchlog.errors import (
     Result,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
+    StateInvalid,
 )
 
 NAME = "validate"
@@ -59,6 +60,7 @@ def run(args: argparse.Namespace) -> Result:
     _check_evidence(paths, ledger, result)
     _check_findings(ledger, result)
     _check_block(active, ledger, result)
+    _check_signals(paths, result)
 
     if args.strict:
         _promote_warnings(result)
@@ -100,6 +102,19 @@ def _check_findings(ledger: state.Ledger, result: Result) -> None:
             result.add(finding)
 
 
+def _check_signals(paths: repo.ResearchPaths, result: Result) -> None:
+    """Signals have no schema, so their invariants are checked here instead."""
+    try:
+        signals = _signals(paths)
+    except StateInvalid as exc:
+        for finding in exc.findings:
+            result.add(finding)
+        return
+    for signal in signals:
+        for finding in constraints.check_signal(signal):
+            result.add(finding)
+
+
 def _check_block(active: object, ledger: state.Ledger, result: Result) -> None:
     block = active.get("block")  # type: ignore[attr-defined]
     if not isinstance(block, dict):
@@ -107,6 +122,19 @@ def _check_block(active: object, ledger: state.Ledger, result: Result) -> None:
     members = _block_members(active, ledger)  # type: ignore[arg-type]
     for finding in constraints.check_block_contract(block, member_records=members):
         result.add(finding)
+
+
+def _signals(paths: repo.ResearchPaths) -> list[dict]:
+    """The `research:signal` blocks in ARCHITECT.md.
+
+    A malformed block raises `StateInvalid` rather than returning an empty list. The
+    alternative was the state this replaced: a signal file that cannot be parsed made
+    every signal check quietly pass, because the check that reads it was the only thing
+    that noticed, and it reported nothing.
+    """
+    if not paths.architect.is_file():
+        return []
+    return schema.extract_blocks(paths.architect.read_text(encoding="utf-8")).get("signal", [])
 
 
 def _block_members(active: object, ledger: state.Ledger) -> list[dict]:

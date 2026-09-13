@@ -17,7 +17,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from researchlog import jgit, repo, schema, state
+from researchlog import constraints, jgit, repo, schema, state
 from researchlog.errors import (
     Finding,
     Result,
@@ -58,6 +58,7 @@ def run(args: argparse.Namespace) -> Result:
         _active_manifest_stale,
         _self_referential_commits,
         _superseded_findings_cited,
+        _incomplete_signals,
         _expired_signals,
         _submission_budget,
         _token_budget,
@@ -255,6 +256,32 @@ def _superseded_findings_cited(
     return findings
 
 
+def _signal_blocks(paths: repo.ResearchPaths) -> list[dict]:
+    """The `research:signal` blocks in ARCHITECT.md, or none if it cannot be read."""
+    if not paths.architect.is_file():
+        return []
+    try:
+        return schema.extract_blocks(paths.architect.read_text(encoding="utf-8")).get("signal", [])
+    except Exception:  # noqa: BLE001 - reported by validate
+        return []
+
+
+def _incomplete_signals(
+    paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
+) -> list[Finding]:
+    """A signal that lost the wording it was given.
+
+    The rule lives in `constraints` with the other meanings the schema cannot express.
+    It is surfaced here as well as in `validate` because `reconcile` is the entry point
+    the resume protocol actually runs, and a rule reported only on a path nobody takes
+    is a rule that never fires.
+    """
+    findings: list[Finding] = []
+    for signal in _signal_blocks(paths):
+        findings.extend(constraints.check_signal(signal))
+    return findings
+
+
 def _expired_signals(
     paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
 ) -> list[Finding]:
@@ -263,16 +290,9 @@ def _expired_signals(
     A free-text expiry such as "recovery checkpoint" is a promise a human keeps, and the
     tool says so by ignoring it rather than pretending to evaluate it.
     """
-    if not paths.architect.is_file():
-        return []
-    try:
-        blocks = schema.extract_blocks(paths.architect.read_text(encoding="utf-8")).get("signal", [])
-    except Exception:  # noqa: BLE001 - reported by validate
-        return []
-
     now = datetime.now(timezone.utc)
     findings: list[Finding] = []
-    for signal in blocks:
+    for signal in _signal_blocks(paths):
         if signal.get("active") is False:
             continue
         expires_at = signal.get("expires_at")

@@ -255,5 +255,50 @@ class BlockContractTests(unittest.TestCase):
         self.assertIn("BLOCK_BELIEF_DELTA_INVALID", codes(findings))
 
 
+class SignalTests(unittest.TestCase):
+    """A boundary keeps the wording it was given.
+
+    The phrasing of a constraint carries its scope, so rendering it into English and
+    dropping the original is a quiet change to what was forbidden, not a translation.
+    """
+
+    def signal(self, **overrides) -> dict:
+        base = {
+            "id": "C-009",
+            "type": "CONSTRAINT",
+            "statement": "Do not modify the navigation planner.",
+            "scope": "recovery research",
+            "expiry": "recovery checkpoint",
+            "source_text": "导航 planner 先别改，等复盘完再评估。",
+        }
+        base.update(overrides)
+        return base
+
+    def test_every_boundary_type_requires_the_original_wording(self) -> None:
+        for signal_type in sorted(constraints.SIGNAL_TYPES_REQUIRING_SOURCE_TEXT):
+            with self.subTest(type=signal_type):
+                findings = constraints.check_signal(self.signal(type=signal_type, source_text=None))
+                self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", codes(findings))
+
+    def test_a_boundary_that_keeps_its_wording_passes(self) -> None:
+        self.assertEqual(constraints.check_signal(self.signal()), [])
+
+    def test_a_blank_source_text_does_not_count_as_keeping_it(self) -> None:
+        findings = constraints.check_signal(self.signal(source_text="   \n"))
+        self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", codes(findings))
+
+    def test_the_type_cannot_be_lower_cased_to_escape_the_rule(self) -> None:
+        findings = constraints.check_signal(self.signal(type="constraint", source_text=None))
+        self.assertIn("SIGNAL_SOURCE_TEXT_REQUIRED", codes(findings))
+
+    def test_signals_that_are_the_agents_to_reformulate_are_exempt(self) -> None:
+        """A SUSPECT or a DIRECTION is meant to be reformulated; a boundary is not."""
+        for signal_type in ("OBSERVE", "SUSPECT", "DIRECTION", "CHALLENGE", "IMPLEMENT"):
+            with self.subTest(type=signal_type):
+                self.assertEqual(
+                    constraints.check_signal(self.signal(type=signal_type, source_text=None)), []
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
