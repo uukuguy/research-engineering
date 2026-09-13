@@ -190,7 +190,8 @@ session 的行为是对的；错的是 fixture 自相矛盾。已修：EXP-0142 
 | canonical 被截断、无 `.tmp`、Git HEAD 有合法副本 | 从 Git 恢复（§12.17） | `RECOVERY_REQUIRED`（error）—— Git 回退**从未接线** | 已修 |
 | canonical 被截断、无 Git 历史 | `RECOVERY_REQUIRED`，不静默 | `RECOVERY_REQUIRED`（error，exit 2） | 通过 |
 | **`reconcile`（resume 真正跑的入口）面对不可读的 ACTIVE** | 绝不能说 clean | **exit 0、`clean: true`、零 finding** | 已修 |
-| 结构合法但 `schema_version: 9.0`（更新版本） | 可读 + 报告不兼容；拒绝写入 | 写入正确拒绝（`SCHEMA_NEWER_REFUSED`，exit 4，文件字节不变）；但**读取静默**：`validate` exit 0 | **未修** |
+| 结构合法但 `schema_version: 9.0`（更新版本） | 可读 + 报告不兼容；拒绝写入 | 写入正确拒绝（`SCHEMA_NEWER_REFUSED`，exit 4，文件字节不变）；但**读取曾静默**：`validate` exit 0 | 已修 |
+| manifest 能解析但违反自身 schema | `validate` 应报 schema 违规 | **从不校验 manifest**（只捕获解析错误），尽管它提供 `--print-schema manifest` | 已修 |
 | mutable-input lineage：只改一个 key input | `ATTRIBUTION_FORBIDDEN`；身份相同则 `COMPARABLE` | **任何两条记录都判 `ATTRIBUTION_FORBIDDEN`**（code identity 把 `research/` 也算进去了） | 已修 |
 
 最后一行修好之后端到端复验：身份相同 → `COMPARABLE`（exit 0）；`replay_suite` 变动 →
@@ -202,9 +203,13 @@ run：新 session 应先识别已有 job 再决定 observe/finalize，而不是�
 local proxy metric 与 E4/人工观察冲突，确认触发 evaluator investigation 而不是盲目优化
 proxy）。#3 的 CLI 层一半可由 `job` 覆盖，判定权一半仍需新 session。
 
-`#11`（canonical JSON 带 `schema_version` 且中断写入后安全恢复）因此只完成一半：crash-safe
-与"无历史时不静默"都通过，"更新版本被读取时报告不兼容"未修。修它没有明显的单一落点
-（`validator` 不能 import `registry`，会成环），所以是一个待决策项而不是一个补丁。
+`#11`（canonical JSON 带 `schema_version` 且中断写入后安全恢复）现在**全部通过**：crash-safe
+写入、从 `.tmp` 恢复、从 Git 恢复并报告来源、无历史时报错、更新版本在**读取时**即被报告、
+且写入始终被拒绝。
+
+这些修复**不需要改 skill** —— `session-continuity.md` 早早就有那张兼容性表（写着 `NEWER` 是
+"read, with a warning"）和那句恢复顺序（`canonical → .tmp → git`，来源必须报告）。是代码没有
+兑现它自己的文档。这也让这一轮的缺陷模式更清楚：不是文档漂移，是**声明与实现之间从未接线**。
 
 ## 准备 fixture 时在正常路径上撞到的三个缺陷（全部已修）
 
