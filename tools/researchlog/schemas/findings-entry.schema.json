@@ -1,0 +1,26 @@
+{
+  "title": "Finding",
+  "description": "One durable belief in research/FINDINGS.md. Findings are context compression, not a log: every entry cites evidence IDs, and an entry with no usable evidence cannot claim to be Established.",
+  "type": "object",
+  "required": ["id", "title", "status", "confidence", "max_evidence_level", "evidence"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^FND-[A-Za-z0-9TZ:._-]+$" },
+    "title": { "type": "string" },
+    "status": {
+      "enum": ["Established", "Provisional", "Refuted", "Superseded", "Open"],
+      "description": "Refuted is the fate of a hypothesis. Superseded is the fate of a finding that was once believed and is now replaced, and it requires superseded_by and reason."
+    },
+    "confidence": { "enum": ["low", "moderate", "high", "certain"] },
+    "max_evidence_level": {
+      "enum": ["E0", "E1", "E2", "E3", "E4", "E5"],
+      "description": "The highest evidence level among the cited records. Recomputed by the tool; a supplied value that disagrees is a state error."
+    },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "implication": { "type": ["string", "null"] },
+    "limitation": { "type": ["string", "null"] },
+    "superseded_by": { "type": ["string", "null"] },
+    "reason": { "type": ["string", "null"] },
+    "created_at": { "type": ["string", "null"] },
+    "updated_at": { "type": ["string", "null"] }
+  }
+}

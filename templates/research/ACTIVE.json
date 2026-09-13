@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "session_epoch": null,
+  "status": "idle",
+  "research_question": null,
+  "subject": null,
+  "hypothesis_ids": [],
+  "chosen_hypothesis": null,
+  "experiment_id": null,
+  "intent": null,
+  "expected_evidence": {
+    "supports_if": null,
+    "weakens_if": null
+  },
+  "block": {
+    "id": null,
+    "objective": null,
+    "max_evidence_iterations": null,
+    "max_wall_clock_minutes": null,
+    "max_tokens": null,
+    "completed_evidence_iterations": 0,
+    "belief_delta": null,
+    "stop_conditions": []
+  },
+  "git": {
+    "branch": null,
+    "base_commit": null,
+    "checkpoint_commit": null,
+    "dirty_expected": false,
+    "expected_touched_files": []
+  },
+  "execution": {
+    "status": "idle",
+    "completed_cases": [],
+    "pending_cases": [],
+    "run_manifest": null
+  },
+  "current_observation": null,
+  "next_action": null,
+  "updated_at": null
+}

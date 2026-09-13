@@ -1,0 +1,143 @@
+{
+  "title": "Evidence record",
+  "description": "One immutable record in research/ledger/. Append-only. `execution_status` and `research_outcome` are separate axes: an environment failure must never enter FINDINGS as a refuted hypothesis.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "question",
+    "subject",
+    "evidence_level",
+    "observations",
+    "execution_status",
+    "research_outcome",
+    "confidence",
+    "counts_as_evidence_iteration"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "evidence_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-Za-z0-9TZ:._-]+$" },
+    "created_at": { "type": ["string", "null"] },
+    "experiment_id": { "type": ["string", "null"] },
+    "question": { "type": "string" },
+    "subject": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string" },
+        "id": { "type": "string" }
+      }
+    },
+    "hypothesis_ids": { "type": "array", "items": { "type": "string" } },
+    "evidence_level": { "enum": ["E0", "E1", "E2", "E3", "E4", "E5"] },
+    "target_evidence_level": {
+      "enum": ["E0", "E1", "E2", "E3", "E4", "E5", null],
+      "description": "The level the research question actually required. When evidence_level is lower, the surrogate contract becomes mandatory."
+    },
+    "surrogate": { "type": "boolean" },
+    "surrogate_contract": {
+      "type": ["object", "null"],
+      "required": [
+        "target_causal_claim",
+        "required_causal_features",
+        "preserved_features",
+        "missing_or_distorted_features",
+        "allowed_conclusions",
+        "forbidden_conclusions",
+        "verdict"
+      ],
+      "properties": {
+        "target_causal_claim": { "type": "string" },
+        "required_causal_features": { "type": "array", "items": { "type": "string" } },
+        "preserved_features": { "type": "array", "items": { "type": "string" } },
+        "missing_or_distorted_features": { "type": "array", "items": { "type": "string" } },
+        "allowed_conclusions": { "type": "array", "items": { "type": "string" } },
+        "forbidden_conclusions": { "type": "array", "items": { "type": "string" } },
+        "verdict": { "enum": ["VALID_SURROGATE", "EVIDENCE_INVALID"] }
+      }
+    },
+    "observations": { "type": "array", "items": { "type": "string" } },
+    "measurements": {
+      "type": ["object", "null"],
+      "description": "Flat scalar map, so that two records always have a well-defined set of common measurements.",
+      "additionalProperties": { "type": ["string", "number", "integer", "boolean", "null"] }
+    },
+    "execution_status": {
+      "enum": [
+        "completed",
+        "interrupted",
+        "infra_failed",
+        "env_blocked",
+        "env_unsupported",
+        "resource_exceeded",
+        "invalid"
+      ]
+    },
+    "research_outcome": {
+      "enum": [
+        "confirmed",
+        "refuted",
+        "inconclusive",
+        "failed",
+        "informative_failure",
+        "promising",
+        "none"
+      ]
+    },
+    "confidence": { "enum": ["low", "moderate", "high", "certain"] },
+    "hypotheses_differentiated": { "type": "array", "items": { "type": "string" } },
+    "belief_delta": { "enum": ["none", "refined", "overturned"] },
+    "counts_as_evidence_iteration": {
+      "type": "boolean",
+      "description": "Derived, never supplied by the caller. Recomputed from execution_status, research_outcome, hypotheses_differentiated and belief_delta."
+    },
+    "invalidated_if": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Predicates that must hold for this evidence to stay valid, for example \"env.sim_physics_hz != 30\". An environment change is checked against these to compute the invalidation closure."
+    },
+    "supports": { "type": "array", "items": { "type": "string" } },
+    "contradicts": { "type": "array", "items": { "type": "string" } },
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string" },
+          "role": { "type": ["string", "null"] },
+          "sha256": { "type": ["string", "null"] },
+          "size": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "code_state": {
+      "type": ["object", "null"],
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] },
+        "base_commit": { "type": ["string", "null"] },
+        "dirty": { "type": "boolean" },
+        "diff_sha256": { "type": ["string", "null"] }
+      }
+    },
+    "environment": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "fingerprint": { "type": ["string", "null"] },
+        "comparability": { "enum": ["COMPATIBLE", "REBASELINED", "INCOMPARABLE", null] }
+      }
+    },
+    "inputs": {
+      "type": ["object", "null"],
+      "description": "Stable identities of every mutable input that took part in this comparison.",
+      "additionalProperties": { "type": "string" }
+    },
+    "anchor": {
+      "type": "boolean",
+      "description": "Mark the few evidence records worth re-running after an environment change."
+    }
+  }
+}

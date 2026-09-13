@@ -1,0 +1,92 @@
+{
+  "title": "Run manifest",
+  "description": "Created before execution, so an interrupted run still has an identity. `status: running` with no result.json means interrupted, never a scientific negative.",
+  "type": "object",
+  "required": ["schema_version", "experiment_id", "status", "code_state", "execution"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "experiment_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-Za-z0-9TZ:._-]+$" },
+    "created_at": { "type": ["string", "null"] },
+    "question": { "type": ["string", "null"] },
+    "hypothesis_ids": { "type": "array", "items": { "type": "string" } },
+    "subject": {
+      "type": ["object", "null"],
+      "properties": {
+        "type": { "type": "string" },
+        "id": { "type": "string" }
+      }
+    },
+    "environment": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "fingerprint": { "type": ["string", "null"] },
+        "comparability": { "enum": ["COMPATIBLE", "REBASELINED", "INCOMPARABLE", null] }
+      }
+    },
+    "code_state": {
+      "type": "object",
+      "required": ["branch", "commit", "base_commit", "dirty", "diff_sha256"],
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] },
+        "base_commit": { "type": ["string", "null"] },
+        "dirty": { "type": "boolean" },
+        "diff_sha256": { "type": ["string", "null"] }
+      }
+    },
+    "inputs": {
+      "type": ["object", "null"],
+      "description": "Every mutable input taking part in the comparison, with a stable identity such as data-v3@sha256:.... A comparison that changes several at once cannot attribute its delta to the algorithm.",
+      "additionalProperties": { "type": "string" }
+    },
+    "command": { "type": ["array", "null"], "items": { "type": "string" } },
+    "status": {
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "interrupted",
+        "infra_failed",
+        "env_blocked",
+        "env_unsupported",
+        "resource_exceeded",
+        "invalid"
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "host",
+        "launcher",
+        "pid_or_job_id",
+        "started_at",
+        "heartbeat_or_last_observed_at",
+        "stdout",
+        "stderr",
+        "expected_outputs"
+      ],
+      "properties": {
+        "host": { "type": ["string", "null"] },
+        "launcher": {
+          "enum": ["local_process", "slurm", "tmux", "docker", "remote", "none"],
+          "description": "Only local_process is inspectable by `researchlog job`. Anything else reports liveness as unknown rather than guessing."
+        },
+        "pid_or_job_id": { "type": ["string", "null"] },
+        "pid_started_at": {
+          "type": ["string", "null"],
+          "description": "Process start time, used to detect PID reuse before reporting liveness."
+        },
+        "started_at": { "type": ["string", "null"] },
+        "heartbeat_or_last_observed_at": { "type": ["string", "null"] },
+        "stdout": { "type": ["string", "null"] },
+        "stderr": { "type": ["string", "null"] },
+        "expected_outputs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "child_exit_code": { "type": ["integer", "null"] },
+    "interruption_reason": {
+      "enum": ["session_boundary", "client_restart", "process_signal", "machine_shutdown", "timeout", "unknown", null]
+    }
+  }
+}

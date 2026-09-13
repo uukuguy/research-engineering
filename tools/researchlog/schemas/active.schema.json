@@ -1,0 +1,130 @@
+{
+  "title": "ACTIVE.json",
+  "description": "Session continuation capsule. Mechanical, short, rewritten often. This is an execution pointer, not a research narrative. Unknown fields must survive a read-modify-write cycle.",
+  "type": "object",
+  "required": ["schema_version", "status", "block", "git", "execution", "updated_at"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "session_epoch": { "type": ["string", "null"] },
+    "status": {
+      "enum": [
+        "idle",
+        "planning_evidence",
+        "implementing",
+        "ready_to_run",
+        "running",
+        "reviewing",
+        "blocked",
+        "interrupted"
+      ]
+    },
+    "research_question": { "type": ["string", "null"] },
+    "subject": {
+      "type": ["object", "null"],
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "enum": [
+            "question",
+            "idea",
+            "mechanism",
+            "algorithm",
+            "component",
+            "architecture_spike",
+            "harness",
+            "instrumentation",
+            "evaluation_surface",
+            "partial_stack",
+            "vertical_slice",
+            "system",
+            "submission_candidate"
+          ]
+        },
+        "id": { "type": "string" }
+      }
+    },
+    "hypothesis_ids": { "type": "array", "items": { "type": "string" } },
+    "chosen_hypothesis": { "type": ["string", "null"] },
+    "experiment_id": { "type": ["string", "null"] },
+    "intent": { "type": ["string", "null"] },
+    "expected_evidence": {
+      "type": "object",
+      "properties": {
+        "supports_if": { "type": ["string", "null"] },
+        "weakens_if": { "type": ["string", "null"] }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": [
+        "id",
+        "objective",
+        "max_evidence_iterations",
+        "max_wall_clock_minutes",
+        "max_tokens",
+        "completed_evidence_iterations",
+        "belief_delta",
+        "stop_conditions"
+      ],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "objective": { "type": ["string", "null"] },
+        "max_evidence_iterations": { "type": ["integer", "null"], "minimum": 1 },
+        "max_wall_clock_minutes": { "type": ["integer", "null"], "minimum": 1 },
+        "max_tokens": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Telemetry only. Token spend lives in the agent runtime, not the filesystem, so this tool can record and reconcile it but cannot enforce it."
+        },
+        "tokens_used": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Self-reported spend for this block. Reconcile compares it against max_tokens after the fact; it is never a gate."
+        },
+        "completed_evidence_iterations": { "type": "integer", "minimum": 0 },
+        "belief_delta": {
+          "enum": ["none", "refined", "overturned", null],
+          "description": "Null while the block is open; written once at close. A block whose members changed belief cannot close as 'none'."
+        },
+        "stop_conditions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "git": {
+      "type": "object",
+      "required": ["branch", "base_commit", "checkpoint_commit", "dirty_expected", "expected_touched_files"],
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "base_commit": { "type": ["string", "null"] },
+        "checkpoint_commit": { "type": ["string", "null"] },
+        "dirty_expected": { "type": "boolean" },
+        "expected_touched_files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": ["status", "completed_cases", "pending_cases", "run_manifest"],
+      "properties": {
+        "status": {
+          "enum": [
+            "idle",
+            "running",
+            "partial",
+            "completed",
+            "interrupted",
+            "infra_failed",
+            "env_blocked",
+            "env_unsupported",
+            "resource_exceeded",
+            "invalid"
+          ]
+        },
+        "completed_cases": { "type": "array", "items": { "type": "string" } },
+        "pending_cases": { "type": "array", "items": { "type": "string" } },
+        "run_manifest": { "type": ["string", "null"] }
+      }
+    },
+    "current_observation": { "type": ["string", "null"] },
+    "next_action": { "type": ["string", "null"] },
+    "updated_at": { "type": ["string", "null"] }
+  }
+}
