@@ -131,15 +131,19 @@ Long autonomous batches are bounded in `ACTIVE.json`:
 ```
 
 - `max_evidence_iterations` counts belief-changing valid evidence. `INFRA_FAILED` and
-  friends are not progress.
-- `completed_evidence_iterations` and `belief_delta` are **derived**. The tool recomputes
-  them from the ledger and rejects a hand-maintained value that disagrees
-  (`EVIDENCE_ITERATION_COUNT_DRIFT`, `EVIDENCE_ITERATION_COUNT_FALSE`). Do not set them
-  by hand.
-- `belief_delta` stays `null` for the whole life of an open block. It is written once, at
-  close, as `none`, `refined`, or `overturned`. A block whose members changed belief
-  cannot close as `none`.
-- On reaching a limit, synthesize the current belief and open a new block. Do not grind
+  friends are not progress. The count is derived from the ledger on every check, so
+  exceeding the limit is reported **while the block is still running** —
+  `BLOCK_ITERATION_BUDGET_EXCEEDED`. That is the point of the bound: grinding happens
+  during the block, not at its close.
+- `completed_evidence_iterations` and `belief_delta` are **derived**. `belief_delta` stays
+  `null` for the whole life of an open block and is written once, at close, as `none`,
+  `refined`, or `overturned`; `completed_evidence_iterations` is written at the same
+  moment, by the same command, from the ledger. Nothing maintains a live counter, because
+  a counter nobody maintains is a counter that lies. Do not set either by hand — a
+  hand-set value that disagrees is reported (`EVIDENCE_ITERATION_COUNT_DRIFT`), and the
+  per-record form is reported as `EVIDENCE_ITERATION_COUNT_FALSE`.
+- A block whose members changed belief cannot close as `none`.
+- On reaching the limit, synthesize the current belief and open a new block. Do not grind
   through thirty similar mutations.
 
 **`max_tokens` is telemetry.** Token spend lives in the agent runtime, not on the

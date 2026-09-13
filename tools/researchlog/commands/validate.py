@@ -123,7 +123,7 @@ def _check_block(active: object, ledger: state.Ledger, result: Result) -> None:
     block = active.get("block")  # type: ignore[attr-defined]
     if not isinstance(block, dict):
         return
-    members = _block_members(active, ledger)  # type: ignore[arg-type]
+    members = constraints.block_members(active.raw, list(ledger.records.values()))  # type: ignore[attr-defined]
     for finding in constraints.check_block_contract(block, member_records=members):
         result.add(finding)
 
@@ -139,17 +139,6 @@ def _signals(paths: repo.ResearchPaths) -> list[dict]:
     if not paths.architect.is_file():
         return []
     return schema.extract_blocks(paths.architect.read_text(encoding="utf-8")).get("signal", [])
-
-
-def _block_members(active: object, ledger: state.Ledger) -> list[dict]:
-    hypothesis_ids = set(active.get("hypothesis_ids") or [])  # type: ignore[attr-defined]
-    if not hypothesis_ids:
-        return list(ledger.records.values())
-    return [
-        record
-        for record in ledger.records.values()
-        if hypothesis_ids & set(record.get("hypothesis_ids") or [])
-    ]
 
 
 def active_hypotheses(paths: repo.ResearchPaths) -> list[str]:

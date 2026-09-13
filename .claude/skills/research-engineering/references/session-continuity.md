@@ -39,8 +39,9 @@ reasoning.
   },
   "block": {"id": "RB-024", "objective": "Resolve recovery oscillation",
             "max_evidence_iterations": 6, "max_wall_clock_minutes": 180,
-            "max_tokens": 400000, "completed_evidence_iterations": 2,
-            "belief_delta": null,
+            "max_tokens": 400000, "completed_evidence_iterations": 0,
+            "belief_delta": null,   # both are written together, at close — an open block
+                                    # reads 0 here because nothing has closed it yet
             "stop_conditions": ["question_resolved", "hard_boundary",
                                 "major_architecture_decision", "no_valid_evidence_path"]},
   "git": {"branch": "research/recovery", "base_commit": "83ab21c",

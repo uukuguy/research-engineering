@@ -169,6 +169,81 @@ class HypothesisRegistryTests(GitRepoCase):
         self.assertIn("UNKNOWN_HYPOTHESIS", [f["code"] for f in envelope["findings"]])
 
 
+class BlockCountTests(GitRepoCase):
+    """The second defect the acceptance work found on the ordinary path.
+
+    `EVIDENCE_ITERATION_COUNT_DRIFT` compared the stored count against the derived one while
+    the block was open, and no command ever wrote the stored count. Every project that
+    recorded a belief-changing iteration therefore carried an error it could not clear, with
+    a fix hint telling it not to maintain that field by hand either.
+    """
+
+    def record_a_counting_iteration(self) -> None:
+        code, envelope = self.record(
+            "--question",
+            "Does the residual separate release timing from measurement noise?",
+            "--subject-type",
+            "harness",
+            "--subject-id",
+            "HRN-001",
+            "--level",
+            "E2",
+            "--execution-status",
+            "completed",
+            "--research-outcome",
+            "refuted",
+            "--confidence",
+            "moderate",
+            "--hypothesis",
+            "H-037",
+            "--belief-delta",
+            "refined",
+            "--observation",
+            "The residual tracked release timing.",
+        )
+        self.assertEqual(code, 0, envelope)
+
+    def declare_hypothesis(self) -> None:
+        self.run_cli("active", "--set", 'hypothesis_ids=["H-037"]')
+
+    def test_an_open_block_is_not_accused_of_drifting(self) -> None:
+        self.init_state()
+        self.declare_hypothesis()
+        self.record_a_counting_iteration()
+
+        _, envelope = self.run_cli("validate")
+        self.assertNotIn(
+            "EVIDENCE_ITERATION_COUNT_DRIFT", [f["code"] for f in envelope["findings"]]
+        )
+
+    def test_closing_the_block_writes_the_derived_count(self) -> None:
+        self.init_state()
+        self.declare_hypothesis()
+        self.record_a_counting_iteration()
+
+        code, envelope = self.run_cli("active", "--close-block", "--belief-delta", "refined")
+        self.assertEqual(code, 0, envelope)
+
+        _, document = self.run_cli("active", "--get-json")
+        self.assertEqual(document["payload"]["active"]["block"]["completed_evidence_iterations"], 1)
+
+        _, envelope = self.run_cli("validate")
+        self.assertEqual([f["code"] for f in envelope["findings"]], [])
+
+    def test_a_block_that_overspends_its_budget_is_reported_while_it_runs(self) -> None:
+        self.init_state()
+        self.declare_hypothesis()
+        self.run_cli("active", "--set", "block.id=RB-024")
+        self.run_cli("active", "--set", "block.max_evidence_iterations=1")
+        self.record_a_counting_iteration()
+        self.record_a_counting_iteration()
+
+        _, envelope = self.run_cli("validate")
+        self.assertIn(
+            "BLOCK_ITERATION_BUDGET_EXCEEDED", [f["code"] for f in envelope["findings"]]
+        )
+
+
 class ArchitectSignalTests(GitRepoCase):
     """A boundary signal must not lose the wording it was given.
 
@@ -274,6 +349,22 @@ class ArchitectSignalTests(GitRepoCase):
 
         _, envelope = self.run_cli("validate")
         self.assertIn("BLOCK_MALFORMED", [f["code"] for f in envelope["findings"]])
+
+    def test_the_skeleton_ships_no_live_signals(self) -> None:
+        """A project built from the template must not start with a constraint nobody issued.
+
+        The example in `ARCHITECT.md` used to be a real `research:signal` block, so every new
+        project opened with a `CONSTRAINT` no architect had given — and it was fully
+        compliant, so no check could see it. The fence is the only observable difference
+        between teaching a shape and asserting a fact, which is why this asserts on the text
+        rather than on a finding.
+        """
+        self.init_state()
+        text = (self.root / "research" / "ARCHITECT.md").read_text(encoding="utf-8")
+        self.assertNotIn("```json research:signal", text)
+
+        _, envelope = self.run_cli("validate")
+        self.assertEqual([f["code"] for f in envelope["findings"]], [])
 
     def test_the_shipped_template_satisfies_the_rule_it_teaches(self) -> None:
         """A new project bootstraps from the template; it must not start on an error."""

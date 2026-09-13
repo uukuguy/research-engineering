@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -90,7 +91,12 @@ def run(args: argparse.Namespace) -> Result:
 
     if writing:
         schema.require_writable("active", paths.active, record.raw)
-        changed = _apply(record, args)
+        # Only a close needs the ledger. Loading it on every mutation would make the common
+        # case pay for the rare one, and `_apply` would still have to be told which is which.
+        members: list[Mapping[str, Any]] = []
+        if args.belief_delta is not None:
+            members = constraints.block_members(record.raw, list(state.load_ledger(paths).records.values()))
+        changed = _apply(record, args, members=members)
         record.set("updated_at", _now())
         ioutil.write_json_atomic(
             paths.active, record.raw, validator=schema.load_validator("active")
@@ -116,7 +122,12 @@ def _is_writing(args: argparse.Namespace) -> bool:
     )
 
 
-def _apply(record: Record, args: argparse.Namespace) -> list[str]:
+def _apply(
+    record: Record,
+    args: argparse.Namespace,
+    *,
+    members: Sequence[Mapping[str, Any]] = (),
+) -> list[str]:
     if args.close_block and args.belief_delta is None:
         raise StateInvalid(
             [
@@ -150,6 +161,11 @@ def _apply(record: Record, args: argparse.Namespace) -> list[str]:
     if args.belief_delta is not None:
         record.set("block.belief_delta", args.belief_delta)
         changed.append("block.belief_delta")
+        # The count is derived, and it is written here, once, with belief_delta: the moment
+        # a block's summary is fixed is the moment its count can be final. Nothing writes it
+        # during the block, because a counter nobody maintains is a counter that lies.
+        record.set("block.completed_evidence_iterations", constraints.count_evidence_iterations(members))
+        changed.append("block.completed_evidence_iterations")
     if args.close_block:
         record.set("status", "idle")
         changed.append("status")

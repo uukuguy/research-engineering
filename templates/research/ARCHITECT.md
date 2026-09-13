@@ -30,7 +30,12 @@ algorithmic detail is better left to the agent.
 
 ## The signal contract
 
-```json research:signal
+The example below is a **shape, not a signal**: it sits in a plain `json` block, so nothing
+reads it. A signal is what you get when you put this shape in a `research:signal` block with
+a real id and words someone actually said. The fence is the whole difference, and the tool
+cannot tell shape from state — which is why the skeleton ships no live signals.
+
+```json
 {
   "id": "C-009",
   "type": "CONSTRAINT",

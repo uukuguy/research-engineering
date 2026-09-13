@@ -185,6 +185,44 @@ def highest_level(cited: Sequence[str], evidence_levels: Mapping[str, str]) -> s
     return _highest_level(cited, evidence_levels)
 
 
+def count_evidence_iterations(member_records: Sequence[Mapping[str, Any]]) -> int:
+    """A block's evidence-iteration count, derived from its members.
+
+    There is one definition of a belief-changing iteration, and it is
+    `derive_counts_as_evidence_iteration`. This counts them; it never invents one.
+    """
+    return sum(1 for record in member_records if derive_counts_as_evidence_iteration(record))
+
+
+def identified_hypotheses(record: Mapping[str, Any]) -> set[str]:
+    """Every hypothesis an evidence record names, from either field.
+
+    `hypothesis_ids` is what the evidence bears on and `hypotheses_differentiated` is what
+    it separated; a record may name a hypothesis in either without the other. This is the
+    same union `_check_hypotheses` uses, and it is defined once so that membership and
+    reference cannot drift apart — reading only `hypothesis_ids` silently dropped every
+    record that named its hypotheses through the other field, and a block that drops
+    members under-counts its own budget.
+    """
+    return set(record.get("hypothesis_ids") or []) | set(record.get("hypotheses_differentiated") or [])
+
+
+def block_members(
+    active: Mapping[str, Any], records: Sequence[Mapping[str, Any]]
+) -> list[Mapping[str, Any]]:
+    """The evidence records a block covers.
+
+    A block covers the records bearing on the hypotheses ACTIVE declares. With none
+    declared there is no way to tell one block's evidence from another's, so the whole
+    ledger is the block. That is a limit of V0 rather than a definition, and it is why the
+    membership rule lives here instead of being re-derived by each caller.
+    """
+    hypothesis_ids = set(active.get("hypothesis_ids") or [])
+    if not hypothesis_ids:
+        return list(records)
+    return [record for record in records if hypothesis_ids & identified_hypotheses(record)]
+
+
 def check_block_contract(
     block: Mapping[str, Any],
     *,
@@ -192,26 +230,52 @@ def check_block_contract(
 ) -> list[Finding]:
     """A block's own summary must agree with the evidence it contains."""
     findings: list[Finding] = []
-    counted = sum(1 for record in member_records if derive_counts_as_evidence_iteration(record))
+    identifier = str(block.get("id") or "?")
+    counted = count_evidence_iterations(member_records)
+    block_delta = block.get("belief_delta")
+
+    # The stored count is a claim about the block, made once, at close — the same lifecycle
+    # as belief_delta. While the block is open there is nothing to compare it against, and
+    # comparing it anyway reported drift on every project that recorded an iteration, with
+    # no way to clear it: no command wrote the field, and the finding told the reader not to
+    # write it by hand either. Comparing only a closed block is what makes the field a
+    # summary rather than a counter nobody maintains.
     declared = block.get("completed_evidence_iterations")
-    if isinstance(declared, int) and declared != counted:
+    if block_delta is not None and isinstance(declared, int) and declared != counted:
         findings.append(
             Finding(
                 "EVIDENCE_ITERATION_COUNT_DRIFT",
                 SEVERITY_ERROR,
-                str(block.get("id", "?")),
+                identifier,
                 f"block claims {declared} evidence iterations, its evidence shows {counted}",
-                "the count is derived from the ledger; do not maintain it by hand",
+                "the count is derived from the ledger when the block closes; do not maintain "
+                "it by hand",
             )
         )
 
-    block_delta = block.get("belief_delta")
+    # The budget is what makes a block a bound rather than a label, and it has to hold while
+    # the block is *running* — that is when grinding through thirty similar mutations
+    # happens. It is checked against the derived count, so it does not depend on anyone
+    # having updated a stored number.
+    limit = block.get("max_evidence_iterations")
+    if isinstance(limit, int) and counted > limit:
+        findings.append(
+            Finding(
+                "BLOCK_ITERATION_BUDGET_EXCEEDED",
+                SEVERITY_ERROR,
+                identifier,
+                f"block has spent {counted} of {limit} evidence iterations",
+                "close the block and synthesise what was learned before opening the next one; "
+                "the limit exists to stop unbounded repetition, not to be raised",
+            )
+        )
+
     if block_delta not in BELIEF_DELTAS and block_delta is not None:
         findings.append(
             Finding(
                 "BLOCK_BELIEF_DELTA_INVALID",
                 SEVERITY_ERROR,
-                str(block.get("id", "?")),
+                identifier,
                 f"belief_delta must be null, none, refined or overturned; got {block_delta!r}",
             )
         )
@@ -222,7 +286,7 @@ def check_block_contract(
             Finding(
                 "BLOCK_BELIEF_DELTA_INCONSISTENT",
                 SEVERITY_ERROR,
-                str(block.get("id", "?")),
+                identifier,
                 "block closes as belief_delta 'none' but one of its evidence records changed belief",
             )
         )
@@ -419,7 +483,7 @@ def _check_hypotheses(
     allowed: Sequence[str] | None,
 ) -> list[Finding]:
     findings: list[Finding] = []
-    referenced = set(record.get("hypothesis_ids") or []) | set(record.get("hypotheses_differentiated") or [])
+    referenced = identified_hypotheses(record)
 
     if known is not None and referenced:
         unknown = sorted(referenced - set(known))

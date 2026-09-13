@@ -231,14 +231,27 @@ class FindingTests(unittest.TestCase):
 
 
 class BlockContractTests(unittest.TestCase):
-    def test_a_drifted_iteration_count_is_rejected(self) -> None:
-        block = {"id": "RB-024", "completed_evidence_iterations": 5, "belief_delta": None}
+    def test_an_open_block_is_not_compared_against_a_stale_count(self) -> None:
+        """The count is written at close, so during the block there is nothing to compare.
+
+        Comparing anyway reported drift on every project that recorded an iteration, with no
+        way to clear it: no command wrote the field, and the finding told the reader not to
+        write it by hand either.
+        """
+        block = {"id": "RB-024", "completed_evidence_iterations": 0, "belief_delta": None}
+        findings = constraints.check_block_contract(block, member_records=[evidence()])
+        self.assertNotIn("EVIDENCE_ITERATION_COUNT_DRIFT", codes(findings))
+
+    def test_a_closed_block_that_overstates_its_count_is_rejected(self) -> None:
+        block = {"id": "RB-024", "completed_evidence_iterations": 5, "belief_delta": "refined"}
         findings = constraints.check_block_contract(block, member_records=[evidence()])
         self.assertIn("EVIDENCE_ITERATION_COUNT_DRIFT", codes(findings))
 
-    def test_an_accurate_iteration_count_passes(self) -> None:
-        block = {"id": "RB-024", "completed_evidence_iterations": 1, "belief_delta": None}
-        self.assertEqual(constraints.check_block_contract(block, member_records=[evidence()]), [])
+    def test_a_closed_block_with_the_derived_count_passes(self) -> None:
+        block = {"id": "RB-024", "completed_evidence_iterations": 1, "belief_delta": "refined"}
+        self.assertEqual(
+            constraints.check_block_contract(block, member_records=[evidence()]), []
+        )
 
     def test_a_block_changed_belief_but_closing_as_none_is_rejected(self) -> None:
         block = {"id": "RB-024", "completed_evidence_iterations": 1, "belief_delta": "none"}
@@ -253,6 +266,65 @@ class BlockContractTests(unittest.TestCase):
         block = {"id": "RB-024", "completed_evidence_iterations": 0, "belief_delta": "maybe"}
         findings = constraints.check_block_contract(block, member_records=[])
         self.assertIn("BLOCK_BELIEF_DELTA_INVALID", codes(findings))
+
+
+class BlockBudgetTests(unittest.TestCase):
+    """The bound has to hold while the block is running. That is when grinding happens."""
+
+    def block(self, **overrides) -> dict:
+        base = {"id": "RB-024", "max_evidence_iterations": 2, "completed_evidence_iterations": 0, "belief_delta": None}
+        base.update(overrides)
+        return base
+
+    def records(self, count: int) -> list[dict]:
+        return [evidence() for _ in range(count)]
+
+    def test_exceeding_the_budget_is_reported_while_the_block_is_open(self) -> None:
+        findings = constraints.check_block_contract(self.block(), member_records=self.records(3))
+        self.assertIn("BLOCK_ITERATION_BUDGET_EXCEEDED", codes(findings))
+
+    def test_spending_the_budget_exactly_is_not_exceeding_it(self) -> None:
+        findings = constraints.check_block_contract(self.block(), member_records=self.records(2))
+        self.assertNotIn("BLOCK_ITERATION_BUDGET_EXCEEDED", codes(findings))
+
+    def test_a_block_with_no_limit_is_not_bounded(self) -> None:
+        findings = constraints.check_block_contract(
+            self.block(max_evidence_iterations=None), member_records=self.records(30)
+        )
+        self.assertNotIn("BLOCK_ITERATION_BUDGET_EXCEEDED", codes(findings))
+
+    def test_records_that_do_not_count_do_not_spend_the_budget(self) -> None:
+        """The budget counts belief-changing iterations, not runs."""
+        quiet = evidence(research_outcome="inconclusive", hypotheses_differentiated=[], belief_delta="none")
+        findings = constraints.check_block_contract(self.block(), member_records=[quiet] * 9)
+        self.assertNotIn("BLOCK_ITERATION_BUDGET_EXCEEDED", codes(findings))
+
+
+class BlockMembershipTests(unittest.TestCase):
+    def test_a_declared_hypothesis_selects_the_records_that_bear_on_it(self) -> None:
+        active = {"hypothesis_ids": ["H-037"]}
+        mine = evidence()
+        other = evidence(hypotheses_differentiated=["H-999"])
+        self.assertEqual(constraints.block_members(active, [mine, other]), [mine])
+
+    def test_either_hypothesis_field_makes_a_record_a_member(self) -> None:
+        """A record may name its hypotheses through `hypotheses_differentiated` alone.
+
+        Reading only `hypothesis_ids` dropped those records, and a block that drops members
+        under-counts the budget it is supposed to be held to.
+        """
+        active = {"hypothesis_ids": ["H-037"]}
+        only_differentiated = evidence(hypothesis_ids=[], hypotheses_differentiated=["H-037"])
+        self.assertEqual(constraints.block_members(active, [only_differentiated]), [only_differentiated])
+
+    def test_with_no_hypotheses_declared_the_whole_ledger_is_the_block(self) -> None:
+        """A limit of V0, stated rather than hidden: there is nothing to tell blocks apart by."""
+        records = [evidence(), evidence(hypothesis_ids=["H-999"])]
+        self.assertEqual(constraints.block_members({}, records), records)
+
+    def test_the_count_ignores_records_that_change_no_belief(self) -> None:
+        quiet = evidence(research_outcome="inconclusive", hypotheses_differentiated=[], belief_delta="none")
+        self.assertEqual(constraints.count_evidence_iterations([evidence(), quiet]), 1)
 
 
 class SignalTests(unittest.TestCase):
