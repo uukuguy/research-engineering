@@ -1,0 +1,918 @@
+<title>Research Engineering v1.5 评审</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F4F6F5;
+  --surface:#FFFFFF;
+  --surface-2:#EDF1F0;
+  --ink:#141817;
+  --ink-2:#566260;
+  --ink-3:#7C8987;
+  --rule:#DBE2E0;
+  --rule-strong:#C3CDCB;
+  --accent:#1C6A5C;
+  --accent-soft:#E3EFEC;
+  --p0:#A6402A;
+  --p0-soft:#F6E7E2;
+  --p1:#8A6A1E;
+  --p1-soft:#F5EEDC;
+  --defer:#6D7877;
+  --defer-soft:#E9EDEC;
+  --code-bg:#F0F3F2;
+  --shadow:0 1px 2px rgba(20,24,23,.05), 0 4px 16px rgba(20,24,23,.04);
+
+  --font-sans:"Archivo","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+
+  --measure:74ch;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1413;
+    --surface:#161C1B;
+    --surface-2:#1D2523;
+    --ink:#E7ECEA;
+    --ink-2:#96A3A0;
+    --ink-3:#7A8785;
+    --rule:#25302D;
+    --rule-strong:#36443F;
+    --accent:#5CC0A7;
+    --accent-soft:#17302B;
+    --p0:#E2856A;
+    --p0-soft:#33201A;
+    --p1:#D6B15F;
+    --p1-soft:#2E2717;
+    --defer:#8C9896;
+    --defer-soft:#212A28;
+    --code-bg:#121918;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1413;
+  --surface:#161C1B;
+  --surface-2:#1D2523;
+  --ink:#E7ECEA;
+  --ink-2:#96A3A0;
+  --ink-3:#7A8785;
+  --rule:#25302D;
+  --rule-strong:#36443F;
+  --accent:#5CC0A7;
+  --accent-soft:#17302B;
+  --p0:#E2856A;
+  --p0-soft:#33201A;
+  --p1:#D6B15F;
+  --p1-soft:#2E2717;
+  --defer:#8C9896;
+  --defer-soft:#212A28;
+  --code-bg:#121918;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--font-sans);
+  font-size:16px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+  padding-inline:clamp(16px,4vw,40px);
+  padding-block:0 clamp(48px,8vw,96px);
+}
+.wrap{max-width:1080px;margin-inline:auto;}
+
+/* ---------- masthead ---------- */
+.masthead{
+  padding-block:clamp(40px,7vw,80px) clamp(28px,4vw,44px);
+  border-bottom:1px solid var(--rule);
+}
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin:0 0 20px;
+}
+h1{
+  font-size:clamp(30px,5.2vw,50px);
+  line-height:1.1;
+  font-weight:700;
+  letter-spacing:-.022em;
+  text-wrap:balance;
+  margin:0 0 20px;
+}
+h1 .ver{color:var(--ink-3);font-weight:500;}
+.subject{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  color:var(--ink-2);
+  line-height:1.85;
+  margin:0;
+  padding-left:14px;
+  border-left:2px solid var(--rule-strong);
+}
+.subject b{color:var(--ink);font-weight:500;}
+
+/* ---------- thesis ---------- */
+.thesis{
+  max-width:var(--measure);
+  margin-block:clamp(32px,5vw,52px) 0;
+  font-size:clamp(17px,2.1vw,20px);
+  line-height:1.66;
+  color:var(--ink);
+  text-wrap:pretty;
+}
+.thesis strong{
+  font-weight:600;
+  box-shadow:inset 0 -0.42em 0 var(--accent-soft);
+}
+
+/* ---------- verdict bar ---------- */
+.verdict{
+  position:sticky;
+  top:0;
+  z-index:20;
+  margin-top:clamp(32px,5vw,52px);
+  background:var(--ground);
+  background:color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border-block:1px solid var(--rule);
+  padding-block:12px;
+}
+.verdict-inner{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 20px;
+}
+.verdict-label{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+}
+.tally{display:flex;flex-wrap:wrap;gap:8px;}
+.tally span{
+  font-family:var(--font-mono);
+  font-size:12px;
+  font-weight:500;
+  padding:3px 9px;
+  border-radius:2px;
+  border:1px solid transparent;
+  font-variant-numeric:tabular-nums;
+}
+.tally .t-accept{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 25%,transparent);}
+.tally .t-later{background:var(--p1-soft);color:var(--p1);border-color:color-mix(in srgb,var(--p1) 25%,transparent);}
+.tally .t-reject{background:var(--p0-soft);color:var(--p0);border-color:color-mix(in srgb,var(--p0) 25%,transparent);}
+.tally .t-open{background:var(--surface-2);color:var(--ink-2);border-color:var(--rule);}
+.reset{
+  margin-left:auto;
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--ink-3);
+  background:none;
+  border:1px solid var(--rule);
+  border-radius:2px;
+  padding:4px 10px;
+  cursor:pointer;
+  transition:color .15s,border-color .15s;
+}
+.reset:hover{color:var(--ink);border-color:var(--rule-strong);}
+.reset:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ---------- section ---------- */
+section{padding-top:clamp(48px,7vw,84px);}
+.sec-head{
+  display:flex;
+  align-items:baseline;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:8px;
+}
+h2{
+  font-size:clamp(21px,2.9vw,27px);
+  font-weight:600;
+  letter-spacing:-.014em;
+  margin:0;
+  text-wrap:balance;
+}
+.sec-note{
+  max-width:var(--measure);
+  color:var(--ink-2);
+  font-size:15px;
+  margin:0 0 28px;
+}
+.sec-note code, .subject code, .thesis code{
+  font-family:var(--font-mono);
+  font-size:.88em;
+  background:var(--code-bg);
+  padding:1px 5px;
+  border-radius:2px;
+  color:var(--ink);
+}
+
+/* ---------- item ---------- */
+.item{
+  display:grid;
+  grid-template-columns:120px minmax(0,1fr);
+  gap:0 28px;
+  padding-block:26px;
+  border-top:1px solid var(--rule);
+}
+.item:first-of-type{border-top:1px solid var(--rule-strong);}
+.rail{padding-top:2px;}
+.sid{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:.04em;
+  display:block;
+  margin-bottom:9px;
+  font-variant-numeric:tabular-nums;
+}
+.sid.p0{color:var(--p0);}
+.sid.p1{color:var(--p1);}
+.sid.m{color:var(--accent);}
+.sid.d{color:var(--defer);}
+.stripe{
+  display:block;
+  width:100%;
+  height:2px;
+  border-radius:1px;
+  margin-bottom:10px;
+}
+.stripe.p0{background:var(--p0);}
+.stripe.p1{background:var(--p1);}
+.stripe.m{background:var(--accent);}
+.stripe.d{background:var(--defer);}
+.meta{
+  font-family:var(--font-mono);
+  font-size:10.5px;
+  line-height:1.9;
+  color:var(--ink-3);
+  letter-spacing:.02em;
+}
+.meta b{color:var(--ink-2);font-weight:500;display:block;}
+
+.body{min-width:0;max-width:var(--measure);}
+.body h3{
+  font-size:17.5px;
+  font-weight:600;
+  letter-spacing:-.008em;
+  margin:0 0 12px;
+  line-height:1.4;
+  text-wrap:balance;
+}
+.body p{margin:0 0 14px;}
+.body p:last-child{margin-bottom:0;}
+.body p.lead{color:var(--ink);}
+.body .label{
+  font-family:var(--font-mono);
+  font-size:10.5px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  display:block;
+  margin:20px 0 8px;
+}
+.body code{
+  font-family:var(--font-mono);
+  font-size:.87em;
+  background:var(--code-bg);
+  padding:1px 5px;
+  border-radius:2px;
+  color:var(--ink);
+  word-break:break-word;
+}
+.body strong{font-weight:600;}
+.body em{font-style:normal;color:var(--ink-2);}
+
+pre{
+  margin:0 0 14px;
+  background:var(--code-bg);
+  border:1px solid var(--rule);
+  border-left:2px solid var(--rule-strong);
+  border-radius:2px;
+  padding:14px 16px;
+  overflow-x:auto;
+  font-size:12.5px;
+  line-height:1.72;
+}
+pre code{
+  font-family:var(--font-mono);
+  background:none;
+  padding:0;
+  font-size:inherit;
+  color:var(--ink);
+  white-space:pre;
+}
+.cmt{color:var(--ink-3);}
+
+/* ---------- decision control ---------- */
+.decide{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:20px;
+  padding-top:16px;
+  border-top:1px dashed var(--rule-strong);
+}
+.decide button{
+  font-family:var(--font-mono);
+  font-size:11.5px;
+  letter-spacing:.04em;
+  padding:5px 13px;
+  border-radius:2px;
+  border:1px solid var(--rule-strong);
+  background:var(--surface);
+  color:var(--ink-2);
+  cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s;
+}
+.decide button:hover{border-color:var(--ink-3);color:var(--ink);}
+.decide button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.decide[data-state="accept"] button[data-v="accept"],
+.decide[data-state="later"]  button[data-v="later"],
+.decide[data-state="reject"] button[data-v="reject"]{
+  border-color:transparent;
+  font-weight:600;
+}
+.decide[data-state="accept"] button[data-v="accept"]{background:var(--accent);color:var(--ground);}
+.decide[data-state="later"]  button[data-v="later"] {background:var(--p1);color:var(--ground);}
+.decide[data-state="reject"] button[data-v="reject"]{background:var(--p0);color:var(--ground);}
+.decide-note{
+  font-family:var(--font-mono);
+  font-size:11px;
+  color:var(--ink-3);
+  align-self:center;
+  margin-left:auto;
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+
+/* ---------- featured item ---------- */
+.featured{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-top:2px solid var(--accent);
+  border-radius:3px;
+  padding:clamp(22px,3.4vw,34px);
+  box-shadow:var(--shadow);
+  margin-top:8px;
+}
+.featured .item{border-top:none;padding-block:0;}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px;}
+th{
+  text-align:left;
+  font-family:var(--font-mono);
+  font-size:10.5px;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  font-weight:500;
+  padding:12px 16px;
+  border-bottom:1px solid var(--rule-strong);
+  white-space:nowrap;
+}
+td{
+  padding:13px 16px;
+  border-bottom:1px solid var(--rule);
+  vertical-align:top;
+  line-height:1.62;
+}
+tr:last-child td{border-bottom:none;}
+td:first-child{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  font-weight:600;
+  white-space:nowrap;
+}
+td.mono{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-2);}
+th.dec, td.dec{
+  position:sticky;
+  right:0;
+  width:1%;
+  white-space:nowrap;
+  background:var(--surface);
+}
+th.dec{border-left:1px solid var(--rule);}
+td.dec{padding-block:10px;}
+.decide.compact{
+  margin:0;
+  padding:0;
+  border-top:none;
+  gap:3px;
+  flex-wrap:nowrap;
+}
+.decide.compact button{
+  width:27px;
+  height:27px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  font-size:12px;
+  line-height:1;
+}
+
+/* ---------- list ---------- */
+ol.steps, ul.plain{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:s;}
+ol.steps li{
+  counter-increment:s;
+  position:relative;
+  padding-left:38px;
+  margin-bottom:11px;
+}
+ol.steps li::before{
+  content:counter(s);
+  position:absolute;
+  left:0;top:1px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  font-weight:600;
+  color:var(--accent);
+  background:var(--accent-soft);
+  width:22px;height:22px;
+  display:grid;place-items:center;
+  border-radius:2px;
+}
+ul.plain li{
+  position:relative;
+  padding-left:20px;
+  margin-bottom:9px;
+}
+ul.plain li::before{
+  content:"";
+  position:absolute;
+  left:2px;top:.68em;
+  width:5px;height:1.5px;
+  background:var(--ink-3);
+}
+
+/* ---------- assertions ---------- */
+.assert{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:3px;
+  padding:6px 0;
+}
+.assert-row{
+  display:flex;
+  gap:14px;
+  align-items:baseline;
+  padding:11px 18px;
+  border-bottom:1px solid var(--rule);
+}
+.assert-row:last-child{border-bottom:none;}
+.tick{
+  font-family:var(--font-mono);
+  font-size:12px;
+  color:var(--accent);
+  font-weight:600;
+  flex:none;
+}
+.assert-row .txt{font-size:14.5px;line-height:1.6;}
+.assert-row .txt code{font-family:var(--font-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:2px;}
+
+/* ---------- footer ---------- */
+footer{
+  margin-top:clamp(56px,8vw,96px);
+  padding-top:22px;
+  border-top:1px solid var(--rule-strong);
+  font-family:var(--font-mono);
+  font-size:11.5px;
+  line-height:2;
+  color:var(--ink-3);
+}
+footer b{color:var(--ink-2);font-weight:500;}
+
+/* ---------- responsive ---------- */
+@media (max-width:720px){
+  .item{grid-template-columns:minmax(0,1fr);gap:14px 0;padding-block:24px;}
+  .rail{display:flex;align-items:center;gap:12px;}
+  .sid{margin-bottom:0;flex:none;}
+  .stripe{width:auto;flex:1;margin-bottom:0;}
+  .meta{display:flex;gap:26px;flex-wrap:wrap;}
+  .meta b{display:inline;margin-right:5px;}
+  .featured{padding:20px 16px;}
+  .decide{margin-top:16px;}
+  .decide button{flex:1 1 auto;text-align:center;}
+  .decide-note{margin-left:0;flex-basis:100%;text-align:right;}
+}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">设计评审 · 2026-09-13</p>
+  <h1>Research Engineering <span class="ver">v1.5</span> 评审</h1>
+  <p class="subject">
+    评审对象 &nbsp;<b>research-engineering-complete-design-v1.5.docx</b><br>
+    文档范围 &nbsp;正文 23 节 + 附录 4 节，27 节 / 3,573 行<br>
+    文档日期 &nbsp;2026-09-11
+  </p>
+</header>
+
+<p class="thesis">
+  概念层已经收口。核心判断——<strong>Evidence 而非 Candidate/Evaluator 才是稳定抽象</strong>——比同类 autonomous research framework 想得清楚。剩余风险几乎全部集中在同一个位置：<strong>软规则无法强制</strong>。read-mostly 契约、surrogate validity、comparability 判断、evidence 记录纪律，目前都靠 agent 自觉。下面 19 项按此排序。
+</p>
+
+<div class="verdict">
+  <div class="wrap verdict-inner">
+    <span class="verdict-label">决策</span>
+    <div class="tally">
+      <span class="t-accept" id="c-accept">采纳 0</span>
+      <span class="t-later" id="c-later">推后 0</span>
+      <span class="t-reject" id="c-reject">否决 0</span>
+      <span class="t-open" id="c-open">未定 19</span>
+    </div>
+    <button class="reset" id="reset" type="button">清空</button>
+  </div>
+</div>
+
+<!-- ============ P0 ============ -->
+
+<section>
+  <div class="sec-head"><h2>结构性问题</h2></div>
+  <p class="sec-note">这五项会让设计在实战中失败或静默退化，建议在写任何 <code>SKILL.md</code> 之前先定。</p>
+
+  <article class="item" data-id="P0-1">
+    <div class="rail">
+      <span class="sid p0">P0-1</span>
+      <span class="stripe p0"></span>
+      <span class="meta"><b>改动量</b>低<br><b>影响面</b>全局</span>
+    </div>
+    <div class="body">
+      <h3>11 个 skill 与触发可靠性直接冲突</h3>
+      <p>设计有 11 个 skill，靠 description 匹配触发。但 Codex 的 skill 列表有预算（约 context 的 2%，未知时约 8,000 字符），<strong>超预算时先截断 descriptions，再静默 omit</strong>。而 <code>research-diagnosis</code> / <code>experiment-review</code> / <code>research-retrospective</code> 三者的语义高度重叠——截断后触发会变得随机：要么都不触发，要么同时触发三个。</p>
+      <span class="label">建议</span>
+      <p>V0 只发 3 个 skill（<code>research-bootstrap</code> / <code>research-engineering</code> / <code>research-status</code>），其余 8 个认知模式降级为 <code>references/*.md</code>，由主 skill 内一张路由表显式 Read。路由条件用<strong>状态谓词</strong>而非主题名：</p>
+<pre><code>| 观察到的状态                            | 加载                      |
+|----------------------------------------|---------------------------|
+| execution_status != completed 且无 result | (非 research 问题) 先 reconciliation |
+| ≥2 live hypotheses 且刚完成一次 run      | references/experiment-review.md |
+| 连续 N 次 iteration 无 belief change     | references/retrospective.md |
+| 无 evaluator，或 local↑ 而 E4↓            | references/evaluation-design.md |
+| 结论依赖 surrogate                       | references/surrogate-validity.md  <span class="cmt"># 强制</span> |</code></pre>
+      <p>一个入口的显式路由表，比 11 条 description 的模糊匹配可靠得多。等确实需要 context 隔离或多 agent 时再升级为独立 skill。</p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="P0-2">
+    <div class="rail">
+      <span class="sid p0">P0-2</span>
+      <span class="stripe p0"></span>
+      <span class="meta"><b>改动量</b>低<br><b>影响面</b>跨客户端</span>
+    </div>
+    <div class="body">
+      <h3>唯一能解决路由歧义的杠杆被可移植性设计掉了</h3>
+      <p>Codex 支持在 <code>agents/openai.yaml</code> 里用 <code>policy.allow_implicit_invocation</code> 控制 skill 是否可被隐式触发——这正是压制 expert skill 过度触发所需要的机制。但附录 I 的 installer 做的是裸 <code>copytree</code>，而 §9.1 又要求 canonical skill 不含 client-specific frontmatter。<strong>结果是：能治 P0-1 的机制被"可移植性"排除在外。</strong></p>
+      <p>同时，两份 copy 之间没有任何 drift 检测，必然漂移。</p>
+      <span class="label">建议</span>
+<pre><code>skills/&lt;name&gt;/
+├── SKILL.md
+├── references/
+├── .claude/          <span class="cmt"># 可选覆盖层，仅用于生成副本</span>
+└── .agents/
+    └── agents/openai.yaml
+
+<span class="cmt"># installer 增加：</span>
+python tools/install_research_skills.py --check   <span class="cmt"># diff canonical vs installed，非零退出</span></code></pre>
+      <p>overlay 只进生成副本，canonical 保持纯净；<code>--check</code> 可挂在 Gate 或 CI 上。<strong>没有 drift 检测，两份副本漂移是时间问题。</strong></p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="P0-3">
+    <div class="rail">
+      <span class="sid p0">P0-3</span>
+      <span class="stripe p0"></span>
+      <span class="meta"><b>改动量</b>低<br><b>影响面</b>Block Contract + KPI</span>
+    </div>
+    <div class="body">
+      <h3>belief-changing iteration 没有操作定义</h3>
+      <p>这是全系统的原子单位——Block Contract 的 <code>max_evidence_iterations</code>、KPI 的 <code>Evidence/hour</code> 与 <code>Validated unknowns/day</code> 全靠它。但文档只给了语义描述（"改变技术判断的有效证据"），<strong>没有任何可审计的判据</strong>。AI 多算则 block 不设限，少算则提前收工。</p>
+      <span class="label">建议</span>
+      <p>在 evidence record 里落成字段，让计数变成查询而非判断：</p>
+<pre><code>{
+  "execution_status": "completed",
+  "research_outcome": "refuted",
+  "hypotheses_differentiated": ["H-037", "H-039"],
+  "belief_delta": "H-039_eliminated",
+  "counts_as_evidence_iteration": true
+}</code></pre>
+<pre><code>counts_as_evidence_iteration =
+     execution_status == "completed"
+ AND research_outcome IN {confirmed, refuted, inconclusive,
+                          informative_failure, promising}
+ AND (hypotheses_differentiated != [] OR belief_delta != "none")</code></pre>
+      <p>Block Contract 的计数器只能由这个字段驱动，不允许 agent 自行判断。</p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="P0-4">
+    <div class="rail">
+      <span class="sid p0">P0-4</span>
+      <span class="stripe p0"></span>
+      <span class="meta"><b>改动量</b>中<br><b>影响面</b>durable state 完整性</span>
+    </div>
+    <div class="body">
+      <h3>没有任何强制函数保证 evidence 真的被写入</h3>
+      <p>整套 durable state 建立在"AI 每次 run 后都 append Evidence"这个<strong>纯自觉行为</strong>上。跑 5 个实验漏记 3 个，状态就静默腐烂——而且下一 session <strong>无法发现</strong>，因为缺失的记录不会报错。</p>
+      <p>§14.2.1(5) 已经想到"commit 成功但 Evidence 尚未 append"的重叠场景，但没有把它一般化成检测器。</p>
+      <span class="label">建议</span>
+      <p>§12.4 Reconciliation 增加两条确定性检查，由 <code>researchlog reconcile</code> 实现：</p>
+<pre><code>manifest.status == completed AND result.json 存在
+  AND 无任何 Evidence 引用该 EXP-ID     → ORPHAN_RUN
+                                          <span class="cmt">先补记，再开新研究</span>
+
+Evidence 引用不存在的 EXP-ID / EV-ID    → DANGLING_EVIDENCE</code></pre>
+      <p>这是全篇投入产出比最高的一处补充：把"记录纪律"从自律变成可检测的不变量。</p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="P0-5">
+    <div class="rail">
+      <span class="sid p0">P0-5</span>
+      <span class="stripe p0"></span>
+      <span class="meta"><b>改动量</b>低<br><b>影响面</b>Gate-2 可信度</span>
+    </div>
+    <div class="body">
+      <h3>Surrogate Validity Contract 是"在心里明确"</h3>
+      <p>§6.5.3 说六项"AI 必须在内部明确；可写入 Evidence record，不要求生成单独文档"。<strong>"在内部明确"对 LLM 不可验证</strong>——模型可以声称做了。而 Gate-2 又依赖它来判定证据是否有效。</p>
+      <span class="label">建议</span>
+      <p>改成 schema 硬约束。当 <code>evidence_level &lt; target_level</code> 或 <code>surrogate: true</code> 时，<code>surrogate_contract</code> 为<strong>必填</strong>，<code>researchlog validate</code> 缺失即失败：</p>
+<pre><code>{
+  "surrogate_contract": {
+    "target_causal_claim": "...",
+    "required_causal_features": ["..."],
+    "preserved_features": ["..."],
+    "missing_or_distorted_features": ["..."],
+    "allowed_conclusions": ["..."],
+    "forbidden_conclusions": ["..."],
+    "verdict": "VALID_SURROGATE"
+  }
+}</code></pre>
+      <p>把 prompt 纪律变成 schema 约束，是这份设计里最值得做的一类升级。</p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+</section>
+
+<!-- ============ MECHANISM ============ -->
+
+<section>
+  <div class="sec-head"><h2>最高价值的新增机制</h2></div>
+  <p class="sec-note">一条我认为应该无条件加进去的机制。当前设计里，它是唯一一个把<strong>主观判断保留在最关键位置</strong>的地方。</p>
+
+  <div class="featured">
+  <article class="item" data-id="M-1">
+    <div class="rail">
+      <span class="sid m">M-1</span>
+      <span class="stripe m"></span>
+      <span class="meta"><b>改动量</b>中<br><b>收益</b>高</span>
+    </div>
+    <div class="body">
+      <h3><code>invalidated_if</code>：让可比性从判断变成查询</h3>
+      <p>§6.5.4 的环境可比性契约要求 AI <strong>主观判断</strong> <code>COMPATIBLE</code> / <code>REBASELINED</code> / <code>INCOMPARABLE</code>。但可比性是<strong>证据自身的属性</strong>，不是需要临场推理的东西。</p>
+      <span class="label">建议</span>
+      <p>evidence record 声明自己的失效条件：</p>
+<pre><code>{
+  "evidence_id": "EV-0821",
+  "invalidated_if": [
+    "env.sim_physics_hz != 30",
+    "inputs.replay_suite != recovery-12@sha256:...",
+    "evaluator.version != eval-v3",
+    "inputs.model != qwen-vl-72b@checkpoint:..."
+  ]
+}</code></pre>
+      <p>于是 <code>researchlog env &lt;change&gt;</code> 可以确定性地输出：</p>
+<pre><code><span class="cmt">$ researchlog env env-change-007.json</span>
+physics 30Hz -> 60Hz 使以下证据失效：
+  EV-0031, EV-0044, EV-0821
+其中 2 条支撑 FND-007 -> 建议降级为 Provisional
+建议重跑 anchor: EXP-0118</code></pre>
+      <span class="label">连带收益</span>
+      <ul class="plain">
+        <li>comparability 从判断变成<strong>查询</strong>——<code>environment_change</code> 一落地就知道要 rebaseline 哪几条 anchor</li>
+        <li>FINDINGS 的 <code>confidence</code> 可以被自动降级（支撑证据失效 → Provisional）</li>
+        <li>KPI 的 <code>False-confidence rate</code> 从人工统计变成可计算量</li>
+        <li>§22 里 "environment confound" 这一整类风险被大幅压缩</li>
+      </ul>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+  </div>
+</section>
+
+<!-- ============ P1 ============ -->
+
+<section>
+  <div class="sec-head"><h2>补充项</h2></div>
+  <p class="sec-note">按性价比排序。每项都可独立决策，不依赖其他项。</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead>
+      <tr><th>ID</th><th>位置</th><th>问题</th><th>建议</th><th class="dec">决策</th></tr>
+    </thead>
+    <tbody>
+      <tr data-id="P1-1"><td>P1-1</td><td class="mono">附录 G</td><td>FINDINGS 条目只有 <code>Confidence</code>，没有 evidence level。§1.2 明确说"系统 E4 但新机制只有 E1"，但 schema 表达不出来。</td><td>加 <code>max_evidence_level: E2</code></td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-2"><td>P1-2</td><td class="mono">§12.11</td><td>只有 Established / Provisional / Refuted / Open。<strong>Refuted 是 hypothesis 的命运，不是 finding 的。</strong>缺"被推翻"状态，导致 KPI <code>False-confidence rate</code> 无法计算。</td><td>加 <code>SUPERSEDED</code> + <code>superseded_by</code> + <code>reason</code></td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-3"><td>P1-3</td><td class="mono">§9.3</td><td>CONSTRAINT/DECISION/VETO 的 <code>source_text</code> 设为"仅有诊断价值时保留"——但约束的措辞<strong>永远</strong>是语义承载的。"不要动 planner 的 recovery 分支"被规范化成 "do not modify navigation planner"，scope 就悄悄变了。</td><td>非挑战型信号强制双语留存</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-4"><td>P1-4</td><td class="mono">§5.1</td><td><code>DECISION FINAL</code> 说"记录并执行"，但没说 AI 要先<strong>回述其规范化理解</strong>让你确认。VETO 被软化成 CONSTRAINT 是无声的。</td><td>DECISION/VETO/CONSTRAINT 走一次 echo-back</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-5"><td>P1-5</td><td class="mono">§11.2</td><td>声称"可粘贴给新 session 做 rehydration"，但整份是中文散文，AI 无法稳定提取 <code>ACTIVE</code> 状态。</td><td>1–14 节中文 + 末尾英文 key 的 YAML block（maturity 三元组 / ACTIVE status / 关键 EV-ID / integrity）</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-6"><td>P1-6</td><td class="mono">§11.2</td><td>它只报告不一致，然后"交给 research-engineering reconcile"——但它是最高频入口，你很可能只跑它。结果是<strong>不一致被报告但永不修复</strong>。</td><td>末尾给 <code>→ 建议下一步: /research-engineering 执行 RECOVERY_RECONCILIATION</code></td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-7"><td>P1-7</td><td class="mono">§10.3</td><td><code>max_wall_clock_minutes</code> 有了，但 agent 的真实货币是 token。20 分钟推理 + 300k token 的 probe 不叫 cheap。</td><td>Block Contract 加 <code>max_tokens</code></td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-8"><td>P1-8</td><td class="mono">§10.3</td><td>"到达边界后应 synthesize 当前 belief" 未编码，退出无产物要求。</td><td>block 关闭前强制写 <code>belief_delta: none | refined | overturned</code> 到 CURRENT</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-9"><td>P1-9</td><td class="mono">§12.9</td><td>比赛提交次数通常只有 3–5 次，但 V0 完全不 gate。</td><td>bootstrap 写入 <code>BOUNDARIES.md: submission_budget: N</code>，每次消耗前必须升级</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-10"><td>P1-10</td><td class="mono">§14.14</td><td>隔离表格从 E0/E1 直接跳到 E4/E5。而 <strong>E2/E3 正是 proxy overfit 发生的地方</strong>——§22 自己也列了这个风险。</td><td>补一行：frozen replay snapshot + hash + dev/holdout 只读分离</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-11"><td>P1-11</td><td class="mono">§20.1</td><td>V0 验收 22 条不可能一天完成，且多数需要工具才能测。</td><td>拆成 Day-1 must（5 条）与 V0 complete</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+      <tr data-id="P1-12"><td>P1-12</td><td class="mono">§12.14</td><td><code>EVIDENCE.jsonl</code> → sharded 的迁移正是 18 号不变量想避免的无谓 schema churn，而 V0 做几乎零成本。</td><td>第一天就 shard；orphan detector 也更好写</td><td class="dec"><div class="decide compact"><button type="button" data-v="accept" title="采纳" aria-label="采纳">✓</button><button type="button" data-v="later" title="推后" aria-label="推后">→</button><button type="button" data-v="reject" title="否决" aria-label="否决">✕</button></div></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ DEFER ============ -->
+
+<section>
+  <div class="sec-head"><h2>建议推后</h2></div>
+  <article class="item" data-id="D-1">
+    <div class="rail">
+      <span class="sid d">D-1</span>
+      <span class="stripe d"></span>
+      <span class="meta"><b>类型</b>减少 V0 面积</span>
+    </div>
+    <div class="body">
+      <h3>跨客户端对称性在 V0 被过度投资</h3>
+      <p>§9 / §26 花了很多篇幅保证 Codex 与 Claude Code 等价。方向是对的——canonical <code>skills/</code> + 双份 copy 是正确的选择——但 V0 不应该为"第二个客户端"写任何专属内容。</p>
+      <p>否则你会在<strong>还没验证主循环是否成立</strong>时，先解决一个次要的兼容性问题。</p>
+      <span class="label">建议</span>
+      <p>先用一个客户端把 research semantics 跑通，另一个只做 §26.3 的 cross-client handoff 验收。P0-2 的 overlay 机制已经为后续差异化留好了位置。</p>
+      <div class="decide" data-default="">
+        <button type="button" data-v="accept">采纳</button>
+        <button type="button" data-v="later">推后</button>
+        <button type="button" data-v="reject">否决</button>
+      </div>
+    </div>
+  </article>
+</section>
+
+<!-- ============ IMPLEMENTATION ============ -->
+
+<section>
+  <div class="sec-head"><h2>实现设想</h2></div>
+  <p class="sec-note">核心判断：<code>SKILL.md</code> 是提示词胶水，<strong>真正可验证的产品是 JSON schema</strong>。所以构建顺序反过来。</p>
+
+  <div class="body" style="max-width:var(--measure)">
+    <span class="label">构建顺序 · 一天</span>
+    <ol class="steps">
+      <li><strong>先写 schema + <code>researchlog.py validate</code>，用 TDD。</strong>这是唯一该用 TDD 的地方——deterministic bookkeeping，不是 research。这顺便演示了 Research/Integration 双模式的分界线：<em>工具是长期资产，值得工程化；研究是一次性的</em>。这个划分本身就是对设计的一次检验。</li>
+      <li><code>AGENTS.md</code>（≤150 行，只放路由 + 不变量 + 语言规则）+ <code>CLAUDE.md</code>（仅 <code>@AGENTS.md</code>）。</li>
+      <li>3 个 <code>SKILL.md</code> + <code>references/*.md</code>。</li>
+      <li>7 个状态文件 skeleton，由 <code>researchlog init</code> 生成，全部带 <code>schema_version</code>。</li>
+      <li>Session recovery 测试 harness。</li>
+    </ol>
+
+    <span class="label">文件布局 · 相对 §9.2 的三处改动</span>
+<pre><code>research/
+├── ACTIVE.json
+├── CURRENT.md  ARCHITECT.md  BOUNDARIES.md  ENVIRONMENT.md  FINDINGS.md
+├── ledger/EV-*.json          <span class="cmt"># 直接 shard，跳过 JSONL 阶段  [P1-12]</span>
+└── runs/EXP-*/manifest.json
+
+skills/
+├── research-bootstrap/SKILL.md
+├── research-engineering/
+│   ├── SKILL.md              <span class="cmt"># 含路由表            [P0-1]</span>
+│   └── references/           <span class="cmt"># 原 8 个 expert skills 降级到这里</span>
+└── research-status/SKILL.md
+
+tools/researchlog.py          <span class="cmt"># --check / orphan detector / invalidated_if 查询
+                              #   [P0-2] [P0-4] [M-1]</span></code></pre>
+  </div>
+</section>
+
+<!-- ============ VALIDATION ============ -->
+
+<section>
+  <div class="sec-head"><h2>唯一的验证实验</h2></div>
+  <p class="sec-note">§12.16 的失忆测试是整套设计<strong>唯一的客观检验</strong>。建议第一天就把它做成可执行脚本，其余 17 条 V0 验收项都是在这条通过之后才有意义。</p>
+
+  <div class="assert">
+    <div class="assert-row"><span class="tick">A</span><span class="txt">启动 <code>/research-engineering</code>，跑到 <code>ACTIVE=running</code> 中途，kill 客户端</span></div>
+    <div class="assert-row"><span class="tick">B</span><span class="txt">新 session，不给任何旧聊天，只给 repo</span></div>
+    <div class="assert-row"><span class="tick">✓</span><span class="txt">找到正确 branch / HEAD</span></div>
+    <div class="assert-row"><span class="tick">✓</span><span class="txt">理解 dirty diff 的意图</span></div>
+    <div class="assert-row"><span class="tick">✓</span><span class="txt">知道 pending cases</span></div>
+    <div class="assert-row"><span class="tick">✓</span><span class="txt"><strong>不重复启动已有 run</strong></span></div>
+    <div class="assert-row"><span class="tick">✓</span><span class="txt">选择与 A 一致的 next action</span></div>
+    <div class="assert-row"><span class="tick">↺</span><span class="txt">反向再跑一次（换客户端）</span></div>
+  </div>
+</section>
+
+<footer>
+  <b>评审基准</b> &nbsp;research-engineering-complete-design-v1.5.docx（2026-09-11）<br>
+  <b>交叉验证</b> &nbsp;OpenAI Codex Skills / AGENTS.md 文档 · Claude Code Skills / memory 文档<br>
+  <b>决策记录</b> &nbsp;仅保存在本机浏览器，不上传、不跨设备同步
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var KEY = "re-v15-review-decisions";
+  var ids = Array.prototype.slice.call(document.querySelectorAll("[data-id]"));
+  var total = ids.length;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function save(state) {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  var state = load();
+
+  function render() {
+    var n = { accept: 0, later: 0, reject: 0, open: 0 };
+    ids.forEach(function (item) {
+      var id = item.getAttribute("data-id");
+      var v = state[id] || "";
+      var box = item.querySelector(".decide");
+      if (box) box.setAttribute("data-state", v);
+      n[v || "open"]++;
+    });
+    document.getElementById("c-accept").textContent = "采纳 " + n.accept;
+    document.getElementById("c-later").textContent  = "推后 " + n.later;
+    document.getElementById("c-reject").textContent = "否决 " + n.reject;
+    document.getElementById("c-open").textContent   = "未定 " + n.open;
+  }
+
+  ids.forEach(function (item) {
+    var box = item.querySelector(".decide");
+    if (!box) return;
+    box.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("button[data-v]");
+      if (!btn) return;
+      var id = item.getAttribute("data-id");
+      var v = btn.getAttribute("data-v");
+      state[id] = (state[id] === v) ? "" : v;
+      save(state);
+      render();
+    });
+  });
+
+  var reset = document.getElementById("reset");
+  if (reset) reset.addEventListener("click", function () {
+    state = {};
+    save(state);
+    render();
+  });
+
+  render();
+})();
+</script>

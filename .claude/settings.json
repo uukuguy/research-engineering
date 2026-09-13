@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "deny": [
+      "Skill(superpowers:brainstorming)",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:test-driven-development)",
+      "Skill(superpowers:requesting-code-review)",
+      "Skill(superpowers:receiving-code-review)",
+      "Skill(superpowers:verification-before-completion)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Skill(superpowers:dispatching-parallel-agents)",
+      "Skill(superpowers:finishing-a-development-branch)",
+      "Skill(superpowers:executing-plans)",
+      "Skill(superpowers:using-superpowers)"
+    ]
+  },
+
+  "skillOverrides": {
+    "brainstorming": "off",
+    "writing-plans": "off",
+    "test-driven-development": "off",
+    "requesting-code-review": "off",
+    "receiving-code-review": "off",
+    "verification-before-completion": "off",
+    "subagent-driven-development": "off",
+    "dispatching-parallel-agents": "off",
+    "finishing-a-development-branch": "off",
+
+    "project-state": "off",
+    "ai-project-manager": "off",
+    "adr-governance": "off",
+    "research": "off"
+  }
+}

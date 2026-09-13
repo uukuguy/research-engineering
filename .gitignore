@@ -1,8 +1,28 @@
+# Python
 *.pyc
+__pycache__/
+.venv/
+
+# macOS
 .DS_Store
-tmp/
-outputs/
-output/
-runs/
-data/
-logs/
+
+# Scratch and outputs.
+# These patterns are ANCHORED to the repo root on purpose. An unanchored `runs/`
+# matches at any depth and would swallow research/runs/**, which carries canonical
+# run provenance (manifest.json, result.json). Git cannot re-include a file whose
+# parent directory is excluded, so a later `!research/runs/**` cannot undo it.
+/tmp/
+/outputs/
+/output/
+/runs/
+/data/
+/logs/
+
+# Inside research/runs, only the heavy artifacts stay out of Git.
+# manifest.json and result.json are tracked.
+research/runs/**/stdout.log
+research/runs/**/stderr.log
+research/runs/**/artifacts/
+
+# Scratch snapshots written by `researchlog snapshot --write`.
+research/.derived/

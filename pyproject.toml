@@ -1,7 +1,15 @@
 [project]
 name = "research-engineering"
 version = "0.1.0"
-description = "Add your description here"
+description = "A thin Research Operating Layer: skills, Git, and durable research state that keep a coding agent in research mode rather than software-delivery mode."
 readme = "README.md"
 requires-python = ">=3.12"
+# Intentionally empty. tools/researchlog is pure standard library so it can be
+# copied whole into any repository without an install step.
 dependencies = []
+
+[tool.pyright]
+# Tests import `researchlog` as a top-level package; `tools` is put on sys.path by
+# `python -m unittest discover -t tools`, which Pyright cannot infer.
+extraPaths = ["tools"]
+pythonVersion = "3.12"
