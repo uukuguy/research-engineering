@@ -85,11 +85,16 @@ start a new experiment.
 
 ### Resuming work on the tool itself
 
-This repository is two tracks. `research/` is the state of the research the tool *supports*
-— the protocol above. Development *of* the tool is the other track, and its handoff is
-**`docs/status/RESUME-NEXT-SESSION.md`**, with the commit log and
-`docs/V0_ACCEPTANCE_GUIDE.md` as its record. If you are here to work on the tool, start
-there. An `idle` `ACTIVE.json` on this repository is the normal state, not a gap to fill.
+This repository carries two tracks. `research/` is the state of the research the tool
+*supports* — the protocol above. Development *of* the tool is the other track, and it has its
+own home:
+
+- **`docs/WORK_LOG.md`** — dated entries, newest first. What was done, what is outstanding,
+  what to do next, and what to know before touching anything. **Start here.**
+- `docs/V0_ACCEPTANCE_GUIDE.md` — the V0 acceptance criteria, the drill protocols, and their
+  measured results. The reference behind the log.
+
+An `idle` `ACTIVE.json` on this repository is the normal state, not a gap to fill.
 
 ## Core invariants
 
