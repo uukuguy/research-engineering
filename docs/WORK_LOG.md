@@ -199,3 +199,78 @@ manifest heartbeat 作为 attach 证据，或在 `session-continuity.md` 里写�
 5. **fixture 里的 commit 用 `drill:` 前缀、session 用 `fix:`** —— 这是两者**唯一稳定**的区分。
    作者字段分不出来，因为 builder 把 `git config user.email` 写进了 fixture。上一轮指南里有一处
    把 fixture 的 commit 当成了 session 的产物，就是这么来的。
+
+---
+
+## 2026-09-14（第三轮）— 修掉上一轮发现的六条缺陷
+
+### 会话概览
+
+架构师指示"先把你发现的缺陷修复"。**六条全部修完**，每条都带变异验证，239 项定向测试全绿
+（8 个模块逐个跑，不是一次全套）。其中三条是**工具缺口**，性质相同：canonical 状态里声明了、
+协议要求维护、而没有任何动词能读写它。
+
+### 修了什么
+
+| | 缺陷 | 修法 | commit |
+|---|---|---|---|
+| **H** | `record` 拒绝时只报 `error CODE id`，**不带 message 与 remedy** | `_default_human` 补上两者；带 message 的那条原先只在 `quiet` 模式下走 | `01b05b5` |
+| **3** | 判据 5 不可判（等待期不写痕迹） | `session-continuity.md` 写明"等待期写**意图**、不写结论"，并说清两者之别 | `a07397b` |
+| **F** | **`research:current` 完全未接线** —— 无命令读、无命令写、无 schema、从不校验 | 新 `researchlog current`（读 / `--set`）+ `current.schema.json` + `validate` 第五种 kind | `5730351` |
+| **D** | fixture 的 state 由三个互不相关的示例拼成；rotation 缺 `expected_evidence` | 假说换成 fixture 自有的 H-041/H-042 并在 CURRENT 里写明各自主张；case 换掉；补 `expected_evidence`；三个 builder 都加自断言 | `2f3a1cc` |
+| **E** | fixture 复制上游 `CLAUDE.md`，声称一个它没有的布局 | fixture 写**自己的** adapter，声明它是"使用这个工具的项目"；加自断言 | `e721196` |
+| **G** | `env record` 写不了 `limitations`/`harnesses`/`available`；无 `environment.schema.json` | 新 `env declare TABLE FILE` + `environment.schema.json` + `validate` 第六种 kind | `69db11c` |
+
+### F 是最深的一条，也是 D 的前提
+
+审计方式：逐个 canonical 文件问"谁写它、谁读它"。结果是 `paths.current` **在代码里零引用** ——
+`loader.py` 认识这个名字、`repo.py` 建了这个路径对象、没有任何命令碰它。
+
+这同时让项目的两句话失真：`CURRENT.md` 写着 "Edit it through `researchlog`, never by hand"，
+AGENTS.md 写着 "**Never hand-edit that JSON — use the tool**"。没有动词时，手改是唯一选项。
+而且**命令够不到的状态，检查也够不到** —— 所以它对 `validate` 完全隐形，而其余每个 canonical
+文件都在被检查。
+
+**顺序是有依赖的**：D 要用工具把 fixture 的 CURRENT 写成一贯的，所以 F 必须先做，否则修 D 只能
+手改 JSON，正好违反那条禁令。
+
+### 一处必须留给出题人的口径
+
+`capability_map` **刻意没给形状**。它在骨架里是一个空数组，任何地方都没有一条 entry 示例 ——
+所以在这里发明一个形状，等于把一个猜测当成已决定的事去强制。它是这次审计里**第三个**"声明了
+但没有消费者"的 canonical 字段（前两个是 `research:current` 和上面那三张表）。给它定义属于
+设计决定，不属于修复。
+
+### 同一轮里想通的几件事
+
+- **`Finding` 的第 5 个字段是 `fix_hint`**，不是 `remedy`。我先前打印 `f.get('remedy')` 得到
+  `None`，是因为那个 key 根本不存在 —— 我查询写错了，不是工具没给。
+- **`_check_surrogate` 的 message 里 `verdict is EVIDENCE_INVALID, not {verdict!r}`** 在 verdict
+  为 `None` 时会打印 `not None`；完整性检查同一条记录里也会报，所以只是措辞略糙，不是缺陷。
+- **验证副本时要确认副本是新的。** 我一度用 `/tmp/eval-conflict` 里那份**约束修复之前**建的
+  `tools/researchlog` 副本去验证"拒绝信息"，结果它照常写入 —— 差点得出"修没生效"的错误结论。
+  这与"按 cwd 找仓库"那条是同一个陷阱的另一面：**副本既是代码的副本，也是代码版本的副本。**
+
+### 开放项
+
+- `AGENTS.md` 的命令清单还缺一行 `current`（以及 `env declare`）。**没有动这个文件**：它带着
+  架构师本轮的 DeepSeek 后端规则改动，提交它会把别人的在途工作一起包进来。
+- `AGENTS.md` 的 "Resuming work on the tool itself" 一节措辞仍只是**隐含**地把路径限定在上游仓库；
+  fixture 现在自己声明了、不再依赖这一点，但这句话本身仍可更明确。同上，属架构师的在途文件。
+- **V0 状态表仍未补**（上一轮列的下一步第 1 项）。所以"V0 完成几条"目前仍答不了。
+- 判据 5 已改协议文本，但**尚未在新文本下重跑 D2** —— 所以"这样写是否就能判"仍未实测。
+
+### 下一步
+
+1. 在新 `session-continuity.md` 下重跑 D2，验证判据 5 真的可判了（这是 3 的验收）
+2. 补 V0 状态表
+3. 给 `capability_map` 定形状（设计决定）
+4. `AGENTS.md` 的两处（命令清单 + tool-dev 一节的措辞）—— 待架构师的在途改动落地
+
+### 动手前必须知道（追加）
+
+6. **"没有动词的状态，也没有校验。"** 这次三条工具缺口是同一个形状。看到一个 canonical 文件/
+   块时，问两句：谁写它？谁读它？两个都答不出来的，就是下一个缺口。审计方法：
+   `grep -rn "paths\.<name>" tools/researchlog/ --include="*.py"`，零引用即未接线。
+7. **改共享底座后，三个 drill builder 全部重跑一遍** —— 它们是这套状态最真实的使用者，
+   比单元测试更早暴露接线缺口（这一轮 D1 fixture 就是被不变量 #4 的接线打坏的）。
