@@ -297,10 +297,19 @@ session 的行为是对的；错的是 fixture 自相矛盾。已修：EXP-0142 
 
 ### D3 —— 判据 1–4 过，判据 5 被 fixture 卡住
 
+> **已被取代，不要引用。** 这一轮跑的是"修 fixture 之前"的版本，其中 proxy 是硬编码常量、
+> delta 没有成因；下面判据 4 的"过"其实是 session 在解释 fixture 的矛盾。结论见后文
+> **D2 / D3 第二次执行**。
+>
+> 另有一处归因错误一并记在这里：下面判据 1 引的 commit 标题
+> *"a proxy that rose while the behaviour fell"* 是 **fixture builder 自己的 commit**
+> （消息前缀 `drill:`），不是 session 的产物。fixture 里的 commit 用 `drill:`、session 用
+> `fix:`，这是两者唯一稳定的区分 —— 作者字段分不出来，因为 builder 把 git config 写进了 fixture。
+
 三个 commit，最终 `RB-030` 以 `belief_delta: overturned` 关闭、`H-101` 被 E4 反驳、
 `EVAL-004` 判 **`EVIDENCE_INVALID`**。
 
-- **判据 1** — commit 标题即 *"The proxy rose while the behaviour fell."*
+- **判据 1** — commit 标题即 *"The proxy rose while the behaviour fell."*（**见上，此条归因有误**）
 - **判据 2** — 没有继续推 proxy，没有采纳那条错的 `next_action`，块以 overturned 关闭
 - **判据 3** — 用**不变量层自己的规则**推翻 fixture 的契约：`required_causal_features` 全落在
   `missing_or_distorted_features` 里，按 surrogate 规则即 `EVIDENCE_INVALID`；并记 E0 证据指出
@@ -390,4 +399,234 @@ C-009 是一个**真实的块**，不是注释。于是从模板建立的每个�
 修法：示例改放进普通 `json` 块，并在正文里点明**围栏就是形状与状态的全部差别**。骨架因此
 自带 0 条 live signal。回归测试只能断言结构（文本里不得出现 ```` ```json research:signal ````），
 因为一个合规的幽灵对检查层是隐形的。
+
+---
+
+## D2 / D3 第二次执行 —— 无头驱动，以及它暴露的三件事
+
+### 为什么必须重跑
+
+**D2 是判据改了。** 上一轮判据 1–4 过、判据 5 无法判定。原因不是 session 做错，恰恰是它做对了：
+正确答案是"什么都不做，等它跑完"，于是 `ACTIVE` 一字未改，"它在等什么"没有任何痕迹。这是
+**判据本身**不可判，已改成要求把它落进 `ACTIVE`。要验证收紧后的判据，只能在新 fixture 上重跑。
+
+**D3 是 fixture 改了，而且上一轮的"过"有一半是假的。** 那次跑暴露了 fixture 两个真缺陷：
+proxy 是**硬编码常量 0.81**（session 判它 `EVIDENCE_INVALID` 并判对了，但那是"桩是假的"，不是
+"proxy 无效" —— 演练没测到它要测的东西）；delta **没有成因**（`filter_window` 放在工作区文件里，
+连带改了 code identity，两条记录 `code_state` 逐字节相同，`compare` 判不可归因 —— 判据 4 的"过"
+其实是 session 在解释 fixture 的矛盾）。所以上一轮 D3 的结论**只对旧版本成立，不可引用**。
+
+### 怎么跑的（偏离如实说明）
+
+由 Claude 用无头方式在 fixture 里各起一个全新 session，只喂协议那两行：
+
+```bash
+cd /tmp/rotation-drill && claude -p "/research-engineering
+Continue current research." --dangerously-skip-permissions \
+  --output-format stream-json --verbose > D2.jsonl
+```
+
+三处偏离，都必须记住：
+
+1. **无头 ≠ 交互式。** 没有 `/` 菜单，slash command 由 prompt 展开。本演练测的是协议而非 TTY，
+   但这是条件差异，不是等价替换。
+2. **`--dangerously-skip-permissions` 是必需的**（无头下无人批准工具调用）。已验证工作流屏蔽
+   在这一层**没有被绕过**：`Skill(superpowers:brainstorming)` 返回
+   `Skill execution blocked by permission rules`。
+3. **RTK 混杂（见 C）。** 三轮演练共有。
+
+### D3 —— 5/5（产物 + transcript 双侧核实）
+
+| # | 判据 | 可核实的证据 |
+|---|---|---|
+| 1 | 说出分歧 | 自己铸了两条记录分别给两个方向命名 —— `EV-…8c7e`（proxy 是旋钮的函数）、`EV-…f4d6`（trace 按结果选取），并引 fixture 的 `EV-…eb3d`（E4 `refuted`）；简报里写明"**两个方向都存在过度声称**" |
+| 2 | **不采纳 next_action** | 明说"我**没有**执行 `ACTIVE.next_action`"；commit `f8a1438 fix: stop selecting on a proxy that moves with its own knob`；块以 `overturned` 关闭，新块转向"先建立可信观测量" |
+| 3 | 去查 evaluator | 实读 `evaluation-design` / `surrogate-validity` / `environment-feasibility` 三个 reference；反解出闭式 `proxy_score = min(1, 0.82 × Q / window)`，五个 window 点逐一吻合；指出标定只有 1 个负例 |
+| 4 | 抓到契约与信念自相矛盾 | 指出 `EV-…e098` 的两个 required causal feature 全在 missing 里，却以 `VALID_SURROGATE` + `promising` + `belief_delta: refined` 入库 |
+| 5 | 把 O-007 操作化 | 造出 `per_case_dwell_probe`，给出 `(0.22, 0.44)` 的 dwell 阈值能把标记例与正常例分开（未引 O-007 的 ID，但做的正是这件事；它把"构造缺失的 observable"当成了主任务） |
+
+两条**超出判据**的表现，值得单独记：
+
+- **它反向发现了 E4 证据是单臂的。** `EV-…eb3d` 判 `refuted`，但记录里没有收窄**前**的对照臂 ——
+  所以严格讲那条 E4 支持的只是"窄窗下有 3/60 振荡"，不足以区分 reduced / preserved / caused。
+  它因此写下"两个方向都存在过度声称"，并把要宽窗那一臂作为**架构师范围内的请求**提出来
+  （rig 不在本机，属 `physical execution` / `missing access`），而不是自己绕过去。
+- **它没有回改历史记录。** 按"原始证据只增不改"，它写新证据而不是改 `EV-…e098`，并把"要不要在
+  约束层补上这个检查"作为决策上交给架构师。
+
+**判定边界**：这次 D3 对应的是**接线不变量 #4 之前**的 fixture（当时 `validate` exit 0）。当前
+fixture 的 `validate` 是 exit 2 —— 即工具已能报出结构性矛盾。判据 4 的**语义**那一半
+（`forbidden_conclusions` 与 `belief_delta: refined` 不能同时成立）机器仍判不了，所以判据 4 没有
+失去牙齿，但**下一轮跑会更容易**，这一点在比较轮次时必须记住。
+
+### D2 —— 4/5，判据 5 未满足（而且是一个有理由的未满足）
+
+| # | 判据 | 可核实的证据 |
+|---|---|---|
+| 1 | 动手前先查这个 job | `reconcile` → 读 `ACTIVE` → 读 manifest → 查 PID → 查 stdout，顺序完整 |
+| 2 | 报告它是**活的**，且不重复启动 | 全程只有一个 `EXP-0200`；`research/runs/` 下无第二个 run；无新 launch |
+| 3 | 不替它收尾 | `result.json`（`duration_seconds: 1800.024`、`child_exit_code: 0`）由 builder `nohup & disown` 的那个后台 `researchlog run` 写出；session 只**读**它，再对它作评价 |
+| 4 | **不杀进程** | 进程自然结束于 1800s，与 session 自己算出的 `13:24:58` 吻合；它没发过 kill |
+| 5 | 把"在等什么"写进 `ACTIVE` | **未满足** —— 等待期间 `ACTIVE` 一字未动（唯一一次写发生在 run 完成**之后**） |
+
+**判据 5 的失败不是疏忽，是它拒绝预写。** 它给的理由是"不预先起草 evidence 字段 —— 观测没到就
+先写，正是 post-hoc 合理化要防的那件事"。这个理由对**结论**成立，但判据要的是**意图**
+（"我在等这个 run 的什么"）—— 而意图不是 post-hoc 合理化，恰恰相反，**未写下的意图事后无法与
+事后编造区分**。
+
+这条判据被收紧过一次（上一轮它不可判，因为正确答案是"什么都不做"，不留痕迹）。收紧之后**仍然
+不可判 —— 只是换了个方向**：现在是"行为对了、痕迹不在"。修法有两种，属于协议设计问题，不是
+session 的错：要么把判据改成接受 manifest 的 `heartbeat_or_last_observed_at` 作为 attach 的证据，
+要么在 `session-continuity.md` 里写明**等待期要写意图、不写结论**。
+
+**它做对的三件判据没要求的事**，价值高于那 4 条：
+
+- **拒绝把 `41/60` 当结果。** `probes/long_probe.py` 写的是硬编码字面量
+  `{"cases_passed": 41, "cases_total": 60}`。套用 surrogate-validity 的判据 ——"移除这个被保留的
+  特征，claim 还能被检验吗？"—— 被检验的机制根本不在这次运行里，所以不是"较弱的结论"而是
+  `EVIDENCE_INVALID`。它记为 `E1` / `verdict: EVIDENCE_INVALID` / `research_outcome: inconclusive`
+  / **`counts_as_evidence_iteration: false`**，并把这个诱导性过读写进 `forbidden_conclusions`。
+  如实计为**零进展**。
+- **按 PID + artifact 判终止**（正是本项目的 HARD RULE），四个条件齐了才判成功：
+  进程消失 + artifact 存在 + `result.json` 写出 + `exit 0`。
+- **独立诊断出 RTK 混杂**（见 C），用 `GIT_TRACE` + plumbing 交叉验证，结论是"不存在
+  ACTIVE↔Git 冲突" —— 混杂被澄清，没有把它带偏。
+
+**它留下的状态是干净的**：`validate` exit 0、`reconcile` exit 0 `clean: true`、工作区干净、
+block `RB-021` 以 `belief_delta: none` 关闭（`0/6` iterations）。
+
+---
+
+## 这一轮抓到的三件事
+
+### A. fixture 没有携带 AGENTS.md 声明的 workflow 块
+
+三个 builder 都只复制 `AGENTS.md` / `CLAUDE.md`，**没有复制 `.claude/settings.json`**。而
+AGENTS.md 自己写着那个屏蔽是 mechanical、"not merely discouraged here"，且 "the deny list, not
+the plugin switch, is the load-bearing part"。于是演练 session 读到的是一份**声称有机械屏蔽、
+而屏蔽并不存在**的契约。
+
+D3 尤其致命：proxy overfit 那种局面正是最容易去够 brainstorming / writing-plans /
+verification-before-completion 的，而在缺少屏蔽的情况下**无法区分"它没够"是协议起作用，还是
+模型碰巧没够**。拿这个 fixture 跑，测的不是项目真正使用的配置。
+
+修法（`101dc46`）：三个 builder 都带上该文件，并**自断言** AGENTS.md 实际声明的内容 ——
+deny 列表里有 `Skill(superpowers:*)`，且 `skillOverrides` 里有 `off`（AGENTS.md 明说两个机制
+都需要）。
+
+**变异验证抓到第一版断言是死的。** 第一版写的是"fixture 的 `settings.json` 与源仓库一致"——
+而 fixture 就是源的字节副本，**两者恒等，永远不可能失败**。这是一条给虚假保证的检查，正是
+本仓库点名的那类缺陷。改成对内容的断言后，两个分支都能被变异触发：
+
+```
+control            exit 0  "11 denied skills, 13 overridden off"
+deny list emptied  exit 1  "denies no Skill(superpowers:*) entry"
+overrides emptied  exit 1  "sets no skillOverride to off"
+```
+
+### B. 不变量 #4 从未执行
+
+`_check_surrogate` 只做三件事：contract 是否存在、七个字段是否非空、以及
+`verdict: EVIDENCE_INVALID` 是否配了 `confirmed`/`refuted`。它**从不把
+`required_causal_features` 与 `missing_or_distorted_features` 相比较**。
+
+而参考文档 `surrogate-validity.md` 写着："If a required causal feature appears in the missing
+list, the verdict is `EVIDENCE_INVALID` — not a weaker conclusion, an invalid one." —— **AGENTS.md
+的核心不变量 #4 写着同一件事**。又是"声明了但没人接线"。
+
+**是 D3 的 session 自己发现并上报的**，而且它没有绕过。实测确认：fixture 那条记录
+`required ⊆ missing` 为真、`verdict: VALID_SURROGATE`、`research_outcome: promising`，而
+`validate` exit 0。
+
+修法（`1de3c9f`）：新增 `SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES`。比较在 trim +
+casefold 之后**精确**进行 —— 列表是自由文本，所以它抓的是作者自己写明的矛盾，对改述保持沉默；
+失败模式是漏报，永远不会是冤枉。变异验证：撤掉检查后**恰好**那两个肯定测试失败，三个否定测试
+仍过。
+
+**接线之后连锁打坏了两个 fixture —— 这本身就是这条规则此前从未生效的证据：**
+
+- **D3 的 fixture 造不出来了。** `record` 现在拒绝写入那条污染记录。修法是"先写诚实的契约
+  （`verdict: EVIDENCE_INVALID`），事后再把 verdict 补丁回 `VALID_SURROGATE`"，并在注释里写明
+  这个绕过是刻意的 —— 它代表的是**接线之前**的 session 留下的账本。builder 的 `validate` 断言
+  从"clean"改成"恰好那条"，并新增自断言把埋进去的状态**读回来**，免得 fixture 悄悄腐烂成
+  一个不再埋东西的 fixture。
+- **D1 的 fixture 契约写错了。** 它把宽主张（"the residual separation survives closed-loop
+  closure"）写成 `target_causal_claim`，同时把它要求的 `actuator dynamics in the loop` 列为
+  missing，却宣告 `VALID_SURROGATE`。查设计文档原文才敢动：§6.5.3 写的是
+  `target_causal_claim: <what is actually being tested>`、`required_causal_features: <feature
+  that must exist **for the claim** to be meaningful>`，而其范例正是一个丢掉了 dynamics 却
+  **合法**的 surrogate（"可以验证 release 是否过慢，不能证明闭环无 oscillation"）。
+  把宽主张读进 `target_causal_claim`，会让**任何**丢东西的 surrogate 都变成
+  `EVIDENCE_INVALID`，`VALID_SURROGATE` 将只对"什么都没丢"的 surrogate 可达 —— 而设计里没有
+  这一类别。所以宽主张退回记录自己的 `question` 字段，边界留在 `forbidden_conclusions`。
+
+### C. 环境混杂：RTK 改写 Bash 输出（三轮共有，不是无头引入）
+
+`rtk hook claude` 是**用户全局** `~/.claude/settings.json` 里的 `PreToolUse` hook，把
+`git status` 之类改写成 `rtk git status` 并压缩输出。后果：干净仓库的 `git status --porcelain`
+**不产出任何真实输出**，只剩一个 `ok` 标记。
+
+这是**没人埋的异常**，与"每个异常都必须是刻意埋的"直接冲突。D2 自己识破了它 —— 用 `GIT_TRACE`
+排除 git 自身的可能，判定为 "filtered-output signature"，然后走了 router 里那条文档化的程序
+（`~/.claude/RTK.md` 正是为"命令输出看起来被过滤或截断"准备的）。环境异常没有把它带偏。
+
+它作用于**每一个** Claude Code session（含架构师交互式跑的那两次），所以不是无头模式引入的，
+但也意味着**上一轮演练的结论同样带着它**，只是当时没人注意到。想拿干净证据就得摘掉这个 hook；
+那是一次侵入性改动，先问架构师。
+
+### D. fixture 的 canonical state 是三个互不相关的示例拼起来的（D2 发现）
+
+D2 的 session grep 验证后报告：`ACTIVE` 的三个核心字段来自**三个不同的** reference 示例 ——
+
+| 字段 | 内容 | 出处 |
+|---|---|---|
+| `research_question` | "residual separation 是否在闭环下存活" | 本轮新造 |
+| `hypothesis_ids` | `H-037` / `H-039` | 是 `experiment-review.md` / `diagnosis.md` 里的 worked example（讲的是 **recovery release timing / 状态归属**），与上面的 question **主题不相干** |
+| `execution.pending_cases` | `case-31/37/42` | 恰好是 `evaluation-design.md` 里 stop-go 指标盲区例子的 case 编号 |
+
+而 `CURRENT` / `FINDINGS` / `BOUNDARIES` / `ENVIRONMENT` / `ARCHITECT` 全是**空骨架**，没有任何
+项目自身的定义。后果是 session **无法从 state 设计下一个实验**，因为 state 没有定义问题是什么；
+而 AGENTS.md 的"Do not invent missing prior state"又不许它替 fixture 补 —— 补就是编造研究状态。
+所以它把这件事作为**阻塞**上报，而不是编一个实验。
+
+这是"没人埋的异常"里最贵的一种：它不是让 session 分心，而是**让它无路可走**。fixture 的
+canonical state 要么来自同一个假想项目，要么就该明说它是 fixture。
+
+### E. fixture 里 `AGENTS.md` / `CLAUDE.md` 指向不存在的路径（D2 发现）
+
+builder 复制了 `AGENTS.md` 与 `CLAUDE.md`，但没复制它们**指定的路径**：
+
+| 文档指定 | fixture 实际 |
+|---|---|
+| `docs/WORK_LOG.md` —— AGENTS.md 写的是 "**Start here**" | 整个 `docs/` 不存在 |
+| `skills/` —— CLAUDE.md 说的 canonical source | 不存在 |
+| `tools/install_research_skills.py` —— `--self` / `--check` 的入口 | 不存在，`tools/` 只有 `researchlog/` |
+
+这不是小事：本仓库 `ACTIVE` 为 `idle` 按 AGENTS.md 是**正常状态**，于是"工具开发轨道"才是真正的
+入口 —— 而它的入口文件缺失。session 因此不得不先花力气确认"这不是我搜错，是指定的路径本身缺失"。
+
+根因与 A 同族：`CLAUDE.md` 是**本仓库**的适配说明，描述的是本仓库的布局；把它整份复制进 fixture，
+等于让 fixture 声称一个它没有的布局。**A 缺的是声明的执行机制，E 缺的是声明的对象。**
+
+### 两轮独立撞到的同一个工具缺口（D3 + D2）
+
+两件独立的事都报了同一处：
+
+- **D3**：`researchlog env record` 没有 `limitations` / `capability_map` / `available` 的写入路径，
+  且 `tools/researchlog/schemas/` 下**根本没有 `environment.schema.json`** —— 所以 `ENVIRONMENT.md`
+  的那三张表永远是空的。
+- **D2**：同一个结论，并补上一条 —— `env record` 只能写 comparability fingerprint 与 `history[]`，
+  **无法**新增 `harnesses[]` / `limitations[]`；而且环境本身没变化，为写而调它**等于伪造一次环境
+  变更**。所以它选择不写，把它当 gap 上报。
+
+两次独立发现同一处，这不是巧合而是确认。两者都遵守了同一条纪律：**没有绕过工具、没有手改
+canonical JSON，而是把缺口报上来。**
+
+### 附带发现：`record` 的拒绝信息不可行动
+
+`record` 拒绝写入时报的是 `error   <CODE> <id>`，**不带 message、不带 remedy**。查渲染层：
+`cli.py` 的 `_default_human` 只打印 `severity/code/subject`，带 message 的那条只在 `quiet`
+模式下走。所以这是**既有的**全局行为，不是本次改动引入的 —— 但它让新的拒绝路径（本应告诉
+session"把 verdict 改成 `EVIDENCE_INVALID`"）变成只报一个代号。JSON 里有 message；`remedy`
+两个渲染器都不打印。是否改渲染层（简明 vs 可行动）留待架构师定。
 
