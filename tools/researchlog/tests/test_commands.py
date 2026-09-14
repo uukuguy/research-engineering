@@ -24,6 +24,14 @@ import unittest
 from pathlib import Path
 
 from researchlog import cli
+from researchlog.errors import (
+    EXIT_FINDINGS_PRESENT,
+    EXIT_STATE_INVALID,
+    SEVERITY_ERROR,
+    SEVERITY_WARNING,
+    Finding,
+    Result,
+)
 
 MISSING_BINARY = "researchlog-definitely-not-a-real-binary"
 
@@ -604,6 +612,41 @@ class ManifestCommandTests(CommandTestCase):
 
         self.assertEqual(code, 5)
         self.assertEqual(envelope["findings"][0]["code"], "MANIFEST_ABSENT")
+
+
+class HumanRenderingTests(unittest.TestCase):
+    """Human output must carry the actionable half of a finding.
+
+    `--json` is the contract an agent branches on, but a refusal printed to a terminal is
+    the only thing between a reader and the source code. A bare code names the constraint
+    and withholds what to do about it.
+    """
+
+    def test_a_finding_prints_its_message_and_its_fix_hint(self) -> None:
+        result = Result(exit_code=EXIT_STATE_INVALID)
+        result.add(
+            Finding(
+                "SOME_CONSTRAINT",
+                SEVERITY_ERROR,
+                "SUBJECT-1",
+                "what went wrong",
+                "what to do about it",
+            )
+        )
+
+        text = cli._default_human(result, "record")
+
+        self.assertIn("SOME_CONSTRAINT", text)
+        self.assertIn("what went wrong", text)
+        self.assertIn("what to do about it", text)
+
+    def test_a_finding_without_a_fix_hint_still_prints_its_message(self) -> None:
+        result = Result(exit_code=EXIT_FINDINGS_PRESENT)
+        result.add(Finding("SOME_WARNING", SEVERITY_WARNING, "SUBJECT-2", "worth knowing"))
+
+        text = cli._default_human(result, "validate")
+
+        self.assertIn("worth knowing", text)
 
 
 if __name__ == "__main__":

@@ -106,8 +106,14 @@ def emit(result: Result, args: argparse.Namespace, *, command: str) -> None:
 
 def _default_human(result: Result, command: str) -> str:
     lines: list[str] = []
-    if result.findings:
-        lines.extend(f"{f.severity:7} {f.code:34} {f.subject}" for f in result.findings)
+    for finding in result.findings:
+        lines.append(f"{finding.severity:7} {finding.code:34} {finding.subject}")
+        # The message and the fix hint are the actionable half. A bare code sends the reader
+        # to the source to find out what the constraint was before they can act on it — and
+        # for a write that was refused, that is the only thing they need.
+        lines.append(f"        {finding.message}")
+        if finding.fix_hint:
+            lines.append(f"        → {finding.fix_hint}")
     if result.exit_code == EXIT_OK and not result.findings:
         lines.append(f"{command}: ok")
     if result.payload:
