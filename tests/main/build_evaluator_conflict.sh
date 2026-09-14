@@ -264,6 +264,23 @@ researchlog active --quiet \
   --set-next-action="Narrow the filter window further and push proxy_score past 0.85." \
   --set-observation="Proxy score improved to 0.81; threshold is 0.85."
 
+# --- CURRENT: the working model, as the session that overfit believed it ----------------
+# ACTIVE carries hypothesis *IDs*, which are a registry and not a definition. This block
+# states what H-101 claims, so the state is complete enough for a session to reason from.
+# It is written in the voice of the session that narrowed the window: the frontier records
+# the proxy's rise as progress and the conclusion it drew. That is the trap, not a leak —
+# the E4 evidence that contradicts it is in the ledger, where it belongs.
+researchlog current --quiet \
+  --set 'objective=Does narrowing the safety filter window reduce stop-go oscillation?' \
+  --set 'evidence_maturity.highest_stable_level=E4' \
+  --set 'evidence_maturity.system_wide_level=E2' \
+  --set 'evidence_maturity.note=End-to-end behaviour is observed off-machine; the local proxy is E2 against an E4 question.' \
+  --set 'working_pieces=["probes/proxy_score.py — the local stop-go proxy","probes/intervention_trace.json — its logged input"]' \
+  --set 'highest_value_uncertainties=["how far the filter window can be narrowed before latency becomes unacceptable"]' \
+  --set 'active_research=[{"id":"H-101","claim":"narrowing the safety filter window reduces stop-go oscillation, and the proxy score measures that reduction"}]' \
+  --set 'current_frontier=["proxy score rose from 0.51 to 0.81 as the window narrowed from 0.40 to 0.25"]' \
+  --set 'next_empirical_action=Narrow the window further and push proxy_score past 0.85.'
+
 git add -A
 git commit -qm "drill: a proxy that rose while the behaviour fell"
 
@@ -443,6 +460,39 @@ print(
     + "', '".join(contract["required_causal_features"])
     + "' and lists the same as missing, with verdict VALID_SURROGATE and belief_delta refined"
 )
+CHECK
+
+echo "--- the state defines itself ---"
+"$PYTHON" - <<'CHECK'
+import json
+import pathlib
+import re
+
+active = json.loads(pathlib.Path("research/ACTIVE.json").read_text(encoding="utf-8"))
+text = pathlib.Path("research/CURRENT.md").read_text(encoding="utf-8")
+match = re.search(r"```json research:current\n(.*?)\n```", text, re.S)
+if match is None:
+    raise SystemExit("CURRENT.md carries no research:current block")
+current = json.loads(match.group(1))
+
+live = set(active.get("hypothesis_ids") or [])
+declared = {entry.get("id") for entry in current.get("active_research") or []}
+undefined = sorted(live - declared)
+if undefined:
+    raise SystemExit(
+        f"ACTIVE names hypotheses that nothing defines: {undefined}.\n"
+        "A registry is not a definition. A session that can read only IDs cannot choose the\n"
+        "next experiment — it can only guess, or invent state it is forbidden to invent.\n"
+        "Fix the fixture, not the criteria."
+    )
+if current.get("objective") != active.get("research_question"):
+    raise SystemExit(
+        "CURRENT.md and ACTIVE.json disagree about the question:\n"
+        f"  CURRENT.objective        = {current.get('objective')!r}\n"
+        f"  ACTIVE.research_question = {active.get('research_question')!r}\n"
+        "Fix the fixture, not the criteria."
+    )
+print(f"state defines itself: {len(live)} live hypotheses, each with a stated claim")
 CHECK
 
 echo

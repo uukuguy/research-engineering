@@ -107,12 +107,14 @@ researchlog active --rotate-session --quiet
 researchlog active --quiet \
   --set 'research_question=Does the residual separation survive closed-loop closure?' \
   --set 'subject.type=harness' --set 'subject.id=HRN-001' \
-  --set 'hypothesis_ids=["H-037","H-039"]' \
-  --set 'chosen_hypothesis=H-037' \
+  --set 'hypothesis_ids=["H-041","H-042"]' \
+  --set 'chosen_hypothesis=H-041' \
   --set 'experiment_id=EXP-0200' \
   --set 'intent=Run the full closed-loop sweep and read the cases that fail.' \
+  --set 'expected_evidence.supports_if=the separation persists once the loop is closed' \
+  --set 'expected_evidence.weakens_if=the separation vanishes once the loop is closed' \
   --set 'execution.status=running' \
-  --set 'execution.pending_cases=["case-31","case-37","case-42"]' \
+  --set 'execution.pending_cases=["case-11","case-12","case-13"]' \
   --set 'execution.run_manifest=research/runs/EXP-0200/manifest.json' \
   --set 'block.id=RB-021' \
   --set 'block.objective=Resolve whether the residual separation survives closure' \
@@ -120,6 +122,27 @@ researchlog active --quiet \
   --set 'block.max_wall_clock_minutes=180' \
   --set-next-action="Wait for the sweep to finish, then read the failing cases." \
   --set-observation="Sweep launched; 60 cases, 41 expected to pass."
+
+# --- CURRENT: the working model the two hypotheses are defined against ----------------
+# ACTIVE carries hypothesis *IDs*, which are a registry and not a definition. Without this
+# block a session can see that H-041 and H-042 exist and cannot tell what either one claims,
+# so it cannot choose the next experiment.
+#
+# The IDs are this fixture's own. Borrowing the skill references' worked examples (H-037 /
+# H-039, whose documented meaning is recovery release timing and state ownership) made the
+# fixture claim hypotheses unrelated to the question here; so did lifting `case-31/37/42`
+# from the reference's stop-go example. A session that read the references first was right to
+# distrust the file.
+researchlog current --quiet \
+  --set 'objective=Does the residual separation survive closed-loop closure?' \
+  --set 'evidence_maturity.highest_stable_level=E2' \
+  --set 'evidence_maturity.system_wide_level=E1' \
+  --set 'evidence_maturity.note=Offline replay only. No closed-loop measurement exists on this machine.' \
+  --set 'working_pieces=["probes/long_probe.py — the full closed-loop sweep","the residual metric over sixty cases"]' \
+  --set 'highest_value_uncertainties=["whether the residual separation is a property of release timing or of the replay harness","whether closing the loop preserves it"]' \
+  --set 'active_research=[{"id":"H-041","claim":"the residual separates release timing from noise because of the timing itself, so the separation survives closed-loop closure"},{"id":"H-042","claim":"the separation is an artifact of offline replay and disappears once the loop is closed"}]' \
+  --set 'current_frontier=["offline replay reproduces the release-timing residual on 2 of 5 cases"]' \
+  --set 'next_empirical_action=Read the failing cases from the sweep before touching the mechanism.'
 
 git add -A
 git commit -qm "drill: a run still in flight, and ACTIVE pointing at it"
@@ -201,6 +224,39 @@ import json, pathlib
 manifest = json.loads(pathlib.Path('research/runs/EXP-0200/manifest.json').read_text())
 print(manifest.get('execution', {}).get('pid_or_job_id') or '?')
 ")"
+
+echo "--- the state defines itself ---"
+"$PYTHON" - <<'CHECK'
+import json
+import pathlib
+import re
+
+active = json.loads(pathlib.Path("research/ACTIVE.json").read_text(encoding="utf-8"))
+text = pathlib.Path("research/CURRENT.md").read_text(encoding="utf-8")
+match = re.search(r"```json research:current\n(.*?)\n```", text, re.S)
+if match is None:
+    raise SystemExit("CURRENT.md carries no research:current block")
+current = json.loads(match.group(1))
+
+live = set(active.get("hypothesis_ids") or [])
+declared = {entry.get("id") for entry in current.get("active_research") or []}
+undefined = sorted(live - declared)
+if undefined:
+    raise SystemExit(
+        f"ACTIVE names hypotheses that nothing defines: {undefined}.\n"
+        "A registry is not a definition. A session that can read only IDs cannot choose the\n"
+        "next experiment — it can only guess, or invent state it is forbidden to invent.\n"
+        "Fix the fixture, not the criteria."
+    )
+if current.get("objective") != active.get("research_question"):
+    raise SystemExit(
+        "CURRENT.md and ACTIVE.json disagree about the question:\n"
+        f"  CURRENT.objective        = {current.get('objective')!r}\n"
+        f"  ACTIVE.research_question = {active.get('research_question')!r}\n"
+        "Fix the fixture, not the criteria."
+    )
+print(f"state defines itself: {len(live)} live hypotheses, each with a stated claim")
+CHECK
 
 echo
 echo "rotation drill fixture ready in $TARGET"

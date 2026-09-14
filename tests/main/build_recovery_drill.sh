@@ -126,7 +126,7 @@ researchlog record \
   --subject-type harness --subject-id HRN-001 \
   --level E2 --target-level E4 --surrogate-contract probes/replay_surrogate.json \
   --execution-status completed --research-outcome inconclusive --confidence low \
-  --hypothesis H-037 --belief-delta none \
+  --hypothesis H-041 --belief-delta none \
   --observation "The residual tracked release timing on 2 of 5 cases; the other 3 were ambiguous." \
   --limitation "Offline replay only; closed-loop dynamics are mocked." >/dev/null
 
@@ -138,7 +138,7 @@ researchlog record \
   --subject-type instrumentation --subject-id INS-002 \
   --level E1 \
   --execution-status env_unsupported --research-outcome none --confidence low \
-  --hypothesis H-037 --no-experiment \
+  --hypothesis H-041 --no-experiment \
   --observation "The machine exposes no actuator interface; no command reached hardware." \
   --limitation "There is no actuator on this machine; the question cannot be measured here." >/dev/null
 
@@ -182,8 +182,8 @@ researchlog active --rotate-session --quiet
 researchlog active --quiet \
   --set 'research_question=Does the residual separation survive closed-loop closure?' \
   --set 'subject.type=harness' --set 'subject.id=HRN-001' \
-  --set 'hypothesis_ids=["H-037","H-039"]' \
-  --set 'chosen_hypothesis=H-037' \
+  --set 'hypothesis_ids=["H-041","H-042"]' \
+  --set 'chosen_hypothesis=H-041' \
   --set 'experiment_id=EXP-0142' \
   --set 'intent=Replay the closed-loop slice to see whether the residual separation survives closure.' \
   --set 'expected_evidence.supports_if=the separation persists once the loop is closed' \
@@ -201,6 +201,27 @@ researchlog active --quiet \
   --set 'git.expected_touched_files=["research/","probes/replay_probe.py"]' \
   --set-next-action="Inspect whether case-03 reproduces the release-timing residual under closure." \
   --set-observation="Cases 01-02 show the residual tracking release timing; 3 cases unreached."
+
+# --- CURRENT: the working model the two hypotheses are defined against ----------------
+# ACTIVE carries hypothesis *IDs*, which are a registry and not a definition. Without this
+# block a session can see that H-041 and H-042 exist and cannot tell what either one claims,
+# so it cannot choose the next experiment — it can only guess, or invent a state that
+# AGENTS.md forbids it to invent.
+#
+# The IDs are this fixture's own. Borrowing the skill references' worked examples (H-037 /
+# H-039) made the fixture claim hypotheses whose documented meaning — recovery release
+# timing, state ownership — has nothing to do with the question here, and a session that
+# read the references before the state was right to distrust the whole file.
+researchlog current --quiet \
+  --set 'objective=Does the residual separation survive closed-loop closure?' \
+  --set 'evidence_maturity.highest_stable_level=E2' \
+  --set 'evidence_maturity.system_wide_level=E1' \
+  --set 'evidence_maturity.note=Offline replay only. No closed-loop measurement exists on this machine.' \
+  --set 'working_pieces=["probes/replay_probe.py — offline replay of recorded traces","the residual metric over five cases"]' \
+  --set 'highest_value_uncertainties=["whether the residual separation is a property of release timing or of the replay harness","whether closing the loop preserves it"]' \
+  --set 'active_research=[{"id":"H-041","claim":"the residual separates release timing from noise because of the timing itself, so the separation survives closed-loop closure"},{"id":"H-042","claim":"the separation is an artifact of offline replay and disappears once the loop is closed"}]' \
+  --set 'current_frontier=["offline replay reproduces the release-timing residual on 2 of 5 cases"]' \
+  --set 'next_empirical_action=Replay the remaining three cases, then compare against the closed-loop slice.'
 
 # --- the architect signal ------------------------------------------------------------
 # Signals have no command. They are appended to ARCHITECT.md as fenced blocks and checked
@@ -351,6 +372,39 @@ if codes:
         "The drill's criteria assume a state whose only anomaly is the dead session."
     )
 print(f"validate exit {envelope['exit_code']}, findings {codes}")
+CHECK
+
+echo "--- the state defines itself ---"
+"$PYTHON" - <<'CHECK'
+import json
+import pathlib
+import re
+
+active = json.loads(pathlib.Path("research/ACTIVE.json").read_text(encoding="utf-8"))
+text = pathlib.Path("research/CURRENT.md").read_text(encoding="utf-8")
+match = re.search(r"```json research:current\n(.*?)\n```", text, re.S)
+if match is None:
+    raise SystemExit("CURRENT.md carries no research:current block")
+current = json.loads(match.group(1))
+
+live = set(active.get("hypothesis_ids") or [])
+declared = {entry.get("id") for entry in current.get("active_research") or []}
+undefined = sorted(live - declared)
+if undefined:
+    raise SystemExit(
+        f"ACTIVE names hypotheses that nothing defines: {undefined}.\n"
+        "A registry is not a definition. A session that can read only IDs cannot choose the\n"
+        "next experiment — it can only guess, or invent state it is forbidden to invent.\n"
+        "Fix the fixture, not the criteria."
+    )
+if current.get("objective") != active.get("research_question"):
+    raise SystemExit(
+        "CURRENT.md and ACTIVE.json disagree about the question:\n"
+        f"  CURRENT.objective        = {current.get('objective')!r}\n"
+        f"  ACTIVE.research_question = {active.get('research_question')!r}\n"
+        "Fix the fixture, not the criteria."
+    )
+print(f"state defines itself: {len(live)} live hypotheses, each with a stated claim")
 CHECK
 
 echo
