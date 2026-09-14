@@ -45,6 +45,13 @@ cp -R "$SOURCE_ROOT/templates" templates
 cp "$SOURCE_ROOT/AGENTS.md" "$SOURCE_ROOT/CLAUDE.md" .
 "$PYTHON" "$SOURCE_ROOT/tools/install_research_skills.py" --target "$TARGET" --quiet
 
+# AGENTS.md declares the workflow-control block as mechanical, enforced in
+# `.claude/settings.json` — "not merely discouraged here", and the deny list is the
+# load-bearing part. Copying the contract without its enforcement would test a
+# configuration the project does not use.
+mkdir -p .claude
+cp "$SOURCE_ROOT/.claude/settings.json" .claude/settings.json
+
 mkdir -p probes
 cat > probes/long_probe.py <<PROBE
 """A long closed-loop sweep. Writes its result only at the end.
@@ -128,6 +135,37 @@ case "$job_out" in
     exit 1
     ;;
 esac
+
+echo "--- workflow control ---"
+"$PYTHON" - <<'CHECK'
+import json
+import pathlib
+
+# Asserted against the content AGENTS.md declares, not against the source file: the fixture
+# is a byte copy of that file, so comparing the two can never fail and would assert nothing.
+settings = json.loads(pathlib.Path(".claude/settings.json").read_text())
+denied = [
+    d for d in settings.get("permissions", {}).get("deny", [])
+    if d.startswith("Skill(superpowers:")
+]
+overrides = [k for k, v in settings.get("skillOverrides", {}).items() if v == "off"]
+if not denied:
+    raise SystemExit(
+        "the drill's settings.json denies no Skill(superpowers:*) entry, so AGENTS.md's\n"
+        "workflow block is declared but not wired. A session would face a contract whose\n"
+        "enforcement is missing, and the drill could not tell 'the protocol held' from\n"
+        "'the model happened not to reach for it'.\n"
+        "Fix the fixture, not the criteria."
+    )
+if not overrides:
+    raise SystemExit(
+        "the drill's settings.json sets no skillOverride to \"off\". AGENTS.md needs both\n"
+        "mechanisms — skillOverrides does not apply to plugin skills, which is why the deny\n"
+        "list alone is not the whole block.\n"
+        "Fix the fixture, not the criteria."
+    )
+print(f"workflow block wired: {len(denied)} denied skills, {len(overrides)} overridden off")
+CHECK
 
 echo "--- reconcile ---"
 reconcile_json="$(researchlog reconcile --json || true)"
