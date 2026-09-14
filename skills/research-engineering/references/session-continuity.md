@@ -150,6 +150,18 @@ extension point.
 
 Never start a second copy of an expensive run because the session that started it is gone.
 
+**Attaching is a decision, and it has to be legible.** When the choice is `attach / observe`,
+write what you are waiting for into `ACTIVE` — `current_observation` or `next_action` — even
+though nothing else will change for the duration. A session that correctly does nothing
+otherwise leaves no trace, and a trace that is absent afterwards is indistinguishable from a
+session that never made the decision at all.
+
+Write the **intent**, not a conclusion. "Waiting for EXP-0142 to finish so the failing cases
+can be read" is an intent and is safe to write at any time. "The run reduced oscillation" is a
+conclusion, and writing it before the run reports is post-hoc rationalisation — the thing the
+wait is there to prevent. The distinction is between saying what you are doing and saying what
+you expect to find.
+
 ## Orphan runs
 
 An orphan is a run that happened but has no evidence record: a manifest and artifacts on
