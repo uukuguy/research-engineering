@@ -83,6 +83,14 @@ At the start of every research session, before choosing any new work:
 If ACTIVE and Git disagree, enter reconciliation. Do not reset, checkout over, or
 start a new experiment.
 
+### Resuming work on the tool itself
+
+This repository is two tracks. `research/` is the state of the research the tool *supports*
+— the protocol above. Development *of* the tool is the other track, and its handoff is
+**`docs/status/RESUME-NEXT-SESSION.md`**, with the commit log and
+`docs/V0_ACCEPTANCE_GUIDE.md` as its record. If you are here to work on the tool, start
+there. An `idle` `ACTIVE.json` on this repository is the normal state, not a gap to fill.
+
 ## Core invariants
 
 1. **Evidence is the stable abstraction**, not candidate-or-evaluator. Do not assume
