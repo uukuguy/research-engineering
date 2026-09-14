@@ -274,3 +274,16 @@ AGENTS.md 写着 "**Never hand-edit that JSON — use the tool**"。没有动词
    `grep -rn "paths\.<name>" tools/researchlog/ --include="*.py"`，零引用即未接线。
 7. **改共享底座后，三个 drill builder 全部重跑一遍** —— 它们是这套状态最真实的使用者，
    比单元测试更早暴露接线缺口（这一轮 D1 fixture 就是被不变量 #4 的接线打坏的）。
+8. **`origin` 走 HTTPS 会连不上，改用 SSH。** 症状是 `Failed to connect to github.com port 443
+   after 75003 ms`，而它**看起来像断网、其实不是** —— 同一时刻 `ping github.com` 通（110ms）、
+   `https://api.github.com` 返回 200，只有 `github.com` 解析到的那台 IP（`20.205.243.166`）连不上。
+   `origin` 是 HTTPS URL，所以 `git push` 会卡 75 秒再失败。
+   可用的推送命令（`~/.ssh/id_rsa` 属于 `idleuncle`，**对 uukuguy 的仓库没有权限**，
+   必须显式指定属主那把 key）：
+
+   ```bash
+   GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa_uukuguy -o IdentitiesOnly=yes" \
+     git push git@github.com:uukuguy/research-engineering.git main
+   ```
+   本轮就是这样把 7 个 commit 推上去的。**根治办法是把 `origin` 换成 SSH URL**（`gh` 的配置
+   本来就是 ssh 协议），但那属于改架构师的仓库配置，留给他定。
