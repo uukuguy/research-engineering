@@ -401,10 +401,10 @@ def _check_execution_vs_outcome(record: Mapping[str, Any], identifier: str) -> l
 def _normalised_features(value: Any) -> set[str]:
     """Feature phrases from one contract list, trimmed and case-folded.
 
-    The lists are free text, so the comparison below is exact after normalisation. It catches
-    the contradiction the author stated outright and stays silent on a paraphrase — which is
-    the only honest option without a semantic matcher, and the failure mode is a miss, never
-    a false accusation.
+    The lists are free text, so the comparison below is exact after normalisation. A hit means
+    the author wrote the same phrase in both lists, which is a contradiction stated outright;
+    a paraphrase is missed. Without a semantic matcher that is the only honest option, and it
+    is why the reference tells authors to reuse the required list's wording.
     """
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return set()
