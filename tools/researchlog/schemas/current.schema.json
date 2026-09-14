@@ -1,0 +1,52 @@
+{
+  "title": "Current",
+  "description": "The research:current block in research/CURRENT.md — research-level working memory. It answers 'where has the research got to', as against ACTIVE.json's 'what is happening right now', so it changes on the scale of a research question rather than an experiment. Three maturities are tracked separately and must never be collapsed into one number: a system can be fully built while a new mechanism inside it is still E1, and the environment may be unable to verify a whole class of question regardless of either.",
+  "type": "object",
+  "required": ["schema_version", "objective", "highest_value_uncertainties", "active_research", "current_frontier", "next_empirical_action"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "objective": {
+      "type": ["string", "null"],
+      "description": "The research question this whole line of work is trying to answer. Null before one has been chosen, which is a legitimate state and not an error."
+    },
+    "evidence_maturity": {
+      "type": "object",
+      "properties": {
+        "highest_stable_level": { "type": ["string", "null"] },
+        "system_wide_level": { "type": ["string", "null"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "environment_maturity": {
+      "type": "object",
+      "properties": {
+        "environment_id": { "type": ["string", "null"] },
+        "highest_supported_by_capability": { "type": "object" },
+        "blocked_or_unsupported": { "type": "array" },
+        "pending_rebaseline": { "type": "array" }
+      }
+    },
+    "working_pieces": {
+      "type": "array",
+      "description": "What has actually been built, as against what is believed about it."
+    },
+    "provisional_system_shape": { "type": ["string", "null"] },
+    "architecture_frozen": {
+      "type": "boolean",
+      "description": "False unless ARCHITECT.md says otherwise. A provisional shape that has never been challenged is a suspicion, not a design."
+    },
+    "highest_value_uncertainties": {
+      "type": "array",
+      "description": "Ordered by what would change the most if it turned out differently."
+    },
+    "active_research": {
+      "type": "array",
+      "description": "The hypotheses currently being worked, with what each one claims. The IDs alone are a registry, not a definition; a session that can read only IDs cannot choose the next experiment."
+    },
+    "current_frontier": {
+      "type": "array",
+      "description": "Where the work has actually reached."
+    },
+    "next_empirical_action": { "type": ["string", "null"] }
+  }
+}

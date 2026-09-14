@@ -13,6 +13,7 @@ from researchlog.commands import (
     active,
     checkpoint,
     compare,
+    current,
     env,
     findings,
     init,
@@ -39,6 +40,7 @@ MODULES: tuple[ModuleType, ...] = (
     snapshot,
     job,
     checkpoint,
+    current,
 )
 
 __all__ = ["MODULES"]

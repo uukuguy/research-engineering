@@ -246,3 +246,29 @@ def unreadable_warning(ledger: Ledger, subject: str) -> list[Finding]:
             f"results below are incomplete",
         )
     ]
+
+
+def literal(raw: str) -> Any:
+    """JSON when it parses, a plain string otherwise, so numbers stay numbers."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def parse_assignment(expression: str, *, code: str) -> tuple[str, Any]:
+    """Split `FIELD=VALUE` into a dotted field and a typed value."""
+    field, separator, raw = expression.partition("=")
+    if not separator or not field.strip():
+        raise StateInvalid(
+            [
+                Finding(
+                    code,
+                    SEVERITY_ERROR,
+                    expression,
+                    "expected FIELD=VALUE",
+                    "for example --set block.max_evidence_iterations=6",
+                )
+            ]
+        )
+    return field.strip(), literal(raw)

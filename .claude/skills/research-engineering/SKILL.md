@@ -206,6 +206,7 @@ researchlog record --from-orphan    prefill an evidence record from a run manife
 researchlog run -- <command...>     execute, capture provenance and artifacts
 researchlog manifest                create or update a versioned run manifest
 researchlog active                  crash-safe update of ACTIVE.json
+researchlog current                 read or update the research:current block
 researchlog findings                durable beliefs: add, close, render
 researchlog env record FILE         record an environment change
 researchlog env query FILE          what an environment change invalidates

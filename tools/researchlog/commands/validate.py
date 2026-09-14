@@ -20,7 +20,7 @@ from researchlog.errors import (
 NAME = "validate"
 HELP = "check schemas and invariants across the canonical research state"
 
-KINDS = ("active", "evidence", "manifest", "findings-entry")
+KINDS = ("active", "evidence", "manifest", "findings-entry", "current")
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -64,6 +64,7 @@ def run(args: argparse.Namespace) -> Result:
     _check_manifests(ledger, result)
     _check_block(active, ledger, result)
     _check_signals(paths, result)
+    _check_current(paths, result)
 
     if args.strict:
         _promote_warnings(result)
@@ -133,6 +134,43 @@ def _check_manifests(ledger: state.Ledger, result: Result) -> None:
             result.add(finding)
         for finding in schema.version_findings("manifest", manifest, where=experiment_id):
             result.add(finding)
+
+
+def _check_current(paths: repo.ResearchPaths, result: Result) -> None:
+    """The last canonical file to get a reader.
+
+    `research:current` had no verb and no validator, which are the same absence twice: the
+    block could only be written by hand — the opposite of what its own prose and AGENTS.md
+    tell the reader — and nothing checked what was written. State no command can reach is
+    also state no check can reach.
+    """
+    if not paths.current.is_file():
+        result.add(
+            Finding(
+                "CURRENT_ABSENT",
+                SEVERITY_ERROR,
+                paths.current.name,
+                "the file is missing",
+                "re-run `researchlog init`",
+            )
+        )
+        return
+    block = schema.find_block(paths.current.read_text(encoding="utf-8"), "current")
+    if block is None:
+        result.add(
+            Finding(
+                "CURRENT_BLOCK_MISSING",
+                SEVERITY_ERROR,
+                paths.current.name,
+                "no ```json research:current block found",
+                "re-run `researchlog init --merge`, or add the block back",
+            )
+        )
+        return
+    for finding in schema.load_validator("current").check(block):
+        result.add(finding)
+    for finding in schema.version_findings("current", block, where=paths.current.name):
+        result.add(finding)
 
 
 def _check_signals(paths: repo.ResearchPaths, result: Result) -> None:

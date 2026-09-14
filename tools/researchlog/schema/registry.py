@@ -36,6 +36,7 @@ CURRENT_VERSIONS: dict[str, str] = {
     "evidence": "1.0",
     "manifest": "1.0",
     "findings-entry": "1.0",
+    "current": "1.0",
 }
 
 # Major-version migrations, keyed by (kind, from_major, to_major). A downgrade across

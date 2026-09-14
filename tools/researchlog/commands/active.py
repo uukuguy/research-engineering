@@ -228,28 +228,7 @@ def _report(record: Record, args: argparse.Namespace, result: Result) -> Result:
 
 
 def _parse_assignment(expression: str) -> tuple[str, Any]:
-    field, separator, raw = expression.partition("=")
-    if not separator or not field.strip():
-        raise StateInvalid(
-            [
-                Finding(
-                    "ACTIVE_SET_MALFORMED",
-                    SEVERITY_ERROR,
-                    expression,
-                    "expected FIELD=VALUE",
-                    "for example --set block.max_evidence_iterations=6",
-                )
-            ]
-        )
-    return field.strip(), _literal(raw)
-
-
-def _literal(raw: str) -> Any:
-    """JSON when it parses, a plain string otherwise, so numbers stay numbers."""
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return raw
+    return state.parse_assignment(expression, code="ACTIVE_SET_MALFORMED")
 
 
 def _now() -> str:

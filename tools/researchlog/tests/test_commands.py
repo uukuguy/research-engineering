@@ -614,6 +614,94 @@ class ManifestCommandTests(CommandTestCase):
         self.assertEqual(envelope["findings"][0]["code"], "MANIFEST_ABSENT")
 
 
+class CurrentBlockTests(CommandTestCase):
+    """`research:current` is canonical state, so it needs a verb and a validator.
+
+    It had neither: the block could only be edited by hand, against its own prose and
+    AGENTS.md, and nothing checked what was written. These tests hold both halves.
+    """
+
+    def test_reading_returns_the_block(self) -> None:
+        code, envelope = self.invoke(["current"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(envelope["payload"]["current"]["schema_version"], "1.0")
+
+    def test_reading_does_not_touch_the_file(self) -> None:
+        before = self.research("CURRENT.md").read_bytes()
+
+        self.invoke(["current"])
+
+        self.assertEqual(self.research("CURRENT.md").read_bytes(), before)
+
+    def test_a_set_updates_the_block_and_leaves_the_prose_alone(self) -> None:
+        before = self.research("CURRENT.md").read_text(encoding="utf-8")
+        prose = before.split("```json research:current")[0]
+
+        code, envelope = self.invoke(
+            [
+                "current",
+                "--set",
+                "objective=Does the residual separate release timing from noise?",
+                "--set",
+                "next_empirical_action=Replay the remaining three cases.",
+            ]
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            envelope["payload"]["changed"], ["objective", "next_empirical_action"]
+        )
+        after = self.research("CURRENT.md").read_text(encoding="utf-8")
+        self.assertTrue(after.startswith(prose), "the prose around the block moved")
+        self.assertIn("Replay the remaining three cases.", after)
+
+    def test_a_dotted_set_reaches_into_a_nested_object(self) -> None:
+        self.invoke(["current", "--set", "evidence_maturity.highest_stable_level=E2"])
+
+        _, envelope = self.invoke(["current"])
+
+        self.assertEqual(
+            envelope["payload"]["current"]["evidence_maturity"]["highest_stable_level"], "E2"
+        )
+
+    def test_a_written_block_survives_validate(self) -> None:
+        self.invoke(["current", "--set", 'objective="a question"'])
+
+        code, envelope = self.invoke(["validate"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(envelope["findings"], [])
+
+    def test_a_malformed_assignment_is_rejected(self) -> None:
+        code, envelope = self.invoke(["current", "--set", "objective"])
+
+        self.assertEqual(code, 2)
+        self.assertEqual(envelope["findings"][0]["code"], "CURRENT_SET_MALFORMED")
+
+    def test_a_block_that_violates_its_schema_is_not_written(self) -> None:
+        """A refused write must leave the file byte-identical, not half-updated."""
+        before = self.research("CURRENT.md").read_bytes()
+
+        code, envelope = self.invoke(["current", "--set", "objective=ok", "--set", "architecture_frozen=yes please"])
+
+        self.assertEqual(code, 2)
+        self.assertEqual(envelope["findings"][0]["code"], "SCHEMA_VIOLATION")
+        self.assertEqual(self.research("CURRENT.md").read_bytes(), before)
+
+    def test_validate_reports_a_current_block_that_drifted(self) -> None:
+        path = self.research("CURRENT.md")
+        path.write_text(
+            path.read_text(encoding="utf-8").replace('"architecture_frozen": false', '"architecture_frozen": "maybe"'),
+            encoding="utf-8",
+        )
+
+        code, envelope = self.invoke(["validate"])
+
+        self.assertEqual(code, 2)
+        self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
+
+
 class HumanRenderingTests(unittest.TestCase):
     """Human output must carry the actionable half of a finding.
 
