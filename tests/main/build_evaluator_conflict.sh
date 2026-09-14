@@ -38,7 +38,28 @@ git config user.name "evaluator conflict drill"
 mkdir -p tools
 cp -R "$SOURCE_ROOT/tools/researchlog" tools/
 cp -R "$SOURCE_ROOT/templates" templates
-cp "$SOURCE_ROOT/AGENTS.md" "$SOURCE_ROOT/CLAUDE.md" .
+cp "$SOURCE_ROOT/AGENTS.md" .
+
+# The adapter is this project's own, not the upstream tool repository's. Copying the latter
+# verbatim would make the fixture claim a layout it does not have: it names `skills/` and
+# `tools/install_research_skills.py`, neither of which a project that merely *uses* the tool
+# carries — and AGENTS.md's "Resuming work on the tool itself" points at `docs/WORK_LOG.md`,
+# which lives in the repository that develops the tool and nowhere else. A session that read
+# those paths as its own went looking for a starting point that does not exist here.
+cat > CLAUDE.md <<'CLAUDE_MD'
+@AGENTS.md
+
+# Claude Code adapter
+
+This is a research project that **uses** the research-engineering tool; it is not the
+repository that develops it.
+
+- The tool is vendored whole at `tools/researchlog`.
+- Its skills are installed copies under `.claude/skills/` and `.agents/skills/`. There is no
+  `skills/` canonical source here, so there is nothing to regenerate and no drift to check.
+- There is no `docs/WORK_LOG.md`. AGENTS.md's "Resuming work on the tool itself" describes the
+  upstream repository and does not apply here — this project has one track, the research.
+CLAUDE_MD
 "$PYTHON" "$SOURCE_ROOT/tools/install_research_skills.py" --target "$TARGET" --quiet
 
 # AGENTS.md declares the workflow-control block as mechanical, enforced in
@@ -493,6 +514,17 @@ if current.get("objective") != active.get("research_question"):
         "Fix the fixture, not the criteria."
     )
 print(f"state defines itself: {len(live)} live hypotheses, each with a stated claim")
+
+adapter = pathlib.Path("CLAUDE.md").read_text(encoding="utf-8")
+if "install_research_skills" in adapter:
+    raise SystemExit(
+        "the adapter names the upstream tool repository's installer, so this fixture is\n"
+        "claiming a layout it does not have. It carries no `skills/` source and no\n"
+        "`docs/WORK_LOG.md`; a session that reads those paths as its own goes looking for a\n"
+        "starting point that does not exist here.\n"
+        "Fix the fixture, not the criteria."
+    )
+print("adapter is this project's own")
 CHECK
 
 echo
