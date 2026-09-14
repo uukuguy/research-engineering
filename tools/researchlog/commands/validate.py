@@ -20,7 +20,7 @@ from researchlog.errors import (
 NAME = "validate"
 HELP = "check schemas and invariants across the canonical research state"
 
-KINDS = ("active", "evidence", "manifest", "findings-entry", "current")
+KINDS = ("active", "evidence", "manifest", "findings-entry", "current", "environment")
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -65,6 +65,7 @@ def run(args: argparse.Namespace) -> Result:
     _check_block(active, ledger, result)
     _check_signals(paths, result)
     _check_current(paths, result)
+    _check_environment(paths, result)
 
     if args.strict:
         _promote_warnings(result)
@@ -170,6 +171,43 @@ def _check_current(paths: repo.ResearchPaths, result: Result) -> None:
     for finding in schema.load_validator("current").check(block):
         result.add(finding)
     for finding in schema.version_findings("current", block, where=paths.current.name):
+        result.add(finding)
+
+
+def _check_environment(paths: repo.ResearchPaths, result: Result) -> None:
+    """The file a Day-1 criterion reads, checked for the first time.
+
+    An infeasible experiment has to land in `limitations` as a limitation rather than in
+    FINDINGS as a refuted hypothesis. That made ENVIRONMENT.md load-bearing while nothing
+    validated it and no command could write its tables — so an entry that was never written
+    and an entry nobody checked looked identical.
+    """
+    if not paths.environment.is_file():
+        result.add(
+            Finding(
+                "ENVIRONMENT_ABSENT",
+                SEVERITY_ERROR,
+                paths.environment.name,
+                "the file is missing",
+                "re-run `researchlog init`",
+            )
+        )
+        return
+    block = schema.find_block(paths.environment.read_text(encoding="utf-8"), "environment")
+    if block is None:
+        result.add(
+            Finding(
+                "ENVIRONMENT_BLOCK_MISSING",
+                SEVERITY_ERROR,
+                paths.environment.name,
+                "no ```json research:environment block found",
+                "re-run `researchlog init --merge`, or add the block back",
+            )
+        )
+        return
+    for finding in schema.load_validator("environment").check(block):
+        result.add(finding)
+    for finding in schema.version_findings("environment", block, where=paths.environment.name):
         result.add(finding)
 
 

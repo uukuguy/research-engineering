@@ -702,6 +702,109 @@ class CurrentBlockTests(CommandTestCase):
         self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
 
 
+class EnvDeclareTests(CommandTestCase):
+    """The declared tables had no write path.
+
+    `env record` merges `comparability` and `history` only, so `limitations` and `harnesses`
+    were readable in the skeleton, required by the protocol, and impossible to fill. A Day-1
+    criterion asks an infeasible experiment to land in the first of them.
+    """
+
+    def declare(self, table: str, payload: dict) -> tuple[int, dict]:
+        path = self.root / "entry.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return self.invoke(["env", "declare", table, str(path)])
+
+    def limitations(self) -> list:
+        _, envelope = self.invoke(["env", "show"])
+        return envelope["payload"]["environment"]["limitations"]
+
+    def test_a_limitation_can_be_declared(self) -> None:
+        code, envelope = self.declare(
+            "limitations",
+            {
+                "id": "ENV-LIM-001",
+                "capability": "post-planner control tampering",
+                "status": "ENV_UNSUPPORTED",
+                "impact": "E4 physical-safety evidence is unobtainable here.",
+            },
+        )
+
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(self.limitations()[0]["status"], "ENV_UNSUPPORTED")
+
+    def test_a_harness_can_be_declared(self) -> None:
+        code, envelope = self.declare(
+            "harnesses",
+            {
+                "id": "HARNESS-001",
+                "capability": "post-planner command corruption replay",
+                "supports_evidence": "E2/E3",
+                "preserves": ["planner command schema"],
+                "missing": ["actuator dynamics"],
+            },
+        )
+
+        self.assertEqual(code, 0, envelope)
+        _, shown = self.invoke(["env", "show"])
+        self.assertEqual(len(shown["payload"]["environment"]["harnesses"]), 1)
+
+    def test_an_incomplete_entry_is_refused_and_writes_nothing(self) -> None:
+        before = self.research("ENVIRONMENT.md").read_bytes()
+
+        code, envelope = self.declare("limitations", {"id": "ENV-LIM-002", "capability": "x"})
+
+        self.assertEqual(code, 2)
+        self.assertEqual(envelope["findings"][0]["code"], "ENV_DECLARE_INCOMPLETE")
+        self.assertEqual(self.research("ENVIRONMENT.md").read_bytes(), before)
+
+    def test_a_duplicate_id_is_refused(self) -> None:
+        entry = {
+            "id": "ENV-LIM-003",
+            "capability": "x",
+            "status": "ENV_UNSUPPORTED",
+            "impact": "y",
+        }
+        self.assertEqual(self.declare("limitations", entry)[0], 0)
+
+        code, envelope = self.declare("limitations", entry)
+
+        self.assertEqual(code, 2)
+        self.assertEqual(envelope["findings"][0]["code"], "ENV_DECLARE_DUPLICATE")
+        self.assertEqual(len(self.limitations()), 1)
+
+    def test_available_extends_a_namespace_without_duplicating(self) -> None:
+        payload = {"namespace": "simulator", "items": ["mujoco 3.1", "pybullet 3.2"]}
+        self.assertEqual(self.declare("available", payload)[0], 0)
+
+        code, _ = self.declare("available", {"namespace": "simulator", "items": ["mujoco 3.1"]})
+
+        self.assertEqual(code, 0)
+        _, shown = self.invoke(["env", "show"])
+        self.assertEqual(shown["payload"]["environment"]["available"]["simulator"], ["mujoco 3.1", "pybullet 3.2"])
+
+    def test_an_unknown_namespace_is_refused(self) -> None:
+        code, envelope = self.declare("available", {"namespace": "gpUs", "items": ["h100"]})
+
+        self.assertEqual(code, 2)
+        self.assertEqual(envelope["findings"][0]["code"], "ENV_NAMESPACE_UNKNOWN")
+
+    def test_validate_checks_the_environment_block(self) -> None:
+        path = self.research("ENVIRONMENT.md")
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                '"limitations": []',
+                '"limitations": [{"id": "ENV-LIM-009", "capability": "x"}]',
+            ),
+            encoding="utf-8",
+        )
+
+        code, envelope = self.invoke(["validate"])
+
+        self.assertEqual(code, 2)
+        self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
+
+
 class HumanRenderingTests(unittest.TestCase):
     """Human output must carry the actionable half of a finding.
 

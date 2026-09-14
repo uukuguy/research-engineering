@@ -1,0 +1,57 @@
+{
+  "title": "Environment",
+  "description": "The research:environment block in research/ENVIRONMENT.md — what the lab can and cannot measure. It is the file a Day-1 criterion reads: an infeasible experiment has to land here as a limitation, distinct from a scientific negative. Until this schema existed the block was read by nothing and never validated, so a limitation that never got written and a limitation nobody checked looked the same.",
+  "type": "object",
+  "required": ["schema_version", "available", "limitations", "harnesses", "comparability", "history"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "environment_id": { "type": ["string", "null"] },
+    "available": {
+      "type": "object",
+      "description": "What the lab actually has, by namespace.",
+      "properties": {
+        "compute": { "type": "array" },
+        "simulator": { "type": "array" },
+        "data": { "type": "array" },
+        "external_services": { "type": "array" }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "description": "Capabilities the environment does not support. A limitation is not a result: it says the question cannot be measured here, which is why it is kept apart from a refuted hypothesis.",
+      "items": {
+        "type": "object",
+        "required": ["id", "capability", "status", "impact"],
+        "properties": {
+          "id": { "type": "string" },
+          "capability": { "type": "string" },
+          "status": { "type": "string" },
+          "impact": { "type": "string" },
+          "verified_by": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "harnesses": {
+      "type": "array",
+      "description": "Surrogates the lab does have, and what each one preserves and drops. This is the environment's half of the surrogate contract: the record states the boundary for one claim, the harness states it once for every claim that uses it.",
+      "items": {
+        "type": "object",
+        "required": ["id", "capability", "supports_evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "capability": { "type": "string" },
+          "supports_evidence": { "type": "string" },
+          "preserves": { "type": "array" },
+          "missing": { "type": "array" },
+          "verified_by": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "capability_map": {
+      "type": "array",
+      "description": "Declared in the skeleton and never given a shape: no entry example exists anywhere, nothing writes it and nothing reads it. Left unconstrained rather than invented — a shape guessed here would be enforced as though it had been decided."
+    },
+    "comparability": { "type": "object" },
+    "history": { "type": "array" }
+  }
+}

@@ -208,6 +208,7 @@ researchlog manifest                create or update a versioned run manifest
 researchlog active                  crash-safe update of ACTIVE.json
 researchlog current                 read or update the research:current block
 researchlog findings                durable beliefs: add, close, render
+researchlog env declare TABLE FILE  append to a declared ENVIRONMENT.md table
 researchlog env record FILE         record an environment change
 researchlog env query FILE          what an environment change invalidates
 researchlog snapshot                git/config/environment/input fingerprint

@@ -100,7 +100,7 @@ class KeywordGuardTests(unittest.TestCase):
         schema is complete, which a derived count would let pass unnoticed.
         """
         found = sorted(registry.schema_dir().glob("*.schema.json"))
-        self.assertEqual(len(found), 5, f"expected five schemas, found {[p.name for p in found]}")
+        self.assertEqual(len(found), 6, f"expected six schemas, found {[p.name for p in found]}")
         for path in found:
             with self.subTest(schema=path.name):
                 validator.load_schema(path)  # raises if any keyword is unsupported

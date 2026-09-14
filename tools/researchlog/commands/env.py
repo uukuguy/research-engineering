@@ -60,6 +60,14 @@ SUPPORTED_BLOCK_VERSION = "1.0"
 REVIEW_ACTION = "review confidence; not auto-demoted"
 DEFAULT_ENVIRONMENT_ID = "ENV-unspecified"
 
+# The declared tables, and the keys an entry must carry. `available` is handled separately:
+# it is a namespace of lists rather than a list of entries.
+DECLARABLE: dict[str, tuple[str, ...]] = {
+    "limitations": ("id", "capability", "status", "impact"),
+    "harnesses": ("id", "capability", "supports_evidence"),
+}
+AVAILABLE_NAMESPACES: tuple[str, ...] = ("compute", "simulator", "data", "external_services")
+
 
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", type=Path, default=None)
@@ -70,8 +78,18 @@ def configure(parser: argparse.ArgumentParser) -> None:
     query = actions.add_parser("query", help="report what the change invalidates; writes nothing")
     query.add_argument("file", metavar="FILE", help="the change document")
     show = actions.add_parser("show", help="print the research:environment block; writes nothing")
+    declare = actions.add_parser(
+        "declare", help="append an entry to a declared ENVIRONMENT.md table"
+    )
+    declare.add_argument(
+        "table",
+        choices=(*DECLARABLE, "available"),
+        metavar="TABLE",
+        help="limitations | harnesses | available",
+    )
+    declare.add_argument("file", metavar="FILE", help="the entry document")
 
-    for action in (record, query, show):
+    for action in (record, query, show, declare):
         _accept_shared_flags(action)
 
 
@@ -92,12 +110,102 @@ def run(args: argparse.Namespace) -> Result:
             payload={"environment": block}, human=json.dumps(block, ensure_ascii=False, indent=2)
         )
 
+    if args.action == "declare":
+        return _declare(paths, text, block, args.table, _read_change(args.file))
+
     change = _read_change(args.file)
     return (
         _record(paths, text, block, change)
         if args.action == "record"
         else _query(paths, block, change)
     )
+
+
+def _declare(
+    paths: repo.ResearchPaths,
+    text: str,
+    block: dict[str, Any],
+    table: str,
+    entry: dict[str, Any],
+) -> Result:
+    """Append to a table this block declares, which until now nothing could write.
+
+    `limitations` and `harnesses` are the two canonical tables that carry evidence
+    semantics — a Day-1 criterion asks an infeasible experiment to land in the first as a
+    limitation rather than as a refuted hypothesis, and a surrogate's boundary belongs in
+    the second. `env record` merges only `comparability` and `history`, so both were
+    readable in the skeleton, required by the protocol, and impossible to fill.
+    """
+    _require_writable_block(block, paths.environment)
+    updated = json.loads(json.dumps(block, ensure_ascii=False))
+
+    if table == "available":
+        namespace = entry.get("namespace")
+        items = entry.get("items")
+        if namespace not in AVAILABLE_NAMESPACES:
+            raise StateInvalid(
+                [
+                    Finding(
+                        "ENV_NAMESPACE_UNKNOWN",
+                        SEVERITY_ERROR,
+                        str(namespace),
+                        f"unknown namespace; expected one of {', '.join(AVAILABLE_NAMESPACES)}",
+                    )
+                ]
+            )
+        if not isinstance(items, list) or not items:
+            raise StateInvalid(
+                [Finding("ENV_DECLARE_EMPTY", SEVERITY_ERROR, table, "items must be a non-empty list")]
+            )
+        target = updated.setdefault("available", {}).setdefault(namespace, [])
+        target.extend(item for item in items if item not in target)
+        changed = f"available.{namespace}"
+    else:
+        required = DECLARABLE[table]
+        missing = [key for key in required if not entry.get(key)]
+        if missing:
+            raise StateInvalid(
+                [
+                    Finding(
+                        "ENV_DECLARE_INCOMPLETE",
+                        SEVERITY_ERROR,
+                        table,
+                        f"entry is missing: {', '.join(missing)}",
+                        f"a {table} entry needs {', '.join(required)}",
+                    )
+                ]
+            )
+        entries = updated.setdefault(table, [])
+        if any(existing.get("id") == entry.get("id") for existing in entries):
+            raise StateInvalid(
+                [
+                    Finding(
+                        "ENV_DECLARE_DUPLICATE",
+                        SEVERITY_ERROR,
+                        str(entry.get("id")),
+                        f"{table} already holds an entry with this id",
+                    )
+                ]
+            )
+        entries.append(entry)
+        changed = f"{table}[{entry.get('id')}]"
+
+    # Schema-checked before the write, so a refused declaration leaves the file untouched.
+    validator = schema.load_validator("environment")
+    findings = validator.check(updated)
+    errors = [finding for finding in findings if finding.severity == SEVERITY_ERROR]
+    if errors:
+        raise StateInvalid(errors)
+
+    paths.environment.write_text(
+        schema.replace_block(text, "environment", updated), encoding="utf-8"
+    )
+
+    result = Result(payload={"path": str(paths.environment), "changed": changed})
+    for finding in findings:
+        result.add(finding)
+    result.human = f"declared {changed} in {paths.environment.name}"
+    return result
 
 
 def _record(
