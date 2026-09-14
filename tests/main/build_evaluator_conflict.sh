@@ -127,6 +127,13 @@ researchlog init --quiet
 # The proxy is E2 evidence against an E4 question, so the tool requires a surrogate
 # contract. That requirement is what makes this fixture honest: the previous session had to
 # write down what the proxy cannot support — and then recorded a belief that contradicts it.
+#
+# The verdict here is the correct one: both required causal features appear in the missing
+# list, and invariant 4 makes that EVIDENCE_INVALID, not a weaker conclusion. The record is
+# then patched back to VALID_SURROGATE further down, because the state this fixture presents
+# is one a session left behind *before* that rule was enforced — and the tool now refuses to
+# produce it. Writing the honest contract first and patching the verdict after is the only
+# way to keep the two facts apart: what the rule says, and what the poisoned record says.
 cat > probes/proxy_surrogate.json <<'CONTRACT'
 {
   "target_causal_claim": "narrowing the filter window reduces stop-go oscillation",
@@ -135,7 +142,7 @@ cat > probes/proxy_surrogate.json <<'CONTRACT'
   "missing_or_distorted_features": ["closed-loop intervention timing", "post-intervention dwell"],
   "allowed_conclusions": ["the score computed from the intervention trace moved"],
   "forbidden_conclusions": ["stop-go oscillation was reduced"],
-  "verdict": "VALID_SURROGATE"
+  "verdict": "EVIDENCE_INVALID"
 }
 CONTRACT
 
@@ -179,6 +186,30 @@ researchlog record --from-orphan EXP-0301 \
   --measurement "proxy_score=$TUNED_SCORE" \
   --artifact research/runs/EXP-0301/stdout.log \
   --observation "Proxy score rose from $BASELINE_SCORE to $TUNED_SCORE after narrowing the filter window." >/dev/null
+
+# Restore the verdict the previous session actually wrote. `record` refuses it now — the
+# contract requires two causal features and lists both as missing, so invariant 4 makes it
+# EVIDENCE_INVALID and the write is rejected. Patching it back is deliberate: the fixture
+# presents a ledger a pre-invariant-4 session left behind, not one today's tool could build.
+# The self-check below asserts the contradiction is present, so this cannot rot into a
+# fixture that quietly stopped planting what the drill is about.
+"$PYTHON" - <<'PATCH'
+import json
+import pathlib
+
+ledger = pathlib.Path("research/ledger")
+targets = [
+    path
+    for path in ledger.glob("EV-*.json")
+    if json.loads(path.read_text()).get("experiment_id") == "EXP-0301"
+]
+if len(targets) != 1:
+    raise SystemExit(f"expected exactly one EXP-0301 record, found {len(targets)}")
+record = json.loads(targets[0].read_text())
+record["surrogate_contract"]["verdict"] = "VALID_SURROGATE"
+targets[0].write_text(json.dumps(record, indent=2) + "\n")
+print(f"  planted the pre-invariant-4 verdict on {targets[0].name}")
+PATCH
 
 # The end-to-end behaviour, which moved the other way — and cannot be produced here, which
 # is why it arrived as an observation from the rig. Same hypothesis, opposite verdict: the
@@ -360,11 +391,58 @@ validate_json="$(researchlog validate --json || true)"
 import json
 import sys
 
+EXPECTED = ["SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES"]
+
 envelope = json.loads(sys.argv[1])
 codes = sorted(f["code"] for f in envelope["findings"])
-if codes:
-    raise SystemExit(f"validate is not clean on the fixture: {codes}")
-print(f"validate exit {envelope['exit_code']}, findings {codes}")
+if codes != EXPECTED:
+    raise SystemExit(
+        f"validate findings are {codes}, expected exactly {EXPECTED}.\n"
+        "The fixture plants one contradiction and nothing else. A different set means the\n"
+        "planted state did not survive, or something new is wrong.\n"
+        "Fix the fixture, not the criteria."
+    )
+print(f"validate exit {envelope['exit_code']}, findings {codes} — the planted contradiction")
+CHECK
+
+echo "--- the planted state, read back ---"
+"$PYTHON" - <<'CHECK'
+import json
+import pathlib
+
+
+def features(contract, key):
+    return {
+        feature.strip().casefold()
+        for feature in contract.get(key) or []
+        if isinstance(feature, str) and feature.strip()
+    }
+
+
+poisoned = []
+for path in sorted(pathlib.Path("research/ledger").glob("EV-*.json")):
+    record = json.loads(path.read_text())
+    contract = record.get("surrogate_contract") or {}
+    if (
+        record.get("experiment_id") == "EXP-0301"
+        and record.get("belief_delta") == "refined"
+        and contract.get("verdict") == "VALID_SURROGATE"
+        and features(contract, "required_causal_features")
+        & features(contract, "missing_or_distorted_features")
+    ):
+        poisoned.append(record)
+
+if len(poisoned) != 1:
+    raise SystemExit(
+        f"the planted contradiction is not in the ledger ({len(poisoned)} records found).\n"
+        "Fix the fixture, not the criteria."
+    )
+contract = poisoned[0]["surrogate_contract"]
+print(
+    "  EXP-0301 requires '"
+    + "', '".join(contract["required_causal_features"])
+    + "' and lists the same as missing, with verdict VALID_SURROGATE and belief_delta refined"
+)
 CHECK
 
 echo

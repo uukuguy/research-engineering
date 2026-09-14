@@ -151,6 +151,58 @@ class SurrogateTests(unittest.TestCase):
         )
         self.assertNotIn("INVALID_SURROGATE_ASSERTS_CONCLUSION", codes(findings))
 
+    def test_calling_a_required_feature_missing_forces_the_invalid_verdict(self) -> None:
+        """Invariant 4: a missing causal feature means EVIDENCE_INVALID, not a weaker claim.
+
+        The lists used to be read only for completeness, so a contract could require a feature,
+        list it as absent, and still declare VALID_SURROGATE with an assertive outcome — the
+        rule the reference states and nothing enforced.
+        """
+        contract = dict(
+            FULL_CONTRACT,
+            required_causal_features=["actuator dynamics"],
+            missing_or_distorted_features=["actuator dynamics"],
+        )
+        findings = constraints.check_evidence(
+            evidence(evidence_level="E2", target_evidence_level="E4", surrogate_contract=contract)
+        )
+        self.assertIn("SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES", codes(findings))
+
+    def test_the_contradiction_survives_padding_and_case(self) -> None:
+        contract = dict(
+            FULL_CONTRACT,
+            required_causal_features=["  Actuator Dynamics "],
+            missing_or_distorted_features=["actuator dynamics"],
+        )
+        findings = constraints.check_evidence(
+            evidence(evidence_level="E2", target_evidence_level="E4", surrogate_contract=contract)
+        )
+        self.assertIn("SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES", codes(findings))
+
+    def test_the_invalid_verdict_is_what_the_contradiction_asks_for(self) -> None:
+        contract = dict(
+            FULL_CONTRACT,
+            required_causal_features=["actuator dynamics"],
+            missing_or_distorted_features=["actuator dynamics"],
+            verdict="EVIDENCE_INVALID",
+        )
+        findings = constraints.check_evidence(
+            evidence(
+                evidence_level="E2",
+                target_evidence_level="E4",
+                surrogate_contract=contract,
+                research_outcome="inconclusive",
+            )
+        )
+        self.assertNotIn("SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES", codes(findings))
+
+    def test_a_distorted_feature_that_is_not_required_is_left_alone(self) -> None:
+        """The check keys on required features only; a non-required distortion is a note."""
+        findings = constraints.check_evidence(
+            evidence(evidence_level="E2", target_evidence_level="E4", surrogate_contract=FULL_CONTRACT)
+        )
+        self.assertNotIn("SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES", codes(findings))
+
 
 class HypothesisTests(unittest.TestCase):
     def test_unknown_hypothesis_is_rejected(self) -> None:

@@ -398,6 +398,19 @@ def _check_execution_vs_outcome(record: Mapping[str, Any], identifier: str) -> l
     return []
 
 
+def _normalised_features(value: Any) -> set[str]:
+    """Feature phrases from one contract list, trimmed and case-folded.
+
+    The lists are free text, so the comparison below is exact after normalisation. It catches
+    the contradiction the author stated outright and stays silent on a paraphrase — which is
+    the only honest option without a semantic matcher, and the failure mode is a miss, never
+    a false accusation.
+    """
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return set()
+    return {item.strip().casefold() for item in value if isinstance(item, str) and item.strip()}
+
+
 def _check_surrogate(record: Mapping[str, Any], identifier: str) -> list[Finding]:
     findings: list[Finding] = []
     contract = record.get("surrogate_contract")
@@ -438,6 +451,22 @@ def _check_surrogate(record: Mapping[str, Any], identifier: str) -> list[Finding
                     SEVERITY_ERROR,
                     identifier,
                     f"surrogate_contract is missing: {', '.join(missing)}",
+                )
+            )
+        required = _normalised_features(contract.get("required_causal_features"))
+        absent = _normalised_features(contract.get("missing_or_distorted_features"))
+        contradicted = sorted(required & absent)
+        if contradicted and contract.get("verdict") != "EVIDENCE_INVALID":
+            findings.append(
+                Finding(
+                    "SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES",
+                    SEVERITY_ERROR,
+                    identifier,
+                    "the contract requires a causal feature and lists it as missing, so the "
+                    f"verdict is EVIDENCE_INVALID, not {contract.get('verdict')!r}: "
+                    + "; ".join(contradicted),
+                    "set the verdict to EVIDENCE_INVALID and the outcome to 'inconclusive'; if "
+                    "the feature is not actually required, drop it from required_causal_features",
                 )
             )
         if contract.get("verdict") == "EVIDENCE_INVALID" and record.get("research_outcome") in ASSERTIVE_OUTCOMES:
