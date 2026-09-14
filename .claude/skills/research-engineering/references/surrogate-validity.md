@@ -57,7 +57,11 @@ The three lists that matter most are `required_causal_features`,
 `missing_or_distorted_features`, and `forbidden_conclusions`. The first says what the
 claim needs. The second says what is absent. The third says what a reader will be tempted
 to infer anyway. If a required causal feature appears in the missing list, the verdict is
-`EVIDENCE_INVALID` — not a weaker conclusion, an invalid one.
+`EVIDENCE_INVALID` — not a weaker conclusion, an invalid one. This is enforced: a contract
+that requires a feature and lists the same feature as absent, while the verdict stays
+`VALID_SURROGATE`, is rejected with `SURROGATE_VERDICT_CONTRADICTS_MISSING_FEATURES` and
+the write fails. The comparison is exact, so a paraphrase slips past — write the missing
+list in the same words as the required list when you mean the same feature.
 
 ## The verdict
 
