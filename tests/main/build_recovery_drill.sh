@@ -87,10 +87,19 @@ PROBE
 
 # The surrogate contract is part of the workspace, so it is committed before any run.
 # Creating it later would move the code identity between two runs of the same code.
+#
+# `target_causal_claim` is the claim the replay actually tests, not the research question it
+# cannot reach. The design says as much — what is actually being tested, and the features
+# that must exist "for the claim to be meaningful" — and the reference's valid worked example
+# is a surrogate that drops the loop dynamics and still counts, because it argues a narrower
+# claim and forbids the wider one. Writing the wide claim here would require the feature it
+# is missing, which makes the verdict EVIDENCE_INVALID and leaves VALID_SURROGATE reachable
+# only for a surrogate that drops nothing. The wider question lives in the record's
+# `question`; the boundary lives in `forbidden_conclusions`.
 cat > probes/replay_surrogate.json <<'CONTRACT'
 {
-  "target_causal_claim": "the residual separation survives closed-loop closure",
-  "required_causal_features": ["actuator dynamics in the loop", "release timing events"],
+  "target_causal_claim": "the residual separation is visible in offline replay",
+  "required_causal_features": ["release timing events"],
   "preserved_features": ["release timing events"],
   "missing_or_distorted_features": ["actuator dynamics in the loop"],
   "allowed_conclusions": ["the residual separation is visible in offline replay"],
