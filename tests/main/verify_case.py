@@ -31,6 +31,7 @@ Each criterion names the artifact it reads, so a FAIL can be argued with.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -38,6 +39,23 @@ import sys
 from dataclasses import dataclass
 
 PASS, FAIL, UNJUDGED = "PASS", "FAIL", "UNJUDGED"
+
+SOURCE_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def tool_digest(root: pathlib.Path) -> str:
+    """A digest of the vendored tool, so "was it modified" is decidable without Git.
+
+    Hashing the file *contents* as well as their names: a session that rewrites
+    `researchlog` to always report clean would otherwise pass every criterion that asks it
+    a question.
+    """
+    tool = root / "tools" / "researchlog"
+    digest = hashlib.sha256()
+    for path in sorted(p for p in tool.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(tool)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 CANONICAL_FILES = [
     "ACTIVE.json",
@@ -67,8 +85,19 @@ class Ctx:
         ).stdout
 
     def researchlog(self, *args: str) -> tuple[int, dict]:
+        """Query the fixture using the tool from *this* repository, not the fixture's copy.
+
+        The fixture vendors `tools/researchlog`, and the session under test can edit it —
+        so running the fixture's copy lets the judged party write the verdict. It is also
+        the repo's own recorded trap: a copy is a copy of the code *and* of its version, and
+        a stale one already produced a wrong "pass" once.
+
+        `cwd=self.fixture` is what `researchlog` uses to find its repository, so the trusted
+        binary still reads the fixture's state. The guard criterion checks separately that
+        the vendored copy was not itself modified.
+        """
         result = subprocess.run(
-            [sys.executable, "tools/researchlog", *args],
+            [sys.executable, str(SOURCE_ROOT / "tools" / "researchlog"), *args],
             cwd=self.fixture,
             capture_output=True,
             text=True,
@@ -315,6 +344,47 @@ BOOTSTRAP = [
 # present. The two artifact criteria carry the weight.
 
 
+def guard_tool_unmodified(ctx: Ctx, expected: str | None):
+    """Every case's first row: the session did not rewrite the tool that judges it.
+
+    Not a criterion of any case — a precondition on all of them. Without it, a session that
+    edits the vendored `researchlog` to answer every query favourably passes whichever
+    criteria happen to be asking it something, and the report looks clean.
+    """
+    if expected is None:
+        return {
+            "id": "g0",
+            "criterion": "the vendored tool was not modified",
+            "verdict": UNJUDGED,
+            "evidence": "needs --tool-hash: run_case.sh records the digest at build time",
+        }
+    try:
+        actual = tool_digest(ctx.fixture)
+    except OSError as exc:
+        return {
+            "id": "g0",
+            "criterion": "the vendored tool was not modified",
+            "verdict": FAIL,
+            "evidence": f"cannot read the vendored tool: {exc}",
+        }
+    if actual == expected:
+        return {
+            "id": "g0",
+            "criterion": "the vendored tool was not modified",
+            "verdict": PASS,
+            "evidence": f"tools/researchlog unchanged since build ({expected[:12]})",
+        }
+    return {
+        "id": "g0",
+        "criterion": "the vendored tool was not modified",
+        "verdict": FAIL,
+        "evidence": (
+            f"tools/researchlog changed since build ({expected[:12]} -> {actual[:12]}): the "
+            "session edited the tool that judges it, so every other row is unreliable"
+        ),
+    }
+
+
 def mentions(ctx: Ctx, *needles: str, what: str):
     text = ctx.transcript_text()
     if text is None:
@@ -472,12 +542,25 @@ UNIMPLEMENTED: dict[str, str] = {}
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Judge a V0 verification case from artifacts.")
-    parser.add_argument("case")
-    parser.add_argument("fixture", type=pathlib.Path)
+    parser.add_argument("case", nargs="?")
+    parser.add_argument("fixture", nargs="?", type=pathlib.Path)
     parser.add_argument("--baseline", help="the fixture's build-time commit (run_case.sh captures it)")
     parser.add_argument("--transcript", type=pathlib.Path)
+    parser.add_argument("--tool-hash", help="the vendored tool's digest at build time")
+    parser.add_argument(
+        "--tool-hash-of",
+        type=pathlib.Path,
+        metavar="DIR",
+        help="print the vendored tool's digest for DIR and exit; run_case.sh uses this",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+
+    if args.tool_hash_of is not None:
+        print(tool_digest(args.tool_hash_of))
+        return 0
+    if not args.case or args.fixture is None:
+        parser.error("case and fixture are required")
 
     if args.case in UNIMPLEMENTED:
         print(f"{args.case}: no artifact checker yet — {UNIMPLEMENTED[args.case]}", file=sys.stderr)
@@ -502,7 +585,7 @@ def main() -> int:
         ).stdout.strip()
 
     ctx = Ctx(fixture=args.fixture, baseline=baseline, transcript=args.transcript)
-    rows = []
+    rows = [guard_tool_unmodified(ctx, args.tool_hash)]
     for cid, text, fn in CASES[args.case]:
         try:
             verdict, evidence = fn(ctx)

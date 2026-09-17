@@ -30,12 +30,36 @@ tests/main/build_rotation_drill.sh /tmp/x 900
 cd /tmp/x && claude                      # 或 pi
 #   只给两行：/research-engineering
 #             Continue current research.
-python3 tests/main/verify_case.py rotation /tmp/x --baseline <建完时的 HEAD>
+python3 tests/main/verify_case.py rotation /tmp/x \
+    --baseline <建完时的 HEAD> --tool-hash <建完时的工具摘要>
 ```
 
 **判据不因驱动方式而变** —— 一个只能用一种方式跑的案例，是没法拿自己的 harness 去对照的。
 
-`--baseline` 是**必需**的（rotation）。理由见下面 c5。
+`--baseline` 是**必需**的（rotation / recovery），`--tool-hash` 强烈建议给。两者都可以在建完时
+这样取到：
+
+```bash
+B=$(git -C /tmp/x rev-parse HEAD)
+H=$(python3 tests/main/verify_case.py --tool-hash-of /tmp/x)
+```
+
+### 第 0 行：守卫判据 `g0` —— session 没有改那个判它的工具
+
+每个案例的第一行都是它，它不是任何案例的判据，而是**所有判据的前提**：
+
+> **`tools/researchlog` 在 fixture 里是 vendored 的，而被测 session 能改它。** 一个把
+> `researchlog` 改成"问什么都答好"的 session，会让**恰好要问它话的那些判据**全部通过，而报告
+> 看起来干净。
+
+这也是仓库自己记过的陷阱的另一面（`GOTCHAS.md` A2：副本既是代码的副本，也是代码版本的副本）。
+所以两件事一起做：
+
+- **检查器自己执行受信的副本** —— `SOURCE_ROOT/tools/researchlog`，用 `cwd=fixture` 让
+  `researchlog` 按 cwd 找到 fixture 的仓库（A1）。**受信的代码，被测的状态。**
+- **`g0` 比对建完时的摘要** —— 变了就整份报告作废，因为**其余每一行都由一个已被改写的裁判给出**。
+
+变异验证：往 vendored 的 `researchlog` 里追加一行 → `g0` 由 PASS 翻 FAIL。
 
 ## 三种裁决
 
@@ -177,6 +201,7 @@ recovery 的 **r2 是这一组里最该看的**：判据是"**报告**了那个�
 | 客户端 | 怎么进入 Research Mode | 状态 |
 |---|---|---|
 | `claude`（缺省） | `claude -p "<两行>" --dangerously-skip-permissions --output-format stream-json --verbose` | 已实测 |
+| `stub`（负对照） | 什么都不做 | 已实测：rotation 下 **c1/c5 FAIL**、c2/c3/c4 PASS |
 | `pi` | `pi -p "<两行>" --no-skills --skill <fixture>/.agents/skills --approve` | 调用形状已实测（技能加载已验证）；**完整案例未跑过** |
 
 `pi` 的三点与 Claude Code 不同，**没有一条是等价替换**：
@@ -194,6 +219,18 @@ recovery 的 **r2 是这一组里最该看的**：判据是"**报告**了那个�
 **凭据在项目自己的 `.env` 里**，不在 agent 的后台环境里，`run_case.sh` 会 source 它。注意
 `pi auth check` 报 `ready` 只表示**配了**凭据，不表示**凭据有效** —— 实测三个 provider 全部
 `ready` 而全部 401。
+
+### `stub`：负对照，唯一不花钱的客户端
+
+```bash
+tests/main/run_case.sh rotation stub 5
+```
+
+它什么都不做。**一个对它还能通过的案例，说明它没在测它声称的东西。** 这是在没有 session 成本的
+前提下，同时验 builder、runner、检查器三者的办法 —— 改动 harness 之后跑一次，比读代码可靠。
+
+实测：`rotation` + `stub` → `c1`/`c5` FAIL（没有任何行为可查）、`c2`/`c3`/`c4` PASS（也确实没做
+那三件坏事）、`g0` PASS（也确实没改工具）。**每一条都判对了。**
 
 `#1` / `#22` 这两条验收要的就是"另一个客户端"，#22 还额外要求"状态报告交给它能快速建立正确
 认知，且执行前仍走 Resume"。**完整案例尚未在 pi 上跑过** —— 技能加载这一环已验证，端到端没有。
@@ -237,3 +274,11 @@ CASE_PERMISSION_MODE=default tests/main/run_case.sh rotation claude 900
 这么写的（指南里那行 `> D2.jsonl` 写在 `cd /tmp/rotation-drill` 之后），session 注意到了那个
 1.25 MB 且在增长的未跟踪文件并花了注意力在它上面 —— 而当时正要判"它为什么不写意图"。
 `run_case.sh` 因此把 transcript 写在 fixture **之外**，并在脚本里断言这件事。
+
+**另外两处 harness 卫生**（安全审查提出，都成立）：
+
+- transcript 落在 `mktemp -d` 造的**私有目录**（`chmod 700`）里，不再用 `/tmp` 下的固定文件名 ——
+  固定名是别的本地用户可以预先占掉的（做成 symlink 就更好），而且同名案例并发跑会互相踩。
+  **fixture 仍用可预测的路径**，因为指南让你 `cd` 进去手工跑，且 builder 会先 `rm -rf` 它；
+  但若那个路径是 symlink，脚本直接拒绝。
+- fixture 建完即 `chmod 700`。

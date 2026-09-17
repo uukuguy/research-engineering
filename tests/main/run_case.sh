@@ -35,13 +35,26 @@ SECONDS_TO_RUN="${3:-900}"
 if [[ -z "$CASE" || -z "$CLIENT" ]]; then
   echo "usage: $0 <case> <client> [seconds]" >&2
   echo "  cases:   rotation bootstrap recovery evaluator-conflict" >&2
-  echo "  clients: claude pi" >&2
+  echo "  clients: claude pi stub (stub is the negative control: it must FAIL)" >&2
   exit 64
 fi
 
 PYTHON="${PYTHON:-python3}"
-FIXTURE="/tmp/re-case-$CASE-$CLIENT"
-TRANSCRIPT="/tmp/re-case-$CASE-$CLIENT.transcript.jsonl"
+FIXTURE="${CASE_FIXTURE:-/tmp/re-case-$CASE-$CLIENT}"
+
+# The transcript goes in a private, unpredictable directory rather than a fixed name in
+# /tmp: a predictable path is one another local user can pre-create — as a symlink, say —
+# and it also means two runs of the same case collide. The fixture keeps its documented,
+# predictable path because the manual workflow in docs/V0_CASES.md tells you to `cd` into
+# it, and because the builder `rm -rf`s it before use.
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/re-cases.XXXXXX")"
+chmod 700 "$WORKDIR"
+TRANSCRIPT="$WORKDIR/$CASE-$CLIENT.transcript.jsonl"
+
+if [[ -L "$FIXTURE" ]]; then
+  echo "refusing: the fixture path is a symlink ($FIXTURE)" >&2
+  exit 70
+fi
 
 # --- case table ------------------------------------------------------------------------
 # builder: the script that creates the fixture. prompt: what the session is given, and
@@ -129,6 +142,13 @@ case "$CLIENT" in
     set +a
     AGENT=(pi -p "$PROMPT" --no-skills --skill "$FIXTURE/.agents/skills" --approve)
     ;;
+  stub)
+    # A negative control, and the only client that costs nothing. An agent that does
+    # nothing must FAIL the criteria that ask anything of it. A case that *passes* against
+    # this client is not measuring what it claims, and the smoke test below is what makes
+    # that visible without spending a session.
+    AGENT=(sh -c 'echo "stub: no session was started; this is the negative control" >&2; exit 0')
+    ;;
   *)
     echo "unknown client: $CLIENT" >&2
     exit 64
@@ -142,9 +162,13 @@ esac
 
 echo "=== build: $CASE -> $FIXTURE ==="
 "${BUILDER[@]}"
+chmod 700 "$FIXTURE"
 
 BASELINE="$(git -C "$FIXTURE" rev-parse HEAD)"
-echo "=== baseline: ${BASELINE:0:8} ==="
+# The digest of the vendored tool, taken now, before any agent has run. Without it the
+# checker cannot tell a session that used the tool from one that rewrote it.
+TOOL_HASH="$("$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" --tool-hash-of "$FIXTURE")"
+echo "=== baseline: ${BASELINE:0:8} · tool ${TOOL_HASH:0:12} ==="
 
 echo "=== drive: $CLIENT ==="
 ( cd "$FIXTURE" && "${AGENT[@]}" ) >"$TRANSCRIPT" 2>&1 || echo "agent exited non-zero (see $TRANSCRIPT)"
@@ -152,4 +176,4 @@ echo "transcript: $TRANSCRIPT ($(wc -c <"$TRANSCRIPT" | tr -d ' ') B)"
 
 echo "=== judge ==="
 "$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" "$CASE" "$FIXTURE" \
-  --baseline "$BASELINE" --transcript "$TRANSCRIPT"
+  --baseline "$BASELINE" --tool-hash "$TOOL_HASH" --transcript "$TRANSCRIPT"
