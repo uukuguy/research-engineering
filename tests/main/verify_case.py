@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -40,7 +41,12 @@ from dataclasses import dataclass
 
 PASS, FAIL, UNJUDGED = "PASS", "FAIL", "UNJUDGED"
 
-SOURCE_ROOT = pathlib.Path(__file__).resolve().parents[2]
+SOURCE_ROOT = pathlib.Path(
+    # run_case.sh copies this checker into the run's private directory and sets this, so the
+    # copy reads the trusted `researchlog` from the repository while the checker's own bytes
+    # stay frozen at build time. Without it the copy would look for the tool beside itself.
+    os.environ.get("VERIFY_SOURCE_ROOT") or pathlib.Path(__file__).resolve().parents[2]
+)
 
 
 def tool_digest_at(root: pathlib.Path, commit: str) -> str:

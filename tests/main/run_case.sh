@@ -172,11 +172,30 @@ export RE_CASE_DRIVEN=1
 "${BUILDER[@]}"
 chmod 700 "$FIXTURE"
 
+# Pin the judge, the way g0 already guards the tool it reads.
+#
+# Everything the agent can reach is compared against build-time state — including the
+# vendored `researchlog`, whose digest is captured here and checked by g0, because a party
+# that can rewrite its own judge can write its own verdict. The checker had no such
+# treatment: it was invoked from the source tree at the end of the run, so an edit to it
+# between the build and the judgment changes the verdict with nothing recording that it did.
+#
+# That is not hypothetical. A defect in b5 was found this round while a bootstrap run was
+# still in flight, and the only reason the verdict did not move under the session is that
+# the fix waited for it to finish. Copying the checker into this run's private directory
+# before the agent starts makes that unnecessary: the bytes that existed at build time are
+# the bytes that judge. `VERIFY_SOURCE_ROOT` tells the copy where the trusted `researchlog`
+# lives, since it can no longer infer the repository from its own location.
+CHECKER="$WORKDIR/verify_case.py"
+cp "$SOURCE_ROOT/tests/main/verify_case.py" "$CHECKER"
+export VERIFY_SOURCE_ROOT="$SOURCE_ROOT"
+
 BASELINE="$(git -C "$FIXTURE" rev-parse HEAD)"
 # The digest of the vendored tool, taken now, before any agent has run. Without it the
 # checker cannot tell a session that used the tool from one that rewrote it.
-TOOL_HASH="$("$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" --tool-hash-of "$FIXTURE")"
-echo "=== baseline: ${BASELINE:0:8} · tool ${TOOL_HASH:0:12} ==="
+TOOL_HASH="$("$PYTHON" "$CHECKER" --tool-hash-of "$FIXTURE")"
+CHECKER_HASH="$("$PYTHON" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CHECKER")"
+echo "=== baseline: ${BASELINE:0:8} · tool ${TOOL_HASH:0:12} · checker ${CHECKER_HASH:0:12} ==="
 
 echo "=== drive: $CLIENT ==="
 ( cd "$FIXTURE" && "${AGENT[@]}" ) >"$TRANSCRIPT" 2>&1 || echo "agent exited non-zero (see $TRANSCRIPT)"
@@ -227,5 +246,5 @@ if [[ "$CLIENT" == "pi" ]]; then
 fi
 echo "judged transcript: $JUDGED_TRANSCRIPT"
 
-"$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" "$CASE" "$FIXTURE" \
+"$PYTHON" "$CHECKER" "$CASE" "$FIXTURE" \
   --baseline "$BASELINE" --tool-hash "$TOOL_HASH" --transcript "$JUDGED_TRANSCRIPT"
