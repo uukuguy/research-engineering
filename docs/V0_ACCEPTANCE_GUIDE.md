@@ -89,25 +89,28 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 | **#21** | 状态汇报正确区分 Established / Provisional / Refuted / Open 与三维 maturity | ✅ | 同一份报告：Findings 按 **Established(6) / Provisional(无) / Refuted(两个假说) / Open(无)** 分列，并说明"Refuted 是 hypothesis 的归宿，FINDINGS 记的是 belief"；三维成熟度**显式声明不合并为单一百分比**，且 Research Environment Maturity 逐能力列出可测/不可测 |
 | **#22** | status 报告交给另一客户端可快速建立正确认知，执行前仍走 Resume | ⏸ **同上，随 #1 一起放一放** | 判据说的是"**另一客户端**"而非 codex，所以并不缺验证路径（上表其余五个 CLI 可选）。素材已就绪：#20 的中文报告含 resume 所需的全部状态指针 |
 
-### 复现 session A 的 fixture（本表里唯一没有脚本化的那次）
+### 复现 session A 的 fixture —— **已脚本化**（`build_bootstrap_case.sh`）
 
-四个演练都有 builder 脚本，因为它们要的是**精确到字节的状态**。session A 要的是一个**空项目**，
-配方比脚本更清楚，所以写在这里而不是再造一个 builder：
+> **这一节原先给的那份 shell 配方是错的，已作废。** 它自称复现 session A 的 fixture，内容却是
+> 复制 `tools/` `templates/` `AGENTS.md` `settings` `skills`，然后管它叫"一个**空项目**"。
+> 按那份配方建出来的项目**没有研究对象** —— 而本表里 M2 的证据恰恰是"它**完全没有碰** fixture 的
+> `sim/` 与 `data/`"，#2 的证据是"`sim/queue.py` 可跑"。**照配方建，M2 会因为错误的原因通过。**
+> 这是"声明了但没人接线"的又一例，只不过这次声明的是配方。
 
 ```bash
-mkdir -p /tmp/v0-research/tools
-cp -R tools/researchlog /tmp/v0-research/tools/researchlog
-cp -R templates /tmp/v0-research/templates      # 注意：target 的 templates/ 必须不存在
-cp AGENTS.md /tmp/v0-research/
-mkdir -p /tmp/v0-research/.claude && cp .claude/settings.json /tmp/v0-research/.claude/
-python3 tools/install_research_skills.py --target /tmp/v0-research --quiet
-# CLAUDE.md 要写 fixture 自己的（见 build_recovery_drill.sh 里那段注释），不要复制本仓库的
+tests/main/build_bootstrap_case.sh /tmp/v0-research
 ```
 
-`templates/` 那一行的注释是踩过的坑：先 `mkdir -p templates` 再 `cp -R src/templates templates`
-会得到 `templates/templates/research`，`init` 报 `TEMPLATES_ABSENT` —— 而那是 **fixture 的打包错误**，
-不是工具缺陷。第一次 M1 运行就撞上它，session 替我把 fixture 修好了。**fixture 里每个异常都必须
-是刻意埋的**，所以那次重跑了。
+fixture 里是一个单服务器队列 + 超时重试（`sim/queue.py`）与两份 per-request 时序 trace；
+**没有 `research/`** —— 建立它就是被测的东西。builder 会自断言"有可研究的东西、没有研究状态、
+没有 plan 文档、没有测试套件、adapter 是自己的"。
+
+`templates/` 那个坑仍然要记得：**target 的 `templates/` 必须不存在**。先 `mkdir -p templates` 再
+`cp -R src/templates templates` 会得到 `templates/templates/research`，`init` 报
+`TEMPLATES_ABSENT` —— 那是 **fixture 的打包错误**，不是工具缺陷。第一次 M1 运行就撞上它，session
+替我把 fixture 修好了。**fixture 里每个异常都必须是刻意埋的**，所以那次重跑了。
+
+**完整的判据、自动跑法与手工跑法见 `docs/V0_CASES.md`。**
 
 **关于 #1 / #22**：它们是**整个矩阵里唯一的两个客户端项**，其余 19 条都已在 Claude Code 上实测通过。
 架构师已决定先把 codex 放一放、把 Claude Code 做好 —— 所以这两条记为**暂缓**，而不是未通过，
