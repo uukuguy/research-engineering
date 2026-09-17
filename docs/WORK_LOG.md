@@ -4,6 +4,68 @@
 
 ---
 
+## 2026-09-18 — Block 3 第一批：S1 expert-skill 重组
+
+承接上一轮（T4 env rebaseline）。Block 2 已基本收口（5/6 sub-block，剩 T1 等 P4），架构师
+问"继续做完"。我决定推 Block 3 / S1（expert-skill 重组）——这是 Block 3 中不严格依赖 P5 的
+部分（P5 schema 升级影响 S2，与 S1 拆分独立）。
+
+### 这一轮交了什么
+
+**5 个新 skill folder**（`skills/<name>/SKILL.md`，自动 install 到 `.claude/skills/` 和 `.agents/skills/`）：
+
+* `evaluation-design` —— V0 router 提升，body 还在 `references/evaluation-design.md`
+* `experiment-review` —— V0 router 提升，body 还在 `references/experiment-review.md`
+* `retrospective` —— V0 router 提升，body 还在 `references/retrospective.md`
+* `research-search` —— **新**：retrospective 的对偶，问"机制族本身该不该换"
+* `scenario-redteam` —— **新**：promising / informative_failure 之后的防御检查，6 项清单
+  （surrogate leak / dataset drift / hidden confounder / single-anchor / code-state drift /
+  architect signal not consumed）
+
+**`skills/research-engineering/SKILL.md` router** 改：
+
+* 3 个 rows 从 `references/<name>.md` 改成 **bold skill**，带"Loading a skill 是 stronger action" 说明
+* 2 个新 rows for `research-search` / `scenario-redteam`
+* preamble 解释 split
+
+**reference body 保留在 `references/`** —— 内容迁移留给下一轮。一个 commit 同时拆 trigger
+和 body 会让 bisection 更难，每个 SKILL.md 显式指 body 当前位置。
+
+### 验证
+
+* `python3 tools/install_research_skills.py --self --check` 双 client **0 drift**（19 files each）
+* 184 个 unittest 全绿（与 Block 2 末尾一致；本批没动 Python 代码）
+* reconcile / validate exit 0
+
+### 现在能核验的状态
+
+```
+HEAD 52a9c77 · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：5/6 ✅（T2/T3/T4/T5/T6） · T1 ⏳ 等 P4
+Block 3：S1 ✅ · S2 ⏳ 等 P5
+184 个 unittest 全绿
+python3 tools/install_research_skills.py --self --check → 双 client 0 drift
+```
+
+### 动手前要知道（这一轮新增）
+
+33. **`skills/` 是 canonical source，`.claude/skills/` 和 `.agents/skills/` 是 installed copy**。
+    永远改 `skills/`，跑 `install_research_skills.py --self` 同步。`--check` 报 drift 是预期
+    信号，不是错误。
+34. **Reference body 还没迁**。3 个提升的 skill (`evaluation-design` / `experiment-review` /
+    `retrospective`) SKILL.md 是**薄壳**，引到 V0 reference 内容。这是有意为之——一个 commit
+    同时拆 trigger 和 body 让 bisection 更难。下一轮可以单独迁 body。
+
+### 下一步
+
+Block 3 剩 S2（source-text schema 强制合并 P5）—— 等架构师触发 P5。
+Block 4 / 5 / 6 等 Block 3 完。
+
+或者架构师先回 P4 proposal，启 Block 2 / T1（capability_map write path）。
+
+---
+
 ## 2026-09-18 — Block 2 第五批：T4 env rebaseline
 
 承接上一轮（T5 telemetry report）。本轮做 T4——`researchlog env rebaseline` 强制更新 fingerprint。
