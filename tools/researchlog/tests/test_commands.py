@@ -1520,6 +1520,113 @@ class RecordValidateLineTests(GitCommandTestCase):
         self.assertEqual(envelope["findings"], [])
 
 
+class TelemetryReportTests(CommandTestCase):
+    """V1 Block 2 / T5: `telemetry --report` emits the §21 KPI table.
+
+    Two of the four named KPIs (`time_to_first_e1`, `time_to_first_e3`)
+    are computable today from the ledger and ACTIVE.session_epoch.
+    The other two (`session_recovery_accuracy`,
+    `discriminating_experiment_without_architect_correction`) need
+    infrastructure that is out of scope for this sub-block. The report
+    marks them `unavailable` with the reason rather than silently
+    emitting a zero, so the gap is visible.
+    """
+
+    def _seed_session_epoch(self) -> str:
+        # `active --rotate-session` mints a fresh session_epoch id whose
+        # timestamp is `now`. Pinning the session_epoch explicitly keeps
+        # the test free of wall-clock drift. The mints mints from
+        # `researchlog ids mint session`, so the timestamp baked into the
+        # id is `now` as well — the gap is in the seconds, not days.
+        code, envelope = self.invoke(["active", "--rotate-session"])
+        self.assertEqual(code, 0, envelope)
+        epoch = json.loads(
+            self.research("ACTIVE.json").read_text(encoding="utf-8")
+        ).get("session_epoch")
+        self.assertIsNotNone(epoch, f"rotate-session did not write session_epoch: {envelope}")
+        return epoch
+
+    def test_report_lists_four_kpis(self) -> None:
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+
+        kpis = envelope["payload"]["kpis"]
+        names = [row["kpi"] for row in kpis]
+        self.assertEqual(
+            names,
+            [
+                "time_to_first_e1",
+                "time_to_first_e3",
+                "session_recovery_accuracy",
+                "discriminating_experiment_without_architect_correction",
+            ],
+        )
+
+    def test_unavailable_kpis_carry_their_reason(self) -> None:
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+
+        kpis = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        for name in ("session_recovery_accuracy",
+                     "discriminating_experiment_without_architect_correction"):
+            row = kpis[name]
+            self.assertEqual(row["status"], "unavailable")
+            self.assertIsNone(row["value"])
+            self.assertTrue(row["reason"], f"{name} must carry a reason")
+
+    def test_unavailable_kpis_surface_as_warnings(self) -> None:
+        # All four rows are unavailable on a fresh repo (no
+        # session_epoch, no ARCHITECT.md reader, no session-event log),
+        # so the envelope must surface four `TELEMETRY_KPI_UNAVAILABLE`
+        # warnings. Without them the next session would mistake the
+        # report for "all is well".
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertEqual(
+            codes.count("TELEMETRY_KPI_UNAVAILABLE"), 4,
+            codes,
+        )
+
+    def test_time_to_first_e1_reports_unavailable_with_empty_ledger(self) -> None:
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+
+        kpis = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        self.assertEqual(kpis["time_to_first_e1"]["status"], "unavailable")
+        self.assertIsNone(kpis["time_to_first_e1"]["value"])
+
+    def test_time_to_first_e1_reports_unavailable_without_a_matching_evidence(self) -> None:
+        # Rotate the session so `session_epoch` is set, but do not
+        # record any E1 evidence. The detector must still report
+        # `unavailable` rather than a misleading zero, because there
+        # is no anchor to subtract from.
+        self._seed_session_epoch()
+
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+        kpis = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        row = kpis["time_to_first_e1"]
+        self.assertEqual(row["status"], "unavailable")
+        self.assertIn("E1", row["reason"])
+
+    def test_time_to_first_e1_measures_after_a_real_record(self) -> None:
+        # With a session_epoch and an E1 evidence on disk, the KPI
+        # reports a real number. The actual value depends on wall
+        # clock; the test pins the shape, not the number.
+        self._seed_session_epoch()
+        self.record_evidence()
+
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+        kpis = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        row = kpis["time_to_first_e1"]
+        self.assertEqual(row["status"], "ok", row)
+        self.assertEqual(row["unit"], "seconds")
+        self.assertIsInstance(row["value"], (int, float))
+        self.assertGreaterEqual(row["value"], 0)
+
+
 class RecordCommitTests(GitCommandTestCase):
     """V1 P1: `record` must commit the evidence file it just wrote.
 
