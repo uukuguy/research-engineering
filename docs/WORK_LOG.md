@@ -4,6 +4,91 @@
 
 ---
 
+## 2026-09-18 — Block 1 第五批：P2 reproduction 分桶
+
+承接上一轮（P7 run heartbeat）。本轮做 P2——`record` 自带 `iteration_kind`，`reproduction`
+不进 evidence budget，仍落 ledger。一次提交，两轮变异验证。
+
+### 这一轮交了什么
+
+**`templates/research/ACTIVE.json` + `schemas/active.schema.json`**
+
+加 `block.reproduction_iterations: integer ≥ 0`，required。template 默认 0。
+
+**`schemas/evidence.schema.json`**
+
+加 `iteration_kind: enum["evidence","reproduction",null]`。老 evidence 该字段为 null，schema
+允许。
+
+**`constraints.py`**
+
+* `derive_counts_as_evidence_iteration` 头部加 `iteration_kind == "reproduction"` 时返 False
+  —— 是 evidence 桶的唯一闸门。
+* 新增 `count_reproduction_iterations`：对称计数，走 iteration_kind 字段。
+
+**`commands/record.py`**
+
+`--iteration-kind evidence|reproduction` flag，默认 `evidence`。`_apply_links` 后写入 document。
+
+**`commands/active.py`**
+
+* `belief_delta` 路径同时写 `completed_evidence_iterations` 和 `reproduction_iterations`。
+* `block.id` 重置时同时清零两个。
+
+**`commands/init.py`**
+
+`_stamp_active` backfill `block.reproduction_iterations = 0`。**这是真实 schema migration**：
+本仓库自己的 `research/ACTIVE.json` 是 V0 时代遗物，没这字段，新 schema required 的话
+reconcile 会 REDCOVERY_REQUIRED。init 时 backfill 一下，老 instance 也能跑。
+
+**`research/ACTIVE.json`** 本仓库自己的 ACTIVE，被 backfill + base_commit 推进 + updated_at
+更新，一并提交进 P2 commit。
+
+**`tests/test_integration.py`**
+
+* `test_reproduction_does_not_consume_the_evidence_budget`：三条 record（两 evidence + 一
+  reproduction）同一 block，close 后断言 evidence=2、reproduction=1。
+* `test_reproduction_skips_even_with_no_belief_delta_dropped`：一条 scientific fields 本该
+  count 的 reproduction（`belief_delta=refined`），断言 override 赢，evidence=0、
+  reproduction=1。
+
+### 变异验证
+
+1. **drop `iteration_kind == "reproduction"` 分支** —— 两个新测试都红，`3 != 2` 和
+   `0 != 1` 准确报告错桶。
+2. **stub `count_reproduction_iterations` 为 `return 0`** —— 两个新测试在 reproduction
+   计数断言上红。
+
+### 现在能核验的状态
+
+```
+HEAD 3f11cf7 · 工作树干净
+Block 1 进度：1.1 P1 ✅ · 1.2 P2 ✅ · 1.3 P5 sub-decision ✅ · 1.4 P6 ✅ · 1.6 P7 ✅ · 1.7 P8 ✅ · 1.8 P9 ✅
+            1.5 P4 capability_map shape
+158 个 unittest 全绿
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+20. **schema migration 的真实成本**：加 required 字段会让所有老 ACTIVE/ledger 报
+    `RECOVERY_REQUIRED`。**backfill 是必要的**，不是 nice-to-have。本仓库自己的
+    `research/ACTIVE.json` 就被 backfill 了。
+21. **`block.reproduction_iterations` 在 record 阶段不动**。`record` 只写 ledger；分桶
+    计数是 close-block 时一次性重派生。这是 V0 invariant 的延伸（"counter nobody maintains
+    is a counter that lies"）。
+
+### 下一步
+
+剩一条：
+
+1. **Block 1.5 P4 capability_map shape proposal**（写文档等架构师评审；不动 schema）
+
+P5（Block 1.3）等架构师触发——V0 测试不动。
+
+---
+
 ## 2026-09-17 — Block 1 第四批：P7 run heartbeat
 
 承接上一轮（P1 record-after-commit）。本轮做 P7 —— `run` 的子进程 supervise 在子进程仍在
