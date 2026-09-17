@@ -132,12 +132,20 @@ next_action: "Wait for the sweep to finish, then read the failing cases."
 `status: running→idle`、`belief_delta: none`、`completed`），**没有一句意图**。而它随后做的是
 **更完整**的事：记 `EV-…6dd6`、以 `belief_delta: none` 关掉 `RB-021`、带完整 provenance footer 提交。
 
-**"变了没有"这个检查在形状 B 下会假通过** —— 收尾写和意图写改的是同一个文件。所以检查器现在
-按**时序**判：写发生在 run 完成**之前**才算数；发生在之后则报 `UNJUDGED`，并把"这算不算满足判据"
-**交回给出题人**，而不是替他答。
+**"变了没有"这个检查在形状 B 下会假通过** —— 收尾写和意图写改的是同一个文件。所以：
 
-**要修的是判据，不是检查器**：形状 B 需要一条不同的判据（"它有没有把 loop 走完"），而不是把
-判据 5 放松到"文件变了就行"。
+- **`c5` 按时序判**：写发生在 run 完成**之前**才算数。
+- **`c6` 是形状 B 的判据**（它的正面）：run 完成之后，session 该做的是**把 loop 走完** ——
+  为这次 run 留下一条证据记录、并把 `ACTIVE.execution.status` 从 `running` 移开。
+  只完成未记录 = **未完成的工作**。
+
+**每条在另一种形状下报 `UNJUDGED`**，所以这一对无论场景落在哪边都覆盖到了，而不是让其中一条
+悄悄把收尾簿记读成意图。
+
+验证：形状 B 用 `pi` 的真实运行（`finalized on EV-…6dd6; execution.status='completed'` → **PASS**）；
+形状 A 用一个 run 仍在飞的 fixture（→ **UNJUDGED**，让给 c5）。
+
+**修的是判据，不是把 c5 放松** —— 形状 B 要的是"它有没有把 loop 走完"这条**不同的**判据。
 
 ### 副作用：这个 fixture 会留下一个真进程
 
