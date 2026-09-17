@@ -4,7 +4,66 @@
 
 ---
 
-## 2026-09-17 — V1 整体实施方案落盘
+## 2026-09-17 — Block 1 首批：P5 二次澄清 + P9 实装
+
+承接上一轮（V1 整体方案落盘）。本轮启动 Block 1，但只做了一处澄清 + 一条 sub-block。理由写在 §本轮做了什么。
+
+### 决策澄清：P5 的 sub-decision（2044d00）
+
+V1_IMPLEMENTATION_PLAN.md 附录 A 把 P5 措辞为"全部 signal 加 history + scope + expiry"。但 V0 的 `test_constraints.py::SignalTests::test_only_a_constraint_needs_scope_and_expiry` 明确断言 **VETO 不需要 scope/expiry**（因为 VETO 是"永久直到废止"）。
+
+建筑师在 AskUserQuestion 看到的选项可能误读为"机制升级"而不是"强制升级"。**不擅自落地**，把这条张力作为附录 A.1 摆出来，三个候选：
+
+- a）机制升级：仅 CONSTRAINT 必填 scope/expiry（V0 不变）
+- b）强制升级：CONSTRAINT/DECISION/VETO 必填
+- c）字面解读：全部 8 类都强制（推翻 V0 测试）
+
+**阻塞 Block 1.3**。其余 7 条 Block 1 sub-block 不受影响。
+
+### 实装：P9 single-writer detector（195b646）
+
+修改：`tools/researchlog/commands/reconcile.py` 加 `_worktree_multi_writer` 与 `_list_worktrees`；`tools/researchlog/tests/test_integration.py` 加 4 个新测试。
+
+**为什么挑 P9 而非其他**：
+
+- 影响面最小（detector-only，不改 `record` / `run` 行为）
+- 不改 schema
+- 不改 `AGENTS.md`
+- 不动 `research/ACTIVE.json`
+- 测试可构造两个 worktree 临时目录，效果可测
+
+**核验**：
+
+```bash
+uv run --python 3.12 python -m unittest discover -t tools -s tools/researchlog/tests
+# Ran 243 tests in 10.509s — OK  # 239 旧 + 4 新，全过
+
+python3 tools/researchlog reconcile --json
+# exit_code: 0
+# clean: True                    # V0 状态仍干净
+
+python3 tools/researchlog validate
+# exit_code: 0                   # validate exit_code 0
+```
+
+### 未触动
+
+- `research/` 轨道（idle）
+- 其余 7 条 Block 1 sub-block：P1 + P6（record 自动 commit + 禁 `--replace-existing`）、P2（reproduction 分桶）、P3（不决断）、P5（阻塞）、P7（run 默认 30s heartbeat）、P8（补 fix_hint 126 处）
+- `tools/researchlog` 其余 14 个 subcommand
+- `skills/`、`tests/main/`
+
+### 下一步
+
+1. **Architect 二次澄清 P5**（附录 A.1 的 a / b / c 三选一）
+2. **启动下一个 Block 1 sub-block** —— 建议选 **P7 run 默认 heartbeat**（影响面比 P1/P2/P6 小、比 P8 工作量轻、且 V0 `manifest --heartbeat` 已实装可直接复用）
+3. **避开 P1 + P6 + P2 + P8 集中在主会话改**——每条独立 session
+
+### 动手前必须知道
+
+按 V0 GOTCHAS：本次 P9 涉及的是 `jgit.git()` 与 `subprocess.run`，无新增坑；4 个测试用 `GitRepoCase` 模板，符合现有 V0 惯例；detector 三参数签名保持与 V0 一致（即便 Pyright 标 `_args` / `_ledger` "unused"，这是 V0 风格，不修）。
+
+---
 
 > **未启动 V1 实现**。本轮只交付一份方案文档供架构师评审。
 
