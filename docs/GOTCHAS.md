@@ -131,6 +131,33 @@ the window"、顺带写了 "I did not adopt a competing reading" 的 session 被
 tests/main/check_negative_control.sh    # 四案例 + stub，6 秒，零模型成本；每案例必须红
 ```
 
+### B14. 判一个 session，要判**它留下的那个产物**；而两个客户端留下的不是同一种东西
+
+第一个在 pi 上跑的真实案例（`recovery`）回来 **FAILED/r2,r3,r6** —— **三条全是 harness 的错**，
+同一棵树、同一次运行，只有判据的输入错了。两个方向，各修一处：
+
+**(a) 只看工作树 = 看不见"提交过的"证据。** `r2` 用 `git status --porcelain`（未跟踪即新增），而
+pi **提交了**它的证据记录、工作树干净 → 检查报"修好了 manifest 却没留证据"，**指控它犯了这个案例
+的核心失败**。最刺人的地方：`changed_since` 的 docstring 里**早就写明**这个形状（"pi committed its
+evidence record and its working tree was clean, so a porcelain-only check would have read a completed
+run as one that recorded nothing"），而 `r2` 一直没换掉那个 helper —— **坑被写下来了，缺陷留下来了**。
+修法：跟 baseline 的树对比目录（`added_since`），提交与否都看得见，且仍只算新增；并把那个
+只看工作树的 helper **删掉**而不是留着 —— 一个"名字像、答的是隔壁问题"的闲置 helper，就是下一个
+会被拿起来用的东西（`d2` 是它的另一个调用者，那边漏判的方向是**放过**真做错的）。
+
+**(b) 客户端的 stdout 不是客户端的记录。** claude 的 `--output-format stream-json` 每轮都发，
+stdout 就是记录；**pi 的 `-p` stdout 只有最终那条消息** —— 4 KB 摘要 vs **254 KB** session log。
+六条提及判据全都在读那份摘要，于是 `r3`/`r6` 判一个"什么都说了"的 session"从未提及"。pi 的完整
+记录在 `--session-dir` 里，`run_case.sh` 现在拿它判，并**打印用了哪个文件**。
+
+**验证方式值得记**：不是重跑，而是**离线复判归档的那次运行** —— 五条变异：已提交记录 PASS、
+未跟踪记录 PASS、无记录仍 FAIL，以及决定性的一对：同一棵树同一次运行，判摘要 → 2 条 FAIL，
+判 session log → 0 条。**真实判读是 7/7。**
+
+**这一轮我的验证程序自己是 bug 的次数**：三次（`ps` 模式写窄、变异锚点写错、变异脚本把多个 case
+准备进同一个目录于是互相覆盖）。**凡是要据以下结论的数字，先确认你读的确实是那个东西的数字** ——
+这条在第六轮写过一次，这一轮仍然作数。
+
 ### B13. 种植式 fixture 里，builder 的 `.replace()` 链会**静默失败**
 
 踩过（由 `recovery` 的**真实运行**发现，三条我都独立复核过）：`build_recovery_drill.sh` 用三个
