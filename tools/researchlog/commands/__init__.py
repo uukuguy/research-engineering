@@ -24,6 +24,7 @@ from researchlog.commands import (
     record,
     run as run_cmd,
     snapshot,
+    status,
     validate,
 )
 
@@ -39,6 +40,7 @@ MODULES: tuple[ModuleType, ...] = (
     env,
     compare,
     snapshot,
+    status,
     job,
     checkpoint,
     current,

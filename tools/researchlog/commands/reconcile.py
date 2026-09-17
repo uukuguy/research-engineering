@@ -14,6 +14,7 @@ as something a machine can check.
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,17 @@ from researchlog.errors import (
     SEVERITY_WARNING,
     StateInvalid,
 )
+
+# V1 Block 2 / T3: the milestone cache (`STATUS.md`) carries a header line
+# `<!-- last_evidence_modified: <epoch> -->`. `reconcile` parses it here
+# without importing the `status` command (which itself imports `snapshot`,
+# which imports `reconcile` — a cycle). The regex is anchored on the
+# known prefix so a prose line mentioning the field name does not trip
+# the detector.
+_LAST_MODIFIED_RE = re.compile(
+    r"<!--\s*last_evidence_modified:\s*(\d+)\s*-->"
+)
+_STATUS_HEADER = "<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->"
 
 NAME = "reconcile"
 HELP = "compare ACTIVE, Git, run manifests and evidence; report inconsistencies"
@@ -67,6 +79,7 @@ def run(args: argparse.Namespace) -> Result:
         _token_budget,
         _gitignore_guard,
         _worktree_multi_writer,
+        _stale_status,
     )
     for detector in detectors:
         for finding in detector(paths, ledger, args):
@@ -464,6 +477,101 @@ def _worktree_multi_writer(
             "loses one writer's record silently",
         )
     ]
+
+
+def _stale_status(
+    paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
+) -> list[Finding]:
+    """V1 Block 2 / T3: `STATUS.md` is the milestone cache `status --write` produces.
+
+    Two failure modes:
+
+    * The file is missing its required header. Treat as stale: a future reader
+      cannot trust `last_evidence_modified`, so the cache is unreliable.
+    * The header is present but the ledger has moved past it. Specifically,
+      the newest mtime across `research/ledger/*.json` is greater than the
+      epoch recorded in the header — i.e. `record` has landed new evidence
+      since this cache was written.
+
+    The detector does not write or refresh the cache; that is the caller's
+    job. It only reports.
+    """
+    status_path = paths.root / "STATUS.md"
+    if not status_path.is_file():
+        return []
+    try:
+        text = status_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [
+            Finding(
+                "STATUS_STALE",
+                SEVERITY_WARNING,
+                str(status_path),
+                f"could not read the milestone cache: {exc}",
+                "re-run `researchlog status --write` once the file system recovers",
+            )
+        ]
+    if _STATUS_HEADER not in text:
+        return [
+            Finding(
+                "STATUS_STALE",
+                SEVERITY_WARNING,
+                str(status_path),
+                "STATUS.md is missing the `DERIVED SNAPSHOT` header line",
+                "re-run `researchlog status --write` so the cache carries the "
+                "header `reconcile` parses",
+            )
+        ]
+    match = _LAST_MODIFIED_RE.search(text)
+    if match is None:
+        return [
+            Finding(
+                "STATUS_STALE",
+                SEVERITY_WARNING,
+                str(status_path),
+                "STATUS.md header does not carry a `last_evidence_modified:` anchor",
+                "re-run `researchlog status --write`; older caches lack the anchor",
+            )
+        ]
+    cached_mtime = int(match.group(1))
+    latest = _ledger_latest_mtime(paths)
+    if latest is None:
+        # Empty ledger: nothing has moved, so the cache cannot be stale by this
+        # detector's definition. A separate detector should care about an
+        # empty ledger in general; this one does not.
+        return []
+    if latest > cached_mtime:
+        return [
+            Finding(
+                "STATUS_STALE",
+                SEVERITY_WARNING,
+                str(status_path),
+                f"the ledger has been updated past the cache's "
+                f"last_evidence_modified ({latest} > {cached_mtime})",
+                "re-run `researchlog status --write` so the cache reflects the "
+                "current ledger",
+            )
+        ]
+    return []
+
+
+def _ledger_latest_mtime(paths: repo.ResearchPaths) -> int | None:
+    """Newest mtime across `research/ledger/*.json`, as an integer epoch.
+
+    Returns None when the directory is missing or has no JSON entries.
+    Iterates the directory rather than `state.Ledger` because the cache
+    detector must work even when the ledger is empty / unreadable; the
+    directory scan is cheap and side-effect free.
+    """
+    if not paths.ledger.is_dir():
+        return None
+    latest: int | None = None
+    for entry in paths.ledger.iterdir():
+        if entry.is_file() and entry.suffix == ".json":
+            mtime = int(entry.stat().st_mtime)
+            if latest is None or mtime > latest:
+                latest = mtime
+    return latest
 
 
 def _list_worktrees(root: Path) -> list[dict[str, str]]:

@@ -640,6 +640,144 @@ class SnapshotCommandTests(CommandTestCase):
         self.assertTrue((self.research(".derived", "fp.json")).is_file())
 
 
+class StatusCommandTests(CommandTestCase):
+    """V1 Block 2 / T3: `status` writes a milestone cache to STATUS.md.
+
+    The cache header carries two machine-parsable lines `reconcile` reads:
+
+        <!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->
+        <!-- last_evidence_modified: <epoch> -->
+
+    Three contracts: writing is opt-in, the cache carries the header, and
+    stale-detection fires when the ledger moves past `last_evidence_modified`.
+    """
+
+    def test_status_without_write_changes_nothing(self) -> None:
+        before = self.tree()
+
+        code, envelope = self.invoke(["status"])
+
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(before, self.tree())
+        # `wrote` is in the payload as None when no write was asked for;
+        # the path it would resolve to is exposed too so callers can see
+        # what would have been written. None stays None here.
+        self.assertIsNone(envelope["payload"]["wrote"])
+
+    def test_write_lands_in_repo_root_with_the_derived_header(self) -> None:
+        # STATUS_NOT_IGNORED is a warning under V0 (exit 3), so the test
+        # asserts on the file contents and the `wrote` path rather than
+        # the exit code.
+        code, envelope = self.invoke(["status", "--write", "STATUS.md"])
+
+        self.assertIn(code, (0, 3), envelope)
+        self.assertEqual(envelope["payload"]["wrote"], str(self.root / "STATUS.md"))
+        text = (self.root / "STATUS.md").read_text(encoding="utf-8")
+        self.assertIn("DERIVED SNAPSHOT", text)
+        self.assertIn("last_evidence_modified:", text)
+
+    def test_write_refuses_paths_above_the_repo_root(self) -> None:
+        code, envelope = self.invoke(["status", "--write", "/tmp/escape.md"])
+
+        self.assertEqual(code, 4, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "STATUS_PATH_OUTSIDE_ROOT")
+
+    def test_write_warns_when_target_is_not_gitignored(self) -> None:
+        # `STATUS.md` at the repo root dirties the tree unless it is in
+        # .gitignore. The warning is the same shape `snapshot` uses for
+        # its own targets: it names the path and the fix, but does not
+        # refuse the write — the caller asked for it. V0 exit semantics
+        # turn any warning into exit 3; the test asserts the warning's
+        # presence rather than the exit code.
+        code, envelope = self.invoke(["status", "--write", "STATUS.md"])
+
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("STATUS_NOT_IGNORED", codes)
+
+
+class ReconcileStaleStatusTests(CommandTestCase):
+    """`reconcile._stale_status` fires `STATUS_STALE` when the cache lags.
+
+    The detector emits a `warning` finding, which under V0 reconcile
+    semantics means exit 3 (`EXIT_FINDINGS_PRESENT`). The assertions check
+    the finding code rather than the exit code so they survive any future
+    reconcile severity reshuffles.
+    """
+
+    def _codes(self, envelope: dict) -> list[str]:
+        return [f["code"] for f in envelope["findings"]]
+
+    def test_reconcile_does_not_flag_when_no_status_md(self) -> None:
+        code, envelope = self.invoke(["reconcile"])
+        self.assertIn(code, (0, 3), envelope)
+        self.assertNotIn("STATUS_STALE", self._codes(envelope))
+
+    def test_reconcile_flags_status_md_missing_the_header(self) -> None:
+        (self.root / "STATUS.md").write_text("# Status\n\nno header here\n", encoding="utf-8")
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertIn(code, (0, 3), envelope)
+        self.assertIn("STATUS_STALE", self._codes(envelope))
+
+    def test_reconcile_flags_status_md_missing_the_anchor_line(self) -> None:
+        (self.root / "STATUS.md").write_text(
+            "<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->\n\n# Status\n",
+            encoding="utf-8",
+        )
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertIn(code, (0, 3), envelope)
+        self.assertIn("STATUS_STALE", self._codes(envelope))
+
+    def test_reconcile_does_not_flag_when_cache_is_fresh(self) -> None:
+        # Empty ledger → cache cannot be stale by the detector's definition.
+        code, envelope = self.invoke(["status", "--write", "STATUS.md"])
+        self.assertIn(code, (0, 3), envelope)
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertIn(code, (0, 3), envelope)
+        self.assertNotIn("STATUS_STALE", self._codes(envelope))
+
+    def test_reconcile_flags_when_ledger_advances_past_cache(self) -> None:
+        # Write the cache first so its anchor line carries epoch = now.
+        code, envelope = self.invoke(["status", "--write", "STATUS.md"])
+        self.assertIn(code, (0, 3), envelope)
+
+        # `record` is a P1-era command; landing a new evidence file advances
+        # the ledger past the cache's `last_evidence_modified` and the next
+        # reconcile must flag STATUS_STALE.
+        self.record_evidence_envelope()
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertIn(code, (0, 3), envelope)
+        self.assertIn("STATUS_STALE", self._codes(envelope))
+
+    def record_evidence_envelope(self) -> dict:
+        """Drive `record` end-to-end and return its envelope payload.
+
+        A leaner wrapper than `record_evidence()` because the test does
+        not need an `evidence_id` string back; it just needs *some*
+        evidence on disk so the ledger's latest mtime moves forward.
+        """
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        return envelope["payload"]
+
+
 class JobCommandTests(CommandTestCase):
     def test_a_finalised_run_reports_completed(self) -> None:
         self.invoke(["run", "--experiment-id", "EXP-smoke-job", "--", "true"])
