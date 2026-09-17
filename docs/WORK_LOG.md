@@ -4,6 +4,104 @@
 
 ---
 
+## 2026-09-17 — Block 1 第三批：P1 record-after-commit
+
+承接上一轮（P6 + P8）。本轮只做 P1，是 Block 1 最大的一块——`record` 命令从此
+自带 `git add + git commit`，失败必报 `COMMIT_FAILED`。一次提交，三轮变异验证。
+
+### 这一轮交了什么
+
+**`tools/researchlog/jgit.py`**
+
+加两个低层 helper：
+
+* `add_paths(root, paths)` —— `git add -- <repo-relative paths>`。**空列表是编程错误**而非
+  无操作（空 `git add` 会 stage 所有已追踪变更，不是 caller 想要的）。
+* `commit_with_message_file(root, message_file)` —— `git commit -F <file>`。**禁止 `-m`**
+  因为 E1：反引号/$/! 会被 shell 静默吞掉，消息变残缺且不报错。
+
+**`tools/researchlog/commands/record.py::run`**
+
+写完 evidence → 调 `_commit_evidence` → 失败抛 `COMMIT_FAILED` (StateInvalid, exit 2)。
+三个失败路径独立区分 `subject` + `message`：
+
+| 失败点 | `subject` | `message` |
+|---|---|---|
+| `jgit.is_repository` 失败 | `git commit` | `<root> is not a git repository` |
+| `git add` 失败 | `git add` | `<git add stderr>` |
+| `git commit` 失败 | `git commit` | `<git commit stderr>` |
+
+区分 subject 的意义：上层 reconciler 能按 subject 知道是哪一步崩，而不是只看
+`code=COMMIT_FAILED` 然后瞎猜。
+
+**`tools/researchlog/tests/test_commands.py`**
+
+P1 把 record 强行绑到 git，但 `CommandTestCase.setUp` 之前不在 git 仓库跑——所以
+带三个改动：
+
+1. **`CommandTestCase.setUp` 改**：加 `git init` + `git config user.email/name` + 写
+   `.gitignore`（含 `research/.derived/`）+ baseline commit。**`test_write_lands_in_derived`
+   的 SNAPSHOT_NOT_IGNORED 失败因此自动消失**——这是 setUp 早期遗漏的"测试基础设施
+   旧 bug"，P1 顺手补了。
+2. **`test_record_appends_an_evidence_record_and_reports_the_closure` 重写**：原来跑
+   `env record` 验 ENVIRONMENT.md history；现在跑 bare `record` 验 commit subject 和
+   `git ls-files --error-unmatch` 的 evidence tracked 状态。V0 env-record 路径断言
+   留给 `test_the_closure_of_a_change_is_reported`。
+3. **新基类 `NonGitCommandTestCase`**：不带 git init 的 setUp，给 is_repository 防线
+   测试用。
+
+**新测试类**：
+
+* `RecordCommitTests`（继承 `GitCommandTestCase`）：钉 commit subject 是
+  `research: record <evidence_id>`，evidence 文件被 git tracked。
+* `RecordRejectsInNonGitRepo`（继承 `NonGitCommandTestCase`）：钉 `subject=git commit`
+  + message 含 `"is not a git repository"` 字面量。
+
+### 变异验证（三轮，全部红-回滚）
+
+1. **删除 `_commit_evidence` 调用** —— `git ls-files --error-unmatch` 在 evidence
+   路径上 non-zero，整条测试红。
+2. **`-F <file>` 换成 `-m <message>`** —— 测试仍过（`_RECORD_COMMIT_SUBJECT` 不含
+   特殊字符）。E1 不是测试可强制的，是 code review 守的。
+3. **删除 `is_repository` 防线** —— `RecordRejectsInNonGitRepo` 的 `subject` 断言
+   从 `git commit` 变成 `git add`（兜底报错），整条红。**这正是 GOTCHAS B11 #1
+   "标签 vs 代码对得上"的镜像**——测试同时钉 subject 和 message 字面量，变异让
+   两个一起露馅。
+
+### 现在能核验的状态
+
+```
+HEAD e6506e1 · 工作树干净
+Block 1 进度：1.1 P1 ✅ · 1.3 P5 sub-decision ✅ · 1.4 P6 ✅ · 1.7 P8 ✅ · 1.8 P9 ✅
+            1.2 P2 reproduction 分桶 · 1.5 P4 capability_map shape · 1.6 P7 run heartbeat
+56 个 unittest 全绿（含 2 个新 P1 commit/reject 测试）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增 + 之前的）
+
+15. **CommandTestCase.setUp 现在 git init**，所有继承它的测试都在 git 仓库跑。新加测试
+    如果要测"非 git 仓库"路径，必须继承 `NonGitCommandTestCase`（V0 的 `GitCommandTestCase`
+    也仍然可继承——它现在 init 重复了，无害）。
+16. **E1 是纪律不是断言**。`-F <file>` 替换 `-m` 时测试仍过——subject 不含反引号。代码 review
+    必须看 commit message 走文件这一约束。
+17. **P1 字面只覆盖 bare `record`**。`env record` 改 ENVIRONMENT.md 但不 commit（与 P1
+    方案 §2.1 描述一致："git add research/ledger/EV-*.json research/ACTIVE.json"）。
+    `env record` 的 commit duty 是 T1 Block 2 的事。
+
+### 下一步
+
+按之前列的队列：
+
+1. **Block 1.6 P7 run heartbeat**（run.py 子进程 supervise 30s 默认；ACTIVE 加
+   `heartbeat_or_last_observed_at`；与 P1 不同——run 是另一条命令族，不影响 record）
+2. **Block 1.2 P2 reproduction 分桶**（schema + record 命令分流计数）
+3. **Block 1.5 P4 capability_map shape proposal**（写文档等评审；不动 schema）
+4. **Block 1.3 P5**（等架构师说）
+
+---
+
 ## 2026-09-17 — Block 1 第二批：P6 收 `--replace-existing` + P8 补 record 的 fix_hint
 
 承接上一轮（Block 1 首批：P5 sub-decision 落地 + P9 detector 跑通）。架构师选 P5 = 机制升级
