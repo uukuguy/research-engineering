@@ -127,8 +127,83 @@ cat > probes/replay_surrogate.json <<'CONTRACT'
 }
 CONTRACT
 
+# Nothing a tool run writes belongs in the fixture's history. Without this the first
+# `researchlog call commits `__pycache__`, and every session afterwards sees a working tree
+# dirtied in files it never touched — an anomaly nobody planted. Asserted below: a
+# .gitignore that stops covering what it was written for fails silently.
+printf '__pycache__/\n*.pyc\n' > .gitignore
+
 git add -A
 git commit -qm "drill: workspace before the session that died"
+tracked_pycache="$(git ls-files | grep -c '__pycache__' || true)"
+if [[ "$tracked_pycache" != "0" ]]; then
+  echo "the fixture committed $tracked_pycache __pycache__ entries: every tool run will dirty" >&2
+  echo "the tree in files the session did not touch. Fix the fixture, not the criteria." >&2
+  exit 1
+fi
+
+# --- the unfinished work, planted before the runs --------------------------------------
+# Before, not after. The runs' manifests record the code identity they ran with, and the
+# in-flight run's command passes the flag this edit adds — so an identity recorded against a
+# clean tree describes a different tree from the one the run's own stdout came from. Planting
+# first makes the two the same, and makes the recorded hash a hash of this edit rather than
+# of whatever a tool run happened to rewrite. The state commit below deliberately leaves it
+# uncommitted; that is the shape the drill describes.
+"$PYTHON" - <<'PROBE_EDIT'
+import pathlib
+
+
+def sub(text: str, old: str, new: str, what: str) -> str:
+    """Replace once, or stop.
+
+    A miss is a silent no-op, and a fixture that plants something other than what the drill
+    describes is worse than one that fails loudly: the criteria then judge the session on a
+    puzzle that is not there.
+    """
+    if old not in text:
+        raise SystemExit(
+            f"planting the unfinished work: {what} is no longer in the probe template, so "
+            "this edit would change nothing while the drill went on assuming it had"
+        )
+    return text.replace(old, new, 1)
+
+
+path = pathlib.Path("probes/replay_probe.py")
+text = path.read_text(encoding="utf-8")
+
+text = sub(
+    text,
+    "# Two cases track release timing;",
+    "import argparse\n\n# Two cases track release timing;",
+    "the case-table comment",
+)
+text = sub(
+    text,
+    "CASES = (\n",
+    "# The closure gain is still a placeholder from the last sweep: the loop absorbs part of\n"
+    "# the residual, and this coefficient is what the sweep suggested, not what was measured.\n"
+    "CLOSURE_GAIN = 0.42\n\nCASES = (\n",
+    "the case table",
+)
+text = sub(
+    text,
+    "def main() -> None:\n",
+    "def main() -> None:\n"
+    "    parser = argparse.ArgumentParser()\n"
+    '    parser.add_argument("--closed-loop", action="store_true")\n'
+    "    closed_loop = parser.parse_args().closed_loop\n",
+    "main()",
+)
+text = sub(
+    text,
+    '        print(f"{name} residual {residual:.2f} tracking={tracking}")\n',
+    "        closed = residual * CLOSURE_GAIN if closed_loop else residual\n"
+    '        arm = "closed-loop " if closed_loop else ""\n'
+    '        print(f"{name} {arm}residual {closed:.2f} tracking={tracking}")\n',
+    "the print line",
+)
+path.write_text(text, encoding="utf-8")
+PROBE_EDIT
 
 researchlog() { "$PYTHON" tools/researchlog "$@"; }
 
@@ -287,63 +362,10 @@ SIGNAL
 # chain matched nothing and nothing reported it.
 researchlog active --quiet --set 'git.dirty_expected=true'
 git add -A
+# The state is committed; the probe edit is not. `git reset` on that one path is what
+# keeps the plant out, and the manifests already recorded it as present.
+git reset -q -- probes/replay_probe.py
 git commit -qm "drill: state as the session that died left it"
-
-"$PYTHON" - <<'PROBE_EDIT'
-import pathlib
-
-
-def sub(text: str, old: str, new: str, what: str) -> str:
-    """Replace once, or stop.
-
-    A miss is a silent no-op, and a fixture that plants something other than what the drill
-    describes is worse than one that fails loudly: the criteria then judge the session on a
-    puzzle that is not there.
-    """
-    if old not in text:
-        raise SystemExit(
-            f"planting the unfinished work: {what} is no longer in the probe template, so "
-            "this edit would change nothing while the drill went on assuming it had"
-        )
-    return text.replace(old, new, 1)
-
-
-path = pathlib.Path("probes/replay_probe.py")
-text = path.read_text(encoding="utf-8")
-
-text = sub(
-    text,
-    "# Two cases track release timing;",
-    "import argparse\n\n# Two cases track release timing;",
-    "the case-table comment",
-)
-text = sub(
-    text,
-    "CASES = (\n",
-    "# The closure gain is still a placeholder from the last sweep: the loop absorbs part of\n"
-    "# the residual, and this coefficient is what the sweep suggested, not what was measured.\n"
-    "CLOSURE_GAIN = 0.42\n\nCASES = (\n",
-    "the case table",
-)
-text = sub(
-    text,
-    "def main() -> None:\n",
-    "def main() -> None:\n"
-    "    parser = argparse.ArgumentParser()\n"
-    '    parser.add_argument("--closed-loop", action="store_true")\n'
-    "    closed_loop = parser.parse_args().closed_loop\n",
-    "main()",
-)
-text = sub(
-    text,
-    '        print(f"{name} residual {residual:.2f} tracking={tracking}")\n',
-    "        closed = residual * CLOSURE_GAIN if closed_loop else residual\n"
-    '        arm = "closed-loop " if closed_loop else ""\n'
-    '        print(f"{name} {arm}residual {closed:.2f} tracking={tracking}")\n',
-    "the print line",
-)
-path.write_text(text, encoding="utf-8")
-PROBE_EDIT
 
 # --- the fixture is only usable if it reports the picture the drill expects ------------
 # --- the fixture must be internally consistent before a session is asked to trust it ---
@@ -363,18 +385,32 @@ if tracking != 2:
     raise SystemExit(f"the log shows {tracking} tracking cases, the evidence claims 2")
 print(f"  EXP-0141 stdout: {len(cases)} cases, {tracking} tracking release timing")
 
-identity = {
-    experiment: (json.loads(pathlib.Path(f"research/runs/{experiment}/manifest.json").read_text())
-                 .get("code_state", {}).get("diff_sha256"))
-    for experiment in ("EXP-0141", "EXP-0142")
-}
+identity = {}
+for experiment in ("EXP-0141", "EXP-0142"):
+    state = json.loads(
+        pathlib.Path(f"research/runs/{experiment}/manifest.json").read_text()
+    ).get("code_state", {})
+    identity[experiment] = (state.get("dirty"), state.get("diff_sha256"))
 if len(set(identity.values())) != 1:
     raise SystemExit(
         "the two runs of the same code carry different code identities: "
         f"{identity}. Something in the workspace moved between them, and the next session "
         "will have to explain it before it can trust anything else."
     )
-print(f"  both runs carry the same code identity: {next(iter(identity.values()))[:22]}…")
+dirty, digest = next(iter(identity.values()))
+# A clean run and a dirty run cannot be told apart by the comparison above, and here the
+# difference is the whole point: this fixture's in-flight run passes a flag that only the
+# uncommitted probe edit adds, so a manifest that records a clean tree describes a different
+# tree from the one its own stdout came from. Before this assertion existed, the recorded
+# hash was non-empty and meaningless — it hashed the byte-caches the tool rewrote — so
+# `dirty: true` looked like evidence of modified code and was evidence of nothing.
+if not dirty or not digest:
+    raise SystemExit(
+        "the runs recorded a clean code tree, but the in-flight run's command passes the\n"
+        "flag that only the uncommitted probe edit adds. The artifact and the provenance\n"
+        "would describe different trees. Plant the unfinished work before the runs."
+    )
+print(f"  both runs carry the same dirty code identity: {digest[:22]}…")
 CONSISTENCY
 
 echo "--- the planted edit is the one the drill describes ---"
@@ -429,9 +465,25 @@ if expected != closed_lines[: len(expected)]:
         "EXP-0142's stdout is not what the closed-loop arm prints, so the artifact does not\n"
         f"come from the code in the tree:\n  artifact: {expected}\n  arm:      {closed_lines[:len(expected)]}"
     )
+
+# The uncommitted work has to be exactly one file. The drill's story is that the session was
+# working on the probe; a tree dirtied in several places is a different puzzle, and the one
+# the criteria describe would not be the one a session meets.
+dirty_code = [
+    line
+    for line in subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True
+    ).stdout.splitlines()
+    if line.strip() and not line[3:].strip().startswith("research/")
+]
+if len(dirty_code) != 1 or "probes/replay_probe.py" not in dirty_code[0]:
+    raise SystemExit(
+        f"the uncommitted work is {dirty_code}, and the drill describes exactly one change\n"
+        "to probes/replay_probe.py. Fix the fixture, not the criteria."
+    )
 print(
-    f"  planted edit: committed probe has no flag; tree runs both arms; "
-    f"{len(offline_lines)} cases, arms differ; EXP-0142 stdout matches the closed-loop arm"
+    f"  planted edit: only uncommitted change; committed probe has no flag; tree runs both "
+    f"arms; {len(offline_lines)} cases, arms differ; EXP-0142 stdout matches the closed-loop arm"
 )
 PLANT_CHECK
 

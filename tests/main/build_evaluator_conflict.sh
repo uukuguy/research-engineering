@@ -138,8 +138,20 @@ cat > probes/closed_loop_observation.json <<'OBSERVATION'
 }
 OBSERVATION
 
+# Nothing a tool run writes belongs in the fixture's history. Without this the first
+# `researchlog call commits `__pycache__`, and every session afterwards sees a working tree
+# dirtied in files it never touched — an anomaly nobody planted. Asserted below: a
+# .gitignore that stops covering what it was written for fails silently.
+printf '__pycache__/\n*.pyc\n' > .gitignore
+
 git add -A
 git commit -qm "drill: workspace before the filter tuning"
+tracked_pycache="$(git ls-files | grep -c '__pycache__' || true)"
+if [[ "$tracked_pycache" != "0" ]]; then
+  echo "the fixture committed $tracked_pycache __pycache__ entries: every tool run will dirty" >&2
+  echo "the tree in files the session did not touch. Fix the fixture, not the criteria." >&2
+  exit 1
+fi
 
 researchlog() { "$PYTHON" tools/researchlog "$@"; }
 
