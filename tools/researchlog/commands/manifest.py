@@ -61,6 +61,18 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-output", action="append", default=[], metavar="PATH")
 
 
+def bump_heartbeat(record: Record) -> None:
+    """Write exactly one field: the heartbeat timestamp.
+
+    Extracted from `_apply` so V1 P7's `run` supervisor can reuse the same
+    write-once rule without spawning a sub-shell. Same constraint applies:
+    a heartbeat must never touch any other field, because the runs that
+    call it are the ones where frequent rewrites are most likely to clobber
+    something.
+    """
+    record.set(HEARTBEAT_FIELD, _now())
+
+
 def run(args: argparse.Namespace) -> Result:
     paths = repo.require(args.root)
     path = paths.manifest(args.experiment_id)
@@ -153,7 +165,7 @@ def _apply(record: Record, args: argparse.Namespace, *, existed: bool) -> list[s
         record.set("status", args.status)
         changed.append("status")
     if args.heartbeat:
-        record.set(HEARTBEAT_FIELD, _now())
+        bump_heartbeat(record)
         changed.append(HEARTBEAT_FIELD)
     if args.input:
         record.set("inputs", _inputs(args.input))

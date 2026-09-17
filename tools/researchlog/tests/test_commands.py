@@ -17,10 +17,14 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import socket
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
+from typing import cast
 from pathlib import Path
 
 from researchlog import cli
@@ -218,6 +222,115 @@ class RunCommandTests(CommandTestCase):
         manifest = json.loads((self.run_dir("EXP-smoke-missing") / "manifest.json").read_text())
         self.assertEqual(manifest["status"], "infra_failed")
         self.assertFalse((self.run_dir("EXP-smoke-missing") / "result.json").exists())
+
+    def test_heartbeat_is_bumped_while_the_child_runs(self) -> None:
+        # V1 P7: a long-running child must leave a live heartbeat on disk
+        # *during* the run, not only at closeout. We assert this by polling
+        # the manifest file from a sibling thread while the child sleeps;
+        # the first sample must already carry a non-None heartbeat value,
+        # which is only possible if the daemon thread bumped the file
+        # before the supervisor's final closeout write.
+        manifest_path = self.run_dir("EXP-smoke-hb") / "manifest.json"
+        argv = [
+            sys.executable,
+            "-m",
+            "researchlog",
+            "run",
+            "--root",
+            str(self.root),
+            "--experiment-id",
+            "EXP-smoke-hb",
+            "--heartbeat-interval",
+            "0.2",
+            "--",
+            "sleep",
+            "1.8",
+        ]
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
+        child = subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        )
+        try:
+            # Sleep a hair longer than one interval so the daemon has
+            # already written its first bump before we sample. The two
+            # sample times are chosen to land on different floor-seconds
+            # — `_now()` truncates to seconds, so a sample at wall-clock
+            # 0.55s and one at 1.55s read different seconds; a sample
+            # at 0.55s and one at 0.95s could land on the same second
+            # even when the daemon is bumping, masking the assertion.
+            time.sleep(0.55)
+            first_raw: str | None = (
+                json.loads(manifest_path.read_text())["execution"][
+                    "heartbeat_or_last_observed_at"
+                ]
+                if manifest_path.is_file()
+                else None
+            )
+            time.sleep(1.0)
+            second_raw: str | None = (
+                json.loads(manifest_path.read_text())["execution"][
+                    "heartbeat_or_last_observed_at"
+                ]
+                if manifest_path.is_file()
+                else None
+            )
+        finally:
+            _stdout, stderr_bytes = child.communicate(timeout=5.0)
+            stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+            self.assertEqual(child.returncode, 0, stderr_text)
+            _ = _stdout  # silence unused-var
+
+        # Both samples must have been captured mid-run, not at closeout.
+        self.assertIsNotNone(
+            first_raw,
+            f"heartbeat was never written while the child ran: "
+            f"first={first_raw!r} second={second_raw!r}",
+        )
+        self.assertIsNotNone(
+            second_raw,
+            f"heartbeat disappeared mid-run: first={first_raw!r} second={second_raw!r}",
+        )
+        first = cast(str, first_raw)
+        second = cast(str, second_raw)
+        # The two samples must come from different bumps, not the same
+        # closeout rewrite. ISO 8601 in UTC sorts lexicographically, so a
+        # later sample must be strictly greater.
+        self.assertLess(
+            first,
+            second,
+            f"heartbeat field did not advance while the child ran: "
+            f"first={first!r} second={second!r}",
+        )
+
+    def test_heartbeat_interval_zero_disables_bumps(self) -> None:
+        # V1 P7 opt-out: passing `--heartbeat-interval 0` turns the daemon
+        # thread off. The manifest still gets its closeout heartbeat from
+        # the supervisor's final write, but no intermediate bumps happen.
+        argv = [
+            sys.executable,
+            "-m",
+            "researchlog",
+            "run",
+            "--root",
+            str(self.root),
+            "--experiment-id",
+            "EXP-smoke-no-hb",
+            "--heartbeat-interval",
+            "0",
+            "--",
+            "sleep",
+            "0.4",
+        ]
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
+        completed = subprocess.run(
+            argv, capture_output=True, text=True, timeout=5.0, check=False, env=env
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        manifest = json.loads(
+            (self.run_dir("EXP-smoke-no-hb") / "manifest.json").read_text()
+        )
+        self.assertIsNotNone(manifest["execution"]["heartbeat_or_last_observed_at"])
+        self.assertEqual(manifest["status"], "completed")
 
     def test_refuses_to_restart_an_experiment_whose_manifest_says_running(self) -> None:
         code, _ = self.invoke(

@@ -31,7 +31,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
@@ -70,6 +70,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--expected-output", action="append", default=[], metavar="PATH")
     parser.add_argument("--timeout", type=float, default=None, metavar="SECONDS")
+    # V1 P7: every long-running experiment must leave a live heartbeat on disk,
+    # so a session that has lost the run can still tell whether the process is
+    # actually working or has gone dark. Default 30s; pass 0 to disable.
+    parser.add_argument(
+        "--heartbeat-interval", type=float, default=30.0, metavar="SECONDS"
+    )
     # V1 P6: stale overwrite is forbidden. To rerun a finalised experiment, just
     # re-invoke `run` with the same `--experiment-id`; the previous manifest is read
     # for context, not for ownership. `--replace-existing` no longer exists.
@@ -144,6 +150,16 @@ def _supervise(
         _pump(process.stdout, sinks["stdout"], stdout_path),
         _pump(process.stderr, sinks["stderr"], stderr_path),
     ]
+    # V1 P7: the supervisor bumps the heartbeat field while the child runs.
+    # `0` is the explicit opt-out; negative intervals are nonsense and raise
+    # at argparse. The thread is daemon, so it cannot wedge a session after
+    # the child has exited even if our join below is interrupted.
+    heartbeat_thread = _start_heartbeat(
+        record,
+        manifest_path,
+        interval=args.heartbeat_interval,
+        stop=lambda: process.poll() is not None,
+    )
     began = time.monotonic()
     timed_out = False
     try:
@@ -152,6 +168,8 @@ def _supervise(
         timed_out = True
         process.kill()
         child_code = process.wait()
+    if heartbeat_thread is not None:
+        heartbeat_thread.join(timeout=5.0)
     for thread in threads:
         thread.join(timeout=5.0)
     _close_pipes(process)
@@ -268,6 +286,54 @@ def _pump(stream: Iterable[str] | None, sink: TextIO, path: Path) -> threading.T
                 return
 
     thread = threading.Thread(target=relay, name=f"relay-{path.name}", daemon=True)
+    thread.start()
+    return thread
+
+
+# V1 P7: while a child process runs, a daemon thread bumps the manifest's
+# heartbeat field on the disk every `--heartbeat-interval` seconds. The
+# thread is daemon so it cannot block session teardown; the caller still
+# joins it after `process.wait` returns so the final bump is observed
+# before the manifest is closed out. `stop` is a callable rather than a
+# flag so a stuck `time.sleep` cannot delay shutdown by more than the
+# remaining interval — the loop checks both the wall clock and the child
+# status.
+def _start_heartbeat(
+    record: Record,
+    manifest_path: Path,
+    *,
+    interval: float,
+    stop: Callable[[], bool],
+) -> threading.Thread | None:
+    if interval <= 0:
+        return None
+
+    def relay() -> None:
+        next_at = time.monotonic() + interval
+        while True:
+            # Sleep in small slices so a session interrupt (Ctrl+C / stop)
+            # tears the loop down within a second, not after a full interval.
+            now = time.monotonic()
+            slice_end = min(next_at, now + 1.0)
+            while now < slice_end:
+                time.sleep(min(0.2, slice_end - now))
+                if stop():
+                    return
+                now = time.monotonic()
+            if stop():
+                return
+            try:
+                record.set("execution.heartbeat_or_last_observed_at", _now())
+                _write_manifest(manifest_path, record)
+            except Exception:  # pragma: no cover - heartbeat is best-effort
+                # A heartbeat that fails to write must not crash the run.
+                # The next bump or the final closeout will publish state.
+                return
+            next_at = time.monotonic() + interval
+
+    thread = threading.Thread(
+        target=relay, name=f"heartbeat-{manifest_path.parent.name}", daemon=True
+    )
     thread.start()
     return thread
 
