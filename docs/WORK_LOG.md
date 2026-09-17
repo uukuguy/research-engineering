@@ -11,6 +11,69 @@
 
 ---
 
+## 2026-09-17（第四轮）— gotcha 从日志里搬出来，研发轨道补上入口
+
+### 会话概览
+
+架构师问的是结构问题："`research-engineering` skill 负责项目下的研究课题，那**本项目的研发**如何
+管理？" 答案是两条轨道两套制度，而且**不对称是刻意的** —— 但审计下来发现研发轨道有三个薄弱点，
+这一轮修了前两个。
+
+### 两条轨道为什么不对称（结论，值得记住）
+
+| | 研究轨道 | 研发轨道 |
+|---|---|---|
+| 载体 | `research/` 八件 canonical + `ledger/` + `runs/` | `docs/WORK_LOG.md` + `docs/V0_ACCEPTANCE_GUIDE.md` |
+| 断言的是 | **现在为真** | **当时发生了什么** |
+| 机制 | schema + 每文件一个动词 + `validate` + `reconcile` | 只追加、带日期；新会话读**最新一条** |
+
+研发轨道不需要 `researchlog` 那一套，理由 `WORK_LOG` 开头自己给过：**过期的条目看起来就是旧的，
+不会伪装成现状**（而"当前状态快照"需要被重新生成与校验）。这是**事件日志 vs 状态快照**之分。
+
+### 三个薄弱点，以及修了什么
+
+1. **gotcha 注册表住在事件日志里** —— 12 条编号跨 4 条 entry，而 gotcha 是**当前为真**的东西，
+   过期时不像日期那样自己显形。新建 **`docs/GOTCHAS.md`**（`c045a6a`）：一页、可编辑、声明
+   "这是状态不是日志"，**修好的直接删掉而不是追加"已修"**。B5 与 A2 两条原先只以散文形式散在
+   正文里，一并落成条目。
+2. **一半的操作知识只在 Claude 专有的记忆里** —— agent memory 有 5 条 WORK_LOG 没有的，其中
+   **`.gitignore` 必须锚定**、**`environ` 快照是 `changed` 谓词的前提** 是**工具行为事实**，
+   本该是两个客户端都读得到的项目 canonical。已迁入 `docs/GOTCHAS.md`，记忆改成**指向它**，
+   不再维护第二份。
+3. **研发轨道唯一的"状态型"产物（V0 状态表）是手维护的，且 `README` 的 Status 只有一行 `V0`** ——
+   外部读者进不来。README 的 Status 现在写明 V0 的含义（21 行中 19 条有实测证据、2 条架构师暂缓、
+   0 条失败）并点名三个文件。
+
+**外加一条不在清单里但必须做的**：`AGENTS.md` 指向 `docs/GOTCHAS.md`。它是**唯一**每会话都加载的
+文件 —— 一个从那里没有链接的注册表会被整个错过，那样第 1 条就白做了。
+
+### 核实（不是回忆）
+
+```
+c045a6a · 工作树干净 · 真实远端 main == 本地 HEAD（git ls-remote 核实）
+python3 tools/check_workflow_block.py  → exit 0（80 交付工作流 / 116 名字）
+python3 tools/researchlog validate     → exit 0
+python3 tools/researchlog reconcile    → exit 0 clean
+```
+
+顺带再确认一次：`origin/main` 这个 **remote-tracking ref 仍然是陈旧的**（停在 `e3ee9f1`），因为
+推送走的是显式 SSH URL。**要判断本地与远端是否同步，用 `git ls-remote`，不要用 `git status -sb`。**
+已写进 GOTCHAS.md C2。
+
+### 开放项
+
+- **`capability_map` 仍无形状** —— 设计决定，按架构师规则不由 Claude 定。
+- **#1 / #22 暂缓**（客户端矩阵项）；若日后要做，不必等 codex。
+- 漂移检查仍有 8 条 warning（低价值，可长期挂着）。
+- **`project-state` 与全局 CLAUDE.md §18 的冲突已解**：`AGENTS.md` 明文 supersede 了"跑
+  `/project-state update`"那条全局建议。本轮再次确认没有活的冲突。
+
+### 下一步
+
+没有待做的收尾。剩下的都是架构师决定项（`capability_map`）或已明确暂缓项（#1 / #22）。
+
+---
+
 ## 2026-09-14 — 评审收官、V0 验收操作化、三个演练
 
 ### 会话概览
