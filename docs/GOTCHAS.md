@@ -205,6 +205,25 @@ uv run --python 3.12 python -m unittest discover -t tools -s tools/researchlog/t
 永远改 `skills/`，然后 `python3 tools/install_research_skills.py --self`；`--check` 会 diff
 canonical vs installed，并在漂移时非零退出。
 
+### C9. **别对你读判决的那条检查加 `>/dev/null 2>&1`** —— 以及 zsh 不做词分割
+
+踩过：用 `for g in "tools/researchlog validate"; do python3 $g >/dev/null 2>&1; echo "exit=$?"; done`
+跑门禁，得到 **exit=2**，据此宣布"validate 回归了"。**实际四道门禁全是 exit 0。**
+
+两层原因，都在我这边：
+
+1. **zsh 不对未加引号的参数做词分割。** `$g` = `"tools/researchlog validate"` 被当成**一个**含空格
+   的参数，于是 python 去找一个叫 `tools/researchlog validate` 的文件 —— 找不到，exit 2。
+   （bash 会分割，zsh 不会。本环境的 shell 是 zsh。）
+2. **`>/dev/null 2>&1` 把唯一能说明问题的那行扔了**：`can't open file '… validate': [Errno 2]`。
+   看见它，一秒就定位；看不见它，我去查了一个不存在的回归。
+
+**规则**：**你准备据以下结论的那条检查，不要静音它的输出**。静音只适合"你只关心它成不成功、且
+失败时你会另外去看日志"的场景 —— 而"我要读 exit code"恰恰不是那种场景。
+
+这是 B11 那一族的又一例：**"门禁的退出码"与"python 找不到文件的退出码"是两件事**，而我读了后者
+当场判前者。
+
 ### C8. 判一个**别人正在跑**的任务，用 PID + artifact 双信号，别用一次 `ps`
 
 踩过：两次 `ps | grep` 返回空（模式太窄、外加我自己 `head` 截断），据此宣布"两个运行都已结束"，
