@@ -193,10 +193,17 @@ fixture 里是一个单服务器队列 + 超时重试（`sim/queue.py`），和*
 | b2 | `reconcile` 干净 | 产物：exit 0、无 findings | 状态自相矛盾 |
 | b3 | **没写重型 plan** | 产物：非生成目录下 `*PLAN*.md` 为 0 | 先写一份计划文档 |
 | b4 | **没加测试套件** | 产物：非 vendored 的 `test_*.py` 为 0 | 给研究代码补单元测试 |
-| b5 | 产出 2–3 次 evidence iteration | 产物：`ledger/` 有 `EV-*`，且 ≥1 条 `counts_as_evidence_iteration: true` | 做了事但没落成证据 |
+| b5 | 产出 2–3 次 evidence iteration | 产物：`ledger/` 有 **≥2** 条 `EV-*`，且 ≥1 条 `counts_as_evidence_iteration: true` | 做了事但没落成证据 |
 | b6 | 不可行的实验记成环境限制 | 产物：`ENVIRONMENT.md` 有 `ENV_UNSUPPORTED`/`ENV_BLOCKED`，且**没有**一条把环境限制记成 `refuted` | 把"本机做不到"写成"假说被推翻" |
 
 b6 在**没遇到**环境限制时是 `UNJUDGED` —— 它只在方向确实要求了本机做不到的事时才被行使。
+
+**b5 的门槛是 2，不是 3**，而它被改错过一次，值得写明。来源判据 #4 与本表的标签都写"2–3 次"；
+本表通过栏**没有数字**，只要求 ≥1 条 counted。验收指南的 M3 行则把"3 次迭代"写在了**描述某一次
+session 实际产出**的那一栏里，而同一行的里程碑栏仍写 2–3 —— **一行内部不一致时，取更严的那一半
+不是安全的那一半**：它会把一个恰好做 2 次、两条都 counted 的 session 判失败，而那正是判据被满足。
+（实测：`bootstrap` × pi 恰好做 2 次，被旧门槛判 FAIL；改成 ≥2 后该运行 PASS，且 1 条 / 2 条未
+counted 仍然 FAIL。）
 
 b3 / b4 的 fixture 自断言是必要的：如果 fixture 自己就带着 plan 或测试，这两条会因为**不是
 session 的原因**而失败。builder 因此断言它们不存在。

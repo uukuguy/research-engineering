@@ -431,15 +431,20 @@ def crit_bootstrap_evidence_iterations(ctx: Ctx):
         if data.get("counts_as_evidence_iteration") is True:
             counted += 1
     note = f" ({len(unreadable)} unreadable)" if unreadable else ""
-    # The guide's pass condition, verbatim: three iterations each producing an `EV-*`, and
-    # at least one of them counted. An earlier version of this check asked only for one
-    # counted record, which is looser than the row it implements — a criterion whose label
-    # says one thing and whose check says another is how a mismatch goes unnoticed.
-    if len(records) < 3:
-        return FAIL, f"{len(records)} evidence record(s); the criterion asks for three iterations"
+    # The threshold is two, and it took three attempts to land there. The source criterion
+    # (#4) and this case's own label both read "2-3 evidence-producing iterations"; the pass
+    # column names no number at all and asks only that one of them counted. A previous round
+    # moved the check from ">=1 counted" to ">=3 records", tightening it toward the
+    # acceptance guide's M3 row — whose last column describes what one session happened to
+    # produce ("three iterations") beside a milestone that still says 2-3. Taking the
+    # stricter half of an internally inconsistent row is not the safe half: it failed a
+    # session that produced exactly two iterations, both of them counted, which *is* the
+    # criterion being met.
+    if len(records) < 2:
+        return FAIL, f"{len(records)} evidence record(s); the criterion asks for 2-3 iterations"
     if counted < 1:
         return FAIL, f"{len(records)} records, none counts_as_evidence_iteration"
-    return PASS, f"{len(records)} records (>=3), {counted} counted as evidence iterations{note}"
+    return PASS, f"{len(records)} records (>=2), {counted} counted as evidence iterations{note}"
 
 
 def crit_bootstrap_env_not_refuted(ctx: Ctx):
