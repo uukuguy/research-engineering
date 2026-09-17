@@ -281,6 +281,76 @@ class BlockCountTests(GitRepoCase):
             "BLOCK_ITERATION_BUDGET_EXCEEDED", [f["code"] for f in envelope["findings"]]
         )
 
+    def test_reproduction_does_not_consume_the_evidence_budget(self) -> None:
+        """V1 P2: tagging an iteration `reproduction` keeps it out of the evidence budget.
+
+        Three records land in the ledger: two belief-changing evidence iterations and one
+        reproduction. Closing the block must show `completed_evidence_iterations = 2`
+        (only the two counted) and `reproduction_iterations = 1`. If the reproduction
+        leaked into the evidence count, the count would be 3 and the test would catch it.
+        """
+        self.init_state()
+        self.declare_hypothesis()
+        self.open_block()
+        self.record_a_counting_iteration()
+        self.record_a_counting_iteration()
+
+        # Same shape as `record_a_counting_iteration` but tagged as reproduction.
+        code, envelope = self.record(
+            "--question", "Re-running the same hypothesis with the new build.",
+            "--subject-type", "harness",
+            "--subject-id", "HRN-001",
+            "--level", "E2",
+            "--execution-status", "completed",
+            "--research-outcome", "refuted",
+            "--confidence", "moderate",
+            "--hypothesis", "H-037",
+            "--belief-delta", "refined",
+            "--observation", "Reproduced the residual tracking on the new build.",
+            "--iteration-kind", "reproduction",
+        )
+        self.assertEqual(code, 0, envelope)
+
+        code, envelope = self.run_cli("active", "--close-block", "--belief-delta", "refined")
+        self.assertEqual(code, 0, envelope)
+
+        _, document = self.run_cli("active", "--get-json")
+        block = document["payload"]["active"]["block"]
+        self.assertEqual(block["completed_evidence_iterations"], 2)
+        self.assertEqual(block["reproduction_iterations"], 1)
+
+    def test_reproduction_skips_even_with_no_belief_delta_dropped(self) -> None:
+        """A reproduction is excluded from the evidence budget even when its
+        scientific fields would otherwise count it (`belief_delta != none`).
+        Without the iteration_kind override, this same record would land in the
+        evidence bucket; the test pins that the override wins."""
+        self.init_state()
+        self.declare_hypothesis()
+        self.open_block()
+
+        code, envelope = self.record(
+            "--question", "Replaying a closed hypothesis to check a tool regression.",
+            "--subject-type", "harness",
+            "--subject-id", "HRN-001",
+            "--level", "E1",
+            "--execution-status", "completed",
+            "--research-outcome", "inconclusive",
+            "--confidence", "low",
+            "--hypothesis", "H-037",
+            "--belief-delta", "refined",  # would normally count
+            "--observation", "Replay only — no new belief.",
+            "--iteration-kind", "reproduction",
+        )
+        self.assertEqual(code, 0, envelope)
+
+        code, envelope = self.run_cli("active", "--close-block", "--belief-delta", "refined")
+        self.assertEqual(code, 0, envelope)
+
+        _, document = self.run_cli("active", "--get-json")
+        block = document["payload"]["active"]["block"]
+        self.assertEqual(block["completed_evidence_iterations"], 0)
+        self.assertEqual(block["reproduction_iterations"], 1)
+
 
 class SchemaVersionVisibilityTests(GitRepoCase):
     """A document from another tool version must be reported when it is read.

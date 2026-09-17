@@ -20,11 +20,12 @@
     "max_tokens": null,
     "completed_evidence_iterations": 0,
     "belief_delta": null,
-    "stop_conditions": []
+    "stop_conditions": [],
+    "reproduction_iterations": 0
   },
   "git": {
     "branch": "main",
-    "base_commit": "403383d356b8011533a4c2297388f24f02f87334",
+    "base_commit": "e06ca6a4d22d510150c86adf704fa0c0b76c68fc",
     "checkpoint_commit": null,
     "dirty_expected": true,
     "expected_touched_files": [
@@ -39,5 +40,5 @@
   },
   "current_observation": null,
   "next_action": null,
-  "updated_at": "2026-09-13T15:38:50+00:00"
+  "updated_at": "2026-09-17T16:13:55+00:00"
 }

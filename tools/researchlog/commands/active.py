@@ -159,7 +159,11 @@ def _apply(
             # block finished and the budget it is held to would belong to someone else.
             record.set("block.belief_delta", None)
             record.set("block.completed_evidence_iterations", 0)
-            changed.extend(["block.belief_delta", "block.completed_evidence_iterations"])
+            record.set("block.reproduction_iterations", 0)
+            changed.extend(
+                ["block.belief_delta", "block.completed_evidence_iterations",
+                 "block.reproduction_iterations"]
+            )
         record.set(field, value)
         changed.append(field)
     if args.set_next_action is not None:
@@ -174,8 +178,11 @@ def _apply(
         # The count is derived, and it is written here, once, with belief_delta: the moment
         # a block's summary is fixed is the moment its count can be final. Nothing writes it
         # during the block, because a counter nobody maintains is a counter that lies.
+        # V1 P2: a separate reproduction bucket is recomputed the same way; the evidence
+        # budget check only reads the first of these two.
         record.set("block.completed_evidence_iterations", constraints.count_evidence_iterations(members))
-        changed.append("block.completed_evidence_iterations")
+        record.set("block.reproduction_iterations", constraints.count_reproduction_iterations(members))
+        changed.extend(["block.completed_evidence_iterations", "block.reproduction_iterations"])
     if args.close_block:
         record.set("status", "idle")
         changed.append("status")

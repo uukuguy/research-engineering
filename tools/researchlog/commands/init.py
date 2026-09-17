@@ -126,6 +126,12 @@ def _stamp_active(paths: repo.ResearchPaths, root: Path) -> None:
     data = json.loads(paths.active.read_text(encoding="utf-8"))
     data["updated_at"] = _now()
     data["git"] = _initial_git_state(root)
+    # V1 P2: backfill block.reproduction_iterations on ACTIVE instances that
+    # pre-date the field. The template ships with the key set, but a repo that
+    # ran `init` before P2 still has it missing; without this line the next
+    # validate / reconcile against a P2-era schema would refuse the file.
+    block = data.setdefault("block", {})
+    block.setdefault("reproduction_iterations", 0)
     paths.active.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 

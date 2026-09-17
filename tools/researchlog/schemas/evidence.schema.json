@@ -93,7 +93,11 @@
     "belief_delta": { "enum": ["none", "refined", "overturned"] },
     "counts_as_evidence_iteration": {
       "type": "boolean",
-      "description": "Derived, never supplied by the caller. Recomputed from execution_status, research_outcome, hypotheses_differentiated and belief_delta."
+      "description": "Derived, never supplied by the caller. Recomputed from execution_status, research_outcome, hypotheses_differentiated and belief_delta. False when iteration_kind is reproduction."
+    },
+    "iteration_kind": {
+      "enum": ["evidence", "reproduction", null],
+      "description": "V1 P2: separates belief-changing iterations from re-runs of a closed hypothesis. Default evidence; reproduction bumps reproduction_iterations instead of completed_evidence_iterations and never counts toward the evidence budget."
     },
     "invalidated_if": {
       "type": "array",

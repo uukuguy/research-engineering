@@ -63,6 +63,7 @@
         "max_wall_clock_minutes",
         "max_tokens",
         "completed_evidence_iterations",
+        "reproduction_iterations",
         "belief_delta",
         "stop_conditions"
       ],
@@ -82,6 +83,11 @@
           "description": "Self-reported spend for this block. Reconcile compares it against max_tokens after the fact; it is never a gate."
         },
         "completed_evidence_iterations": { "type": "integer", "minimum": 0 },
+        "reproduction_iterations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "V1 P2: reproductions bump this counter, not completed_evidence_iterations. The block's evidence budget is only the latter."
+        },
         "belief_delta": {
           "enum": ["none", "refined", "overturned", null],
           "description": "Null while the block is open; written once at close. A block whose members changed belief cannot close as 'none'."

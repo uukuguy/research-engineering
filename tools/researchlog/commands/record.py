@@ -115,6 +115,16 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--artifact-role", default=None, help="role applied to every --artifact")
     parser.add_argument("--invalidated-if", action="append", default=[], metavar="PREDICATE")
     parser.add_argument("--anchor", action="store_true")
+    # V1 P2: `reproduction` lands in the ledger yet is excluded from the
+    # block's evidence budget — the default `evidence` is what every prior
+    # record was tagged with.
+    parser.add_argument(
+        "--iteration-kind",
+        choices=["evidence", "reproduction"],
+        default="evidence",
+        help="evidence bumps completed_evidence_iterations; reproduction bumps "
+             "reproduction_iterations and never counts toward the block budget",
+    )
 
 
 def run(args: argparse.Namespace) -> Result:
@@ -357,6 +367,9 @@ def _apply_links(document: dict[str, Any], args: argparse.Namespace) -> None:
         document["hypotheses_differentiated"] = _split_list(args.hypotheses_differentiated)
     if args.anchor:
         document["anchor"] = True
+    # V1 P2: stamp iteration_kind from the CLI flag; the default "evidence"
+    # matches what every prior record carried (the field did not exist yet).
+    document["iteration_kind"] = args.iteration_kind
 
 
 def _derive_counts(document: dict[str, Any]) -> None:

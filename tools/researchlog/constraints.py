@@ -88,8 +88,12 @@ def derive_counts_as_evidence_iteration(record: Mapping[str, Any]) -> bool:
     """The single definition of a belief-changing iteration.
 
     The block contract and every throughput KPI are driven by this, so it is computed
-    here and nowhere else.
+    here and nowhere else. V1 P2: a reproduction iteration always returns False, so
+    its evidence_id still lands in the ledger but does not bump the block's evidence
+    budget.
     """
+    if record.get("iteration_kind") == "reproduction":
+        return False
     if record.get("execution_status") != "completed":
         return False
     if record.get("research_outcome") not in COUNTED_OUTCOMES:
@@ -192,6 +196,19 @@ def count_evidence_iterations(member_records: Sequence[Mapping[str, Any]]) -> in
     `derive_counts_as_evidence_iteration`. This counts them; it never invents one.
     """
     return sum(1 for record in member_records if derive_counts_as_evidence_iteration(record))
+
+
+def count_reproduction_iterations(member_records: Sequence[Mapping[str, Any]]) -> int:
+    """V1 P2: count re-runs of a closed hypothesis separately from the evidence budget.
+
+    A reproduction is a deliberate replay that should not eat into the block's
+    3-to-8 iteration cap, but still belongs in the ledger so the next session can
+    see what was tried. Anything tagged `iteration_kind == reproduction` counts
+    here; everything else counts (or does not) through the regular path.
+    """
+    return sum(
+        1 for record in member_records if record.get("iteration_kind") == "reproduction"
+    )
 
 
 def identified_hypotheses(record: Mapping[str, Any]) -> set[str]:

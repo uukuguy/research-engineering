@@ -19,6 +19,7 @@
     "max_wall_clock_minutes": null,
     "max_tokens": null,
     "completed_evidence_iterations": 0,
+    "reproduction_iterations": 0,
     "belief_delta": null,
     "stop_conditions": []
   },
