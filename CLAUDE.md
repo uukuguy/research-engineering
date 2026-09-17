@@ -23,6 +23,12 @@ interchangeable:
   where a locally installed suite lives. It blocks model invocation while leaving the skill
   in the architect's `/` menu, which is the direction wanted here.
 
+Two traps, both of which produce a block that looks right and does nothing. A denied name is
+`plugin:skill` where the **plugin** is the directory above the version, not the marketplace
+directory above that — under the `omc` marketplace the plugin is `oh-my-claudecode`, so
+`Skill(omc:...)` matches nothing. And a cached plugin that is not in `enabledPlugins` is not
+reachable at all, so denying its skills adds entries that cannot do anything either way.
+
 The block is true only as long as it covers what is actually installed, and it quietly
 stopped being true: it was written against one family, and this machine later grew sixty-five
 more skills that between them supply a written plan, TDD, review checklists and the phase

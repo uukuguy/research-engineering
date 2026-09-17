@@ -50,8 +50,31 @@ DELIVERY_SKILLS: frozenset[str] = frozenset(
     }
 )
 
+# The same judgement for plugin-namespaced skills, which need permissions.deny instead —
+# `skillOverrides` does not reach plugin skills. Names are `plugin:skill`, and the plugin is
+# the directory above the version: under the `omc` marketplace the plugin is
+# `oh-my-claudecode`, so `Skill(omc:...)` would match nothing while looking correct.
+PLUGIN_DELIVERY_FAMILIES: tuple[str, ...] = ("dev-phase-manager", "planning-with-files")
+PLUGIN_DELIVERY_SKILLS: frozenset[str] = frozenset(
+    f"oh-my-claudecode:{skill}"
+    for skill in (
+        "autopilot",             # idea to working code
+        "plan", "ralplan",       # strategic planning, and consensus planning before execution
+        "ralph",                 # loop until task completion
+        "ultraqa",               # test, verify, fix, repeat
+        "ultrawork",             # parallel execution engine
+        "verify",                # verify before claiming completion
+        "self-improve",          # autonomous code improvement
+        "release",
+        "deep-interview", "deep-dive",   # requirements before autonomous execution
+        "project-session-manager",       # issues, PRs, features
+    )
+)
+
 # Started by AGENTS.md as deliberately available, so they must NOT be blocked.
 DELIBERATELY_AVAILABLE: frozenset[str] = frozenset({"systematic-debugging", "using-git-worktrees"})
+
+PLUGIN_CACHE = pathlib.Path.home() / ".claude" / "plugins" / "cache"
 
 DELIVERY_WORDS = re.compile(r"plan|brainstorm|test-driven|review checklist|roadmap|phase", re.I)
 
@@ -81,6 +104,42 @@ def personal_skills() -> dict[str, str]:
     return found
 
 
+def enabled_plugins() -> set[str]:
+    """Plugin names the user has switched on. A cached plugin that is not enabled is not
+    reachable, so treating the cache as the available set reports a block that is not
+    needed — and would hide a real one behind it."""
+    settings_file = pathlib.Path.home() / ".claude" / "settings.json"
+    if not settings_file.is_file():
+        return set()
+    declared = json.loads(settings_file.read_text(encoding="utf-8")).get("enabledPlugins") or {}
+    entries = declared.items() if isinstance(declared, dict) else ((e, True) for e in declared)
+    return {name.split("@")[0] for name, on in entries if on}
+
+
+def plugin_skills() -> dict[str, str]:
+    """{plugin:skill: description} for the plugin skills reachable on this machine.
+
+    The plugin name is the directory above the version; the marketplace directory above that
+    is a different name, and reading the wrong one silently matches nothing.
+    """
+    found: dict[str, str] = {}
+    if not PLUGIN_CACHE.is_dir():
+        return found
+    enabled = enabled_plugins()
+    for skills_dir in PLUGIN_CACHE.glob("*/*/*/skills"):
+        plugin = skills_dir.parts[-3]
+        if plugin not in enabled:
+            continue
+        for skill in sorted(skills_dir.iterdir()):
+            manifest = skill / "SKILL.md"
+            if not skill.is_dir() or not manifest.is_file():
+                continue
+            text = manifest.read_text(encoding="utf-8", errors="replace")[:2000]
+            match = re.search(r"^description:\s*(.+)$", text, re.M)
+            found[f"{plugin}:{skill.name}"] = (match.group(1) if match else "").strip()
+    return found
+
+
 def main() -> int:
     if not SETTINGS.is_file():
         print(f"no project settings at {SETTINGS}; the block is not configured at all", file=sys.stderr)
@@ -88,12 +147,15 @@ def main() -> int:
 
     settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
     covered = blocked_skill_names(settings)
-    installed = personal_skills()
+    installed = {**personal_skills(), **plugin_skills()}
 
     expected = {
         name
         for name in installed
-        if name.startswith(DELIVERY_FAMILIES) or name in DELIVERY_SKILLS
+        if name.startswith(DELIVERY_FAMILIES)
+        or name in DELIVERY_SKILLS
+        or name.split(":")[0] in PLUGIN_DELIVERY_FAMILIES
+        or name in PLUGIN_DELIVERY_SKILLS
     }
     missing = sorted(expected - covered)
     leaked = sorted(DELIBERATELY_AVAILABLE & covered)
@@ -103,7 +165,7 @@ def main() -> int:
         name
         for name, description in installed.items()
         if name not in covered
-        and name not in DELIBERATELY_AVAILABLE
+        and name.split(":")[-1] not in DELIBERATELY_AVAILABLE
         and DELIVERY_WORDS.search(description or "")
     )
 
