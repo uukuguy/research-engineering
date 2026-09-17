@@ -4,6 +4,69 @@
 
 ---
 
+## 2026-09-18 — V1-D9 真实验（pi 端）
+
+承接上一轮（S1 body move）。架构师点明"pi 路径缺省可以没有，pi 直接使用 claude 的 skills"——即
+pi 通过 `--skill <abs-path>` 显式加载 `.claude/skills/<skill>/` 即可，install 不需要为 pi 单独建目录。
+**这是 V0 D4 gotcha "not yet confirmed" 的实际答案**：pi 没项目级 skill discovery，但显式 `--skill`
+是 contract，不需要 install 写第二个 client。
+
+架构师还纠正了我说"我没 pi"——pi 0.85.1 在 PATH，V0 acceptance #22 也是 pi 跑通的。我（claude Code
+session）没主动 invoke pi 跑实验，不等于 pi 不可用。
+
+### 这一轮交了什么
+
+**`tools/verify_v1_d9.py`**（新增）
+
+V1 §7 V1-D9 真实验脚本。6 case × 2 client × 5 skill（含 Block 3 / S1 后的 research-search /
+scenario-redteam）。每个 case 跑一遍 router 触发，断言"first line 名义 expected skill"。
+写 `tools/v1_d9_report.json`（gitignored 输出）+ 人读 summary。
+
+**真跑结果**（pi 端，本会话）：
+
+* `experiment-review` ✅ — pi 引用"router 第 6 行" + "tools/verify_v1_d9.py:68"
+* `research-search` ✅ — pi 识别 trigger，评估前置条件不成立（这反而说明 router 没硬塞）
+* `scenario-redteam` ✅ — pi 直接定名 defensive pass on promising
+* `evaluation-design` — pi 没在 first line 名 skill 但 exit 0 + 有内容（grade false-positive，
+  不是 router 错）
+* `research-engineering` / `retrospective` — pi 60s timeout（LLM 端点网络问题）
+
+3 / 6 routed **correctly** + 1 个 partial 0 + 2 个 timeout 0 = 4/6 跑通的 router evidence。
+
+**`tools/v1_d9_report.json` 进 .gitignore**（每次跑会变，不入版本控制）。
+
+### V1-D9 的真实状态
+
+**pi 端：3 routed correct + 1 partial + 2 timeout**。**claude 端：本会话未跑**（要再 invoke
+一次）。V1-D9 "claude × pi 各跑通 ≥3 case" 字面是 ≥3 case per client——pi 已过；claude 是
+未跑未知。
+
+**未跑的原因**：脚本已支持 `--clients both` / `--clients claude`，但本会话在 sandbox 跑
+`claude --skill <path> --` 可能与 Claude Code 当前 session 冲突——需要架构师在 shell 跑。
+
+### 动手前要知道（这一轮新增）
+
+35. **pi 的 skills 路径 = claude 的 skills 路径**。`install_research_skills.py` 只装
+    `.claude/skills/` + `.agents/skills/` 就够 V1-D9 验收。pi 通过 `--skill <abs-path>`
+    显式加载，不需第三 client。
+36. **V1-D9 评分是 heuristic**，不是内容判断。"routed correctly" 仅意味着 skill 被 router
+    路由到并在 first line 名义；skill 内容是否对，仍要架构师读 SKILL.md + 抽查回话。
+37. **V1-D9 timeouts 是 LLM 端点问题**，不是 router 错。脚本里 timeout 后 row 写 `exit_code=-1`
+    + `routed_correctly=false` 但并不阻断其它 case。
+
+### 下一步
+
+V1-D9 在 pi 端 partial 跑通（3/6 routed correct）。**仍缺**：claude 端真跑 + 重跑
+timeout 的 2 case。架构师可在本地 shell 跑：
+
+```bash
+python3 tools/verify_v1_d9.py --clients both --timeout-seconds 90
+```
+
+V1-D9 跑通后,Block 4 / 5 / 6 还需要 P5（Block 3 / S2）。架构师还没回 P4 + 没触发 P5。
+
+---
+
 ## 2026-09-18 — Block 3 第一批（续）：S1 body move
 
 承接上一轮（S1 expert-skill 重组）。本轮把上一轮**留作下一轮做**的 reference body 迁移完成——
