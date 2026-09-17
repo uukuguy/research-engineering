@@ -140,7 +140,12 @@ case "$CLIENT" in
     # shellcheck disable=SC1091
     . "$SOURCE_ROOT/.env"
     set +a
-    AGENT=(pi -p "$PROMPT" --no-skills --skill "$FIXTURE/.agents/skills" --approve)
+    # `--session-dir` keeps pi's own session log inside this run's private work directory.
+    # By default pi writes it under `~/.pi/agent/sessions/<mangled cwd>/`, so every case run
+    # leaves an artifact in the operator's home that nothing cleans up — and a case should
+    # leave its state where the case is.
+    AGENT=(pi -p "$PROMPT" --no-skills --skill "$FIXTURE/.agents/skills" --approve
+           --session-dir "$WORKDIR/pi-sessions")
     ;;
   stub)
     # A negative control, and the only client that costs nothing. An agent that does
