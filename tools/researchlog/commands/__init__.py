@@ -11,6 +11,7 @@ from types import ModuleType
 
 from researchlog.commands import (
     active,
+    boundaries,
     checkpoint,
     compare,
     current,
@@ -41,6 +42,7 @@ MODULES: tuple[ModuleType, ...] = (
     job,
     checkpoint,
     current,
+    boundaries,
 )
 
 __all__ = ["MODULES"]

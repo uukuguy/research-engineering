@@ -1,0 +1,30 @@
+{
+  "title": "Boundaries",
+  "description": "The research:boundaries block in research/BOUNDARIES.md — which tier each constraint sits in, and therefore who may change it. HARD needs the architect; PROVISIONAL the agent may change when evidence supports it, but must record; FREE is the agent's own business. The tier is the whole content: a constraint in the wrong tier is either an unchallengeable remark that nobody agreed to, or a rule the agent may quietly move.",
+  "type": "object",
+  "required": ["schema_version", "hard", "provisional", "free"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string" },
+    "hard": {
+      "type": "array",
+      "description": "Changing one of these requires the architect. Competition rules, external data policy, official metric semantics, verified SDK coordinate and unit conventions, the physical actuator safety envelope, evaluator and holdout truth, official credentials, spend and compute caps, and the submission budget.",
+      "items": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }
+    },
+    "provisional": {
+      "type": "array",
+      "description": "The agent may change these when evidence supports it, but must record the change. Current world-state representation, module boundaries, the safety/planner interface, replay formats, architecture ownership.",
+      "items": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }
+    },
+    "free": {
+      "type": "array",
+      "description": "The agent's own business: no permission and no record beyond the usual evidence trail.",
+      "items": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }
+    },
+    "submission_budget": {
+      "type": ["integer", "null"],
+      "description": "Official submissions are scarce — often three to five for a competition — and are the one resource that cannot be recovered by working harder. Null for projects with no external submission step."
+    },
+    "submissions_used": { "type": "integer", "minimum": 0 }
+  }
+}

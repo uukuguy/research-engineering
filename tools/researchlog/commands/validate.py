@@ -20,7 +20,15 @@ from researchlog.errors import (
 NAME = "validate"
 HELP = "check schemas and invariants across the canonical research state"
 
-KINDS = ("active", "evidence", "manifest", "findings-entry", "current", "environment")
+KINDS = (
+    "active",
+    "evidence",
+    "manifest",
+    "findings-entry",
+    "current",
+    "environment",
+    "boundaries",
+)
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -66,6 +74,7 @@ def run(args: argparse.Namespace) -> Result:
     _check_signals(paths, result)
     _check_current(paths, result)
     _check_environment(paths, result)
+    _check_boundaries(paths, result)
 
     if args.strict:
         _promote_warnings(result)
@@ -135,6 +144,59 @@ def _check_manifests(ledger: state.Ledger, result: Result) -> None:
             result.add(finding)
         for finding in schema.version_findings("manifest", manifest, where=experiment_id):
             result.add(finding)
+
+
+def _check_boundaries(paths: repo.ResearchPaths, result: Result) -> None:
+    """The canonical file that had a reader, a validator, and no way to be written.
+
+    `research:boundaries` was checked by `reconcile` for block well-formedness and by
+    nothing else, and no verb wrote it but `init`'s empty skeleton — so the tiers a session
+    is told to populate in bootstrap could only be filled by hand. The submission budget is
+    checked here because the file's own prose makes it an error rather than a warning:
+    official submissions are the one resource that cannot be recovered by working harder.
+    """
+    if not paths.boundaries.is_file():
+        result.add(
+            Finding(
+                "BOUNDARIES_ABSENT",
+                SEVERITY_ERROR,
+                paths.boundaries.name,
+                "the file is missing",
+                "re-run `researchlog init`",
+            )
+        )
+        return
+    block = schema.find_block(paths.boundaries.read_text(encoding="utf-8"), "boundaries")
+    if block is None:
+        result.add(
+            Finding(
+                "BOUNDARIES_BLOCK_MISSING",
+                SEVERITY_ERROR,
+                paths.boundaries.name,
+                "no ```json research:boundaries block found",
+                "re-run `researchlog init --merge`, or add the block back",
+            )
+        )
+        return
+    for finding in schema.load_validator("boundaries").check(block):
+        result.add(finding)
+    for finding in schema.version_findings("boundaries", block, where=paths.boundaries.name):
+        result.add(finding)
+
+    budget = block.get("submission_budget")
+    used = block.get("submissions_used")
+    if isinstance(budget, int) and not isinstance(budget, bool) and isinstance(used, int):
+        if used >= budget:
+            result.add(
+                Finding(
+                    "SUBMISSION_BUDGET_SPENT",
+                    SEVERITY_ERROR,
+                    paths.boundaries.name,
+                    f"{used} of {budget} official submissions are used",
+                    "reaching the budget stops and asks rather than spending the last "
+                    "attempt; the architect owns any increase",
+                )
+            )
 
 
 def _check_current(paths: repo.ResearchPaths, result: Result) -> None:

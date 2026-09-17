@@ -211,15 +211,26 @@ python3 tools/researchlog reconcile --json     # ACTIVE / Git / runs / evidence
 python3 tools/researchlog validate             # schema + invariant check
 python3 tools/researchlog record --help        # append an evidence record
 python3 tools/researchlog current              # read/update the research:current block
+python3 tools/researchlog boundaries           # read/update the research:boundaries block
+python3 tools/researchlog boundaries --add TIER=FILE   # append a hard|provisional|free entry
 python3 tools/researchlog env record FILE      # record an environment change
 python3 tools/researchlog env declare TABLE F  # append to a declared ENVIRONMENT.md table
 python3 tools/researchlog env query FILE       # what an environment change invalidates
 python3 tools/researchlog findings --help      # durable beliefs
 ```
 
-Every canonical file has a verb. That is worth stating because it was not true: `CURRENT.md`
-and the `ENVIRONMENT.md` tables could be read but not written, so the only way to fill them
-was by hand — against the sentence directly above this list.
+Every canonical file whose block is canonical JSON has a verb — one deliberate exception,
+below. That is worth stating because it twice was not true: `CURRENT.md` and the
+`ENVIRONMENT.md` tables could be read but not written, and when those were fixed
+`BOUNDARIES.md` was missed. The cost was observable rather than theoretical: a bootstrap
+told to *identify HARD boundaries* had nowhere to put them, could not hand-edit them either
+— the sentence directly above this list forbids it — and spent its run grepping the tool's
+source for a verb that did not exist.
+
+**The exception is `ARCHITECT.md`.** Its `research:signal` blocks are appended by hand, on
+purpose: `ARCHITECT.md` says so itself, because a signal is something the architect said and
+its `source_text` is the point. `validate` and `reconcile` check those blocks; nothing
+writes them.
 
 `tools/researchlog` is zero-dependency stdlib Python and is meant to be copied whole.
 

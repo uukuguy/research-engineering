@@ -38,6 +38,7 @@ CURRENT_VERSIONS: dict[str, str] = {
     "findings-entry": "1.0",
     "current": "1.0",
     "environment": "1.0",
+    "boundaries": "1.0",
 }
 
 # Major-version migrations, keyed by (kind, from_major, to_major). A downgrade across
