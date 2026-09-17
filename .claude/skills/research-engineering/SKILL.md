@@ -200,9 +200,11 @@ Loading a reference is not a workflow stage. Most iterations load none. If you f
 yourself loading four of them per iteration, the loop has turned into ceremony.
 
 Loading a **skill** (bold above) is a stronger action: it brings its own
-description, its own loading discipline, and — once V1 Block 3 finishes the
-content move — its own self-contained body. Until then each skill's body still
-lives at the V0 reference path noted inside the skill.
+description, its own loading discipline, and its own self-contained body.
+The three V0 references that became `evaluation-design`,
+`experiment-review`, and `retrospective` are now folded into their
+respective skills; the remaining rows in the router still load a
+`references/<name>.md` file.
 
 ## Tool surface
 
