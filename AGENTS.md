@@ -1,5 +1,14 @@
 # Research Engineering — Project Contract
 
+**DeepSeek 后端规则**（`ANTHROPIC_BASE_URL` 指向 DeepSeek 时）：
+
+- **一律不传 `model` 给 subagent**，只用会话的 `ANTHROPIC_MODEL`。
+- 本后端统一 `deepseek-flash`，不做难度分档；上面的 Fable/Opus/Sonnet/Haiku 分工仅适用于原生 Anthropic 端点。
+- `ANTHROPIC_SMALL_FAST_MODEL` 必须设置（`~/openai-coding-deepseek.sh` 已有），否则后台任务也走最贵档。
+
+原因：该兼容层把**任何 `claude-*` 模型名映射到最贵的 `deepseek-v4-pro`**（实测 `claude-opus-4-7` → `deepseek-v4-pro`；裸别名 `opus` 直接报错）。`Agent` 的 `model` 参数只收 `sonnet/opus/haiku/fable` 别名，传不出 `deepseek-flash`，所以传任何别名都等于选最贵档——与"派 Haiku 省钱"的意图正好相反
+。
+
 This is an exploratory applied-AI research project, not a software delivery project.
 The human acts as **lead architect**; the AI acts as **technical research partner**.
 
@@ -24,8 +33,11 @@ Knowing which mode you are in is the whole game.
 The generic software-delivery workflow skills are **disabled for this project
 mechanically**, in `.claude/settings.json` — not merely discouraged here:
 
-- `permissions.deny` blocks the plugin-namespaced forms (`Skill(superpowers:*)`).
-  This is a hard block: the tool call is refused and never executes.
+- `permissions.deny` blocks the plugin-namespaced forms, **one exact name per skill** —
+  `Skill(superpowers:brainstorming)` and so on. A pattern does not work: `Skill(gsd-*)`
+  matches nothing, checked by invoking `gsd-plan-phase` under a settings file that denied
+  exactly that pattern and watching it load. This is a hard block: the tool call is refused
+  and never executes.
 - `skillOverrides` sets the personal-level copies to `"off"`, which hides them from
   both the model and the `/` menu.
 
@@ -35,6 +47,20 @@ the plugin's `SKILL.md` files can still load because discovery scans source
 directories rather than honouring `marketplace.json`
 (anthropics/claude-code#13344). So the deny list, not the plugin switch, is the
 load-bearing part.
+
+**A list cannot notice that the machine grew.** This block was written against one family and
+silently stopped being true: the machine later acquired sixty-five more skills that between
+them supply a written plan, TDD and review checklists, and nothing was covering them. So the
+block is checked rather than assumed:
+
+```
+python3 tools/check_workflow_block.py     # exit 1 names every uncovered delivery workflow
+```
+
+It reads the machine's own inventory — personal skills, plus plugin skills from *enabled*
+plugins, since a cached plugin that is not enabled is not reachable — and it also fails if a
+skill deliberately left available below, `systematic-debugging` or `using-git-worktrees`, has
+been switched off by mistake.
 
 If you find yourself looking for another route to brainstorming, a written plan, TDD,
 or a review checklist for an experimental change: the absence is the point. Those
@@ -158,9 +184,16 @@ JSON** — use the tool:
 python3 tools/researchlog reconcile --json     # ACTIVE / Git / runs / evidence
 python3 tools/researchlog validate             # schema + invariant check
 python3 tools/researchlog record --help        # append an evidence record
+python3 tools/researchlog current              # read/update the research:current block
+python3 tools/researchlog env record FILE      # record an environment change
+python3 tools/researchlog env declare TABLE F  # append to a declared ENVIRONMENT.md table
 python3 tools/researchlog env query FILE       # what an environment change invalidates
 python3 tools/researchlog findings --help      # durable beliefs
 ```
+
+Every canonical file has a verb. That is worth stating because it was not true: `CURRENT.md`
+and the `ENVIRONMENT.md` tables could be read but not written, so the only way to fill them
+was by hand — against the sentence directly above this list.
 
 `tools/researchlog` is zero-dependency stdlib Python and is meant to be copied whole.
 
