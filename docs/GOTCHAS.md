@@ -136,6 +136,18 @@ GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa_uukuguy -o IdentitiesOnly=yes" \
   git ls-remote git@github.com:uukuguy/research-engineering.git main
 ```
 
+**第二个连带后果：`--force-with-lease` 会失败，报 `stale info`。** 它的"lease"就是 `origin/main`
+那个陈旧 ref，所以它比的是一个没人更新过的值。要强制推就得**显式给出期望值**：
+
+```bash
+R=$(GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa_uukuguy -o IdentitiesOnly=yes" \
+      git ls-remote git@github.com:uukuguy/research-engineering.git main | cut -f1)
+git push --force-with-lease="main:$R" git@github.com:uukuguy/research-engineering.git main
+```
+
+这条比裸 `--force` 安全，又比 `--force-with-lease` 能用 —— 它仍然会挡住"远端在我查看之后又变了"
+的情况，只是那个"我查看过"的值来自 `ls-remote` 而不是那个从不更新的 ref。
+
 根治办法是把 `origin` 换成 SSH URL，但那属于改架构师的仓库配置。
 
 ### C3. 跑测试必须 `uv run`，且必须带 `-t tools`
