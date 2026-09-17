@@ -596,6 +596,28 @@ RECOVERY = [
             what="that it inspected the commit the dead session left",
         ),
     ),
+    # §12.16 criterion 2 — understand what the uncommitted diff was for — had no row at all
+    # until this one, and the fixture could not have supported it either: the flag the
+    # "unfinished work" was adding was already implemented at HEAD, so the diff read as
+    # damage rather than as work in progress (see the planter's assertions in
+    # build_recovery_drill.sh). Both halves are now fixed, and the state is worth stating
+    # plainly: this row settles the *absence* half — a session that never opened the
+    # uncommitted change cannot name what is in it — and leaves "did it understand" to a
+    # reader, exactly like the five mention rows above it.
+    #
+    # `CLOSURE_GAIN` is the token because it exists only in the uncommitted edit: the
+    # committed probe has no flag, no coefficient and no argparse import. A session can
+    # reach it by reading the working-tree probe or by diffing it against HEAD; it cannot
+    # reach it from the state, the ledger or the manifest.
+    (
+        "r7",
+        "opened the uncommitted probe change",
+        lambda ctx: mentions(
+            ctx,
+            "CLOSURE_GAIN",
+            what="that it read the probe edit the dead session left uncommitted",
+        ),
+    ),
 ]
 
 

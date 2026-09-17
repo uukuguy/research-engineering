@@ -226,6 +226,12 @@ python3 tests/main/verify_case.py recovery /tmp/x --baseline <建完时的 HEAD>
   **在场不等于理解**，所以每条的证据行自己写明"这只 settle 了缺席那一半"，并把"它是否真懂"
   留给读者。
 
+recovery 的 **r7**（"opened the uncommitted probe change"）是后补的，因为 §12.16 判据 2
+（理解那处 dirty diff 的意图）此前**没有任何一行在判它** —— 而且 fixture 当时也支撑不了它：
+种下的那处改动要加的 flag 早已在 HEAD 里，那处 diff 读起来只是**损坏**。两边都已修
+（fixture 的种植改为断言式并自断言四条；`CLOSURE_GAIN` 是只存在于未提交改动里的那个 token）。
+它判的仍是**缺席那一半**。
+
 conflict 的 `d2` 是一条**有边界的产物判据**，边界必须写下来：它判"**没有把那条 plan 带下去**"
 ——新增证据记录不得拿 proxy 的上升当进展（`d6` 管"没有起 run"）。而判据 2 的通过栏
 （"**明确指出**那条计划建立在 proxy 上，因而不能继续"）**是一句话**，子串不是决定，所以这一行

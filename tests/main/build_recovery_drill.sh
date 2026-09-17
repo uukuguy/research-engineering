@@ -78,9 +78,11 @@ Prints one line per case and writes nothing into the working tree. A probe that 
 output file into the repository changes the code identity between runs, and then two runs
 of the same code look like two different codes — an anomaly the next session has to explain
 before it can trust anything else here.
-"""
 
-import argparse
+The residuals below are this suite's recorded replay values, replayed from the table rather
+than re-derived from raw data. That is what "offline replay" means here: the trace is fixed,
+so the numbers are reproducible and a second run of the same code cannot move them.
+"""
 
 # Two cases track release timing; three are ambiguous. The evidence record cites this
 # breakdown, so the breakdown has to be something the artifact actually shows.
@@ -94,12 +96,8 @@ CASES = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--closed-loop", action="store_true")
-    closed_loop = parser.parse_args().closed_loop
-    arm = "closed-loop " if closed_loop else ""
     for name, residual, tracking in CASES:
-        print(f"{name} {arm}residual {residual:.2f} tracking={tracking}")
+        print(f"{name} residual {residual:.2f} tracking={tracking}")
 
 
 if __name__ == "__main__":
@@ -164,10 +162,13 @@ researchlog record \
   --limitation "There is no actuator on this machine; the question cannot be measured here." >/dev/null
 
 # --- the experiment that was in flight when the session died --------------------------
+# No `--expected-output`: the probe prints and never writes a file (its docstring says so,
+# and that is deliberate — an output file would move the code identity between runs). A
+# manifest declaring an output its command cannot produce is a fixture contradicting
+# itself, and the run would be unable to satisfy its own completion condition.
 researchlog manifest --experiment-id EXP-0142 --status running --quiet \
   --command "$PYTHON probes/replay_probe.py --closed-loop" \
-  --input replay_suite=replay-v3 --input mock_closure=true \
-  --expected-output probes/residual.json
+  --input replay_suite=replay-v3 --input mock_closure=true
 
 # Partial output from the cases the dead session did reach, so that ACTIVE's
 # `completed_cases` is backed by an artifact. Without this the fixture contradicts itself:
@@ -175,9 +176,14 @@ researchlog manifest --experiment-id EXP-0142 --status running --quiet \
 # claim — which turns the case-progress criterion into a test of the fixture. The log stops
 # after case-02 because that is where the session died; that is the evidence for pending.
 mkdir -p research/runs/EXP-0142
+# These are the *closed-loop* arm's numbers, i.e. what the working-tree probe prints with
+# the flag the dead session was adding — not the offline arm's. The two arms print
+# different values, so this log could not have come from the committed code, and that is
+# the point: the run used the unfinished work in the tree. An assertion below re-derives
+# both arms and requires them to differ, and requires this log to match the closed-loop one.
 cat > research/runs/EXP-0142/stdout.log <<'STDOUT'
-case-01 closed-loop residual 0.22 tracking=release_timing
-case-02 closed-loop residual 0.19 tracking=release_timing
+case-01 closed-loop residual 0.09 tracking=release_timing
+case-02 closed-loop residual 0.08 tracking=release_timing
 STDOUT
 
 # Elapsed time is the one input a fixture cannot manufacture: a run killed one second ago
@@ -269,8 +275,16 @@ path.write_text(path.read_text(encoding="utf-8").rstrip() + "\n" + signal, encod
 SIGNAL
 
 # --- commit the state, then leave the tree dirty the way the dead session left it ------
-# The uncommitted probe edit is the diff whose intent the new session has to recover:
-# the session that died had begun adding the closed-loop flag the in-flight run used.
+# The uncommitted probe edit is the diff whose intent the new session has to recover: the
+# session that died had begun adding the closed-loop flag, which is the flag the in-flight
+# run's command used — and the committed probe has no such flag at all.
+#
+# Every substitution below asserts that its pattern is present. `str.replace` returns the
+# string unchanged when it matches nothing, so a chain of silent replaces is a builder that
+# can plant something other than what it believes. It already did: this edit once added a
+# *second* argparse line to a probe that already handled the flag, so the "unfinished work"
+# was a duplicate that crashed with AttributeError — while two of the three patterns in the
+# chain matched nothing and nothing reported it.
 researchlog active --quiet --set 'git.dirty_expected=true'
 git add -A
 git commit -qm "drill: state as the session that died left it"
@@ -278,18 +292,55 @@ git commit -qm "drill: state as the session that died left it"
 "$PYTHON" - <<'PROBE_EDIT'
 import pathlib
 
+
+def sub(text: str, old: str, new: str, what: str) -> str:
+    """Replace once, or stop.
+
+    A miss is a silent no-op, and a fixture that plants something other than what the drill
+    describes is worse than one that fails loudly: the criteria then judge the session on a
+    puzzle that is not there.
+    """
+    if old not in text:
+        raise SystemExit(
+            f"planting the unfinished work: {what} is no longer in the probe template, so "
+            "this edit would change nothing while the drill went on assuming it had"
+        )
+    return text.replace(old, new, 1)
+
+
 path = pathlib.Path("probes/replay_probe.py")
 text = path.read_text(encoding="utf-8")
-text = text.replace(
-    'import json\nimport pathlib',
-    'import argparse\nimport json\nimport pathlib',
-).replace(
-    'RESIDUAL = 0.41',
-    'RESIDUAL = 0.41\nCLOSED_LOOP_RESIDUAL = 0.19',
-).replace(
-    'def main() -> None:',
-    'def main() -> None:\n'
-    '    argparse.ArgumentParser().add_argument("--closed-loop", action="store_true").parse_args()',
+
+text = sub(
+    text,
+    "# Two cases track release timing;",
+    "import argparse\n\n# Two cases track release timing;",
+    "the case-table comment",
+)
+text = sub(
+    text,
+    "CASES = (\n",
+    "# The closure gain is still a placeholder from the last sweep: the loop absorbs part of\n"
+    "# the residual, and this coefficient is what the sweep suggested, not what was measured.\n"
+    "CLOSURE_GAIN = 0.42\n\nCASES = (\n",
+    "the case table",
+)
+text = sub(
+    text,
+    "def main() -> None:\n",
+    "def main() -> None:\n"
+    "    parser = argparse.ArgumentParser()\n"
+    '    parser.add_argument("--closed-loop", action="store_true")\n'
+    "    closed_loop = parser.parse_args().closed_loop\n",
+    "main()",
+)
+text = sub(
+    text,
+    '        print(f"{name} residual {residual:.2f} tracking={tracking}")\n',
+    "        closed = residual * CLOSURE_GAIN if closed_loop else residual\n"
+    '        arm = "closed-loop " if closed_loop else ""\n'
+    '        print(f"{name} {arm}residual {closed:.2f} tracking={tracking}")\n',
+    "the print line",
 )
 path.write_text(text, encoding="utf-8")
 PROBE_EDIT
@@ -325,6 +376,64 @@ if len(set(identity.values())) != 1:
     )
 print(f"  both runs carry the same code identity: {next(iter(identity.values()))[:22]}…")
 CONSISTENCY
+
+echo "--- the planted edit is the one the drill describes ---"
+# Three assertions about the planted state, each here because its failure already happened.
+#
+# A note on what is *not* asserted: a probe that never parses arguments ignores `--closed-loop`
+# and exits 0, so "the committed probe rejects the flag" is not observable from an exit code.
+# The premise is asserted on the source instead — the flag is simply not there.
+"$PYTHON" - <<'PLANT_CHECK'
+import pathlib
+import subprocess
+import sys
+
+committed = subprocess.run(
+    ["git", "show", "HEAD:probes/replay_probe.py"], capture_output=True, text=True, check=True
+).stdout
+
+if "--closed-loop" in committed:
+    raise SystemExit(
+        "the committed probe already implements --closed-loop, so the uncommitted edit adds\n"
+        "nothing and criterion 2 has no derivable intent: the diff can only read as damage\n"
+        "rather than as work in progress. The flag belongs to the unfinished work, not to HEAD."
+    )
+
+offline = subprocess.run(
+    [sys.executable, "probes/replay_probe.py"], capture_output=True, text=True
+)
+closed = subprocess.run(
+    [sys.executable, "probes/replay_probe.py", "--closed-loop"], capture_output=True, text=True
+)
+if offline.returncode != 0 or closed.returncode != 0:
+    raise SystemExit(
+        "the working tree the session is handed does not run, but EXP-0142's stdout is what\n"
+        f"that code printed:\n  offline: {offline.stderr.strip()[-400:]}\n"
+        f"  closed-loop: {closed.stderr.strip()[-400:]}"
+    )
+
+offline_lines = [line for line in offline.stdout.splitlines() if line.strip()]
+closed_lines = [line for line in closed.stdout.splitlines() if line.strip()]
+unlabelled = [line.replace("closed-loop ", "", 1) for line in closed_lines]
+if offline_lines == unlabelled:
+    raise SystemExit(
+        "the two arms print the same numbers and differ only in a label, so the fixture's\n"
+        "central contrast — offline replay against closed-loop replay — is empty. The flag has\n"
+        "to change what is computed, or the drill presents a comparison that is not one."
+    )
+
+expected = pathlib.Path("research/runs/EXP-0142/stdout.log").read_text().splitlines()
+expected = [line for line in expected if line.strip()]
+if expected != closed_lines[: len(expected)]:
+    raise SystemExit(
+        "EXP-0142's stdout is not what the closed-loop arm prints, so the artifact does not\n"
+        f"come from the code in the tree:\n  artifact: {expected}\n  arm:      {closed_lines[:len(expected)]}"
+    )
+print(
+    f"  planted edit: committed probe has no flag; tree runs both arms; "
+    f"{len(offline_lines)} cases, arms differ; EXP-0142 stdout matches the closed-loop arm"
+)
+PLANT_CHECK
 
 echo "--- workflow control ---"
 "$PYTHON" - <<'CHECK'
