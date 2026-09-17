@@ -71,6 +71,27 @@ fixture。
 
 判据本身无歧义时（M1），问题可能只是"测量该取在哪一刻"。此时要改的是**测量点**。
 
+### B6. 判据要判"发生过什么"，不要判"字段里写着什么"
+
+rotation fixture 的 builder 自己在 `next_action` 里种了一句 "Wait for the sweep to finish,
+then read the failing cases." —— 于是**任何读内容的检查都会判通过，哪怕 session 一个字没写**。
+这与"第一版断言是恒真的、永不失败"是同一形状。
+
+正确做法是拿 fixture **建完那一刻的 commit** 做基线（`run_case.sh` 的 `--baseline`），判
+"它相对那一刻变了没有" —— 无论 session 留的是未提交改动还是自己提交了。
+
+### B7. 自断言的 glob 要排除 vendored 目录
+
+`rglob("test_*.py")` 会把 `tools/researchlog/tests/` 一起算进去，于是"session 有没有加测试套件"
+这条断言因为**工具自带的测试**而永远失败。凡是按文件名 glob 的自断言，都要先排掉
+`tools/` / `.claude/` / `.agents/`。
+
+### B8. 台账污染会让判据的结论无法归因
+
+把 transcript 写进 fixture（`> D2.jsonl`）就是**没人埋的异常** —— session 会注意到那个不断增长
+的未跟踪文件并分心，而当时正要判"它为什么不写意图"。**判据红了以后，你分不清是协议的问题还是
+你的垃圾文件的问题**，只能重跑。`run_case.sh` 因此把 transcript 写在 fixture 之外并断言这件事。
+
 ---
 
 ## C. 本机环境
@@ -127,6 +148,12 @@ uv run --python 3.12 python -m unittest discover -t tools -s tools/researchlog/t
 永远改 `skills/`，然后 `python3 tools/install_research_skills.py --self`；`--check` 会 diff
 canonical vs installed，并在漂移时非零退出。
 
+### C7. 新的凭据文件出现时，先 `git check-ignore` 再 `git add -A`
+
+项目本地 `.env` 曾被漏在 `.gitignore` 之外，而提交流程用 `git add -A` —— 下一步就会把密钥提交
+并推上去。新出现任何凭据文件时，**先 `git check-ignore -v <file>`**，别等 `git status` 里那个
+`??` 变成一条已推送的历史。
+
 ### C6. `.gitignore` 的模式必须锚定
 
 用 `/runs/` 而非 `runs/`。未锚定的模式匹配任意深度，会连 `research/runs/**` 一起吞掉 —— 而
@@ -157,6 +184,20 @@ python3 tools/check_workflow_block.py    # exit 1 点名每个未覆盖的交付
 
 一份清单不会注意到机器长大了。它同时**反向**检查：`AGENTS.md` 明文保留可用的
 `systematic-debugging` / `using-git-worktrees` 若被误关，同样 exit 1。
+
+### D4. `pi` 的 `--skill` 要绝对路径，而 `--no-skills` 是它的 workflow block 等价物
+
+三点，**没有一条是等价替换**：
+
+1. `pi` **原生读 `AGENTS.md` 与 `CLAUDE.md`**（`--no-context-files` 的说明即是）。
+2. **不从 `.agents/skills` 自动发现，且 `--skill` 要绝对路径。** 传相对路径时它**静默加载 0 个**
+   项目技能、转而加载用户级的 —— 于是 session 跑在一个不是这个项目的技能集上。**没有报错。**
+3. **不加 `--no-skills`，pi 会加载用户级的 `brainstorming` / `writing-plans` /
+   `test-driven-development` / `project-state`** —— 正是 `AGENTS.md` 声明对本项目机械禁用的那批。
+   Claude 一侧靠 `.claude/settings.json`；**pi 没有项目级等价机制**，所以这个 flag 就是机制。
+
+凭据在项目自己的 `.env` 里，不在 agent 后台环境里。**`pi auth check` 报 `ready` 只表示"配了"，
+不表示"有效"** —— 实测三个 provider 全部 ready、全部 401。
 
 ---
 

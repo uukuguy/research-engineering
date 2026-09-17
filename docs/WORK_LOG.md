@@ -11,6 +11,98 @@
 
 ---
 
+## 2026-09-17（第五轮）— V0 收尾：判据 5 的三次运行，与案例集
+
+### 会话概览
+
+架构师定了目标与优先级：**可用于长时间自主研究 AI 编程**；V0 是路标不是终点，条件合适就推进
+V1/V2；**不要求每一步精准工程级符合**。据此我**撤回**了一版提议（给 V0 状态表加"证据形式"列去
+对齐 3 行）—— 那是账目，不是能力。同轮委托：**一批核心验证案例**，跑在临时项目目录里，由 coding
+agent 完成，有执行指南，可自动验收也可手工执行。
+
+主线是 **A（重跑 D2，判判据 5）**，跑了三次。
+
+### 判据 5 的三次运行：FAIL / FAIL / PASS
+
+| 次 | 条件 | 结果 | 关键证据 |
+|---|---|---|---|
+| 1 | 旧协议文本 | ✗ | `ACTIVE.json` mtime 未动 |
+| 2 | 同上，但 transcript 移到 fixture 外 | ✗ | mtime == builder 那次 commit 的时刻；`git diff HEAD` 为空 |
+| 3 | **router 修好后** | **✓** | `ACTIVE.json` 相对 baseline 变了；写的是**意图**（"Decision: attach/observe"，"Wait for EXP-0200 to exit, then read probes/sweep.json"） |
+
+**第 2 次是第 3 次有意义的原因**：它排除了"是我的台账污染导致的"。两次同结果 → 单变量成立。
+
+### 根因：不是那句话，是路由
+
+第 2 次做了链路追踪：session 读了 AGENTS.md 列的**恰好那 6 个** canonical 文件 + manifest +
+probe，**对任何 reference 的 Read 调用为 0** —— 而 skill **确实加载了**（init 事件里它在 100 个
+skill 中）。所以 `session-continuity.md` 从未进入它的工作路径。
+
+`SKILL.md` 的 router 表里**两行匹配同一状态**，先匹配的那行只说了"先 reconcile"、**不指向任何
+reference**；指向 `session-continuity.md` 的那行在后面。session 走完 reconcile 就停了。
+
+改那一行（`e9044b8`）→ 第 3 次 5/5。
+
+**上一轮那句"它拒绝预写，因为那是 post-hoc 合理化"是错的解读** —— 那是从行为倒推的理由，不是
+它说的。它只是没读到那句话。**措辞一直是对的。**
+
+### 交付：案例集（`c8e4d00`、`ea389f3`）
+
+```
+tests/main/run_case.sh               建 fixture → 驱动 agent → 判据（claude / pi）
+tests/main/verify_case.py            从产物判，三态：PASS / FAIL / UNJUDGED
+tests/main/build_bootstrap_case.sh   M1/M2/M3/M5 的 fixture（新的）
+docs/V0_CASES.md                     执行指南：判据表 + 自动跑法 + 手工跑法
+```
+
+- **两种跑法共用同一套判据** —— 只能用一种方式跑的案例，没法拿自己的 harness 对照。
+- **`UNJUDGED` 是第三种裁决** —— 产物判不了就明说，**绝不静默算通过**。
+- rotation 与 bootstrap 有产物检查器；**recovery / evaluator-conflict 还没有**，
+  `verify_case.py` 对它们 exit 2 并指回判据表（已在指南里列为已知未完成项）。
+
+**判据 5 的检查器判的是"发生过一次写"，不是"字段里写着什么"** —— builder 自己在 fixture 里种了
+"Wait for the sweep to finish"，所以读内容的检查**恒真**。`--baseline` 因此是必需的。
+
+### `pi`：三点实测，没有一条是等价替换
+
+1. 原生读 `AGENTS.md` / `CLAUDE.md`（但**必须 source 项目 `.env`** 才有凭据）。
+2. **`--skill` 要绝对路径** —— 传相对路径时**静默加载 0 个**项目技能、转去加载用户级的 18 个。
+   **没有报错的失败。**
+3. **`--no-skills` 是 pi 这边的 workflow block** —— 不加它，加载的是用户级 `brainstorming` /
+   `writing-plans` / `test-driven-development` / `project-state`，正是 AGENTS.md 声明机械禁用的
+   那批。**pi 没有项目级等价机制。**
+
+另外：**`pi auth check` 报 `ready` 只表示"配了"，不表示"有效"** —— 三个 provider 全 ready、全 401。
+
+### 顺带：`.env` 泄漏风险
+
+架构师把 `MINIMAX_*` 放进项目本地 `.env`，而 `.gitignore` 没覆盖它，`git status` 里是 `?? .env`，
+提交流程用 `git add -A`。已修（`7ff13bb`）。
+
+### 开放项
+
+1. **`recovery` / `evaluator-conflict` 的产物检查器未写** —— 判据在指南里有，检查器没有。
+2. **`pi` 的完整案例没跑过** —— 技能加载那一环已验证，端到端没有。#1 / #22 因此仍未验。
+3. **`bootstrap` 的 fixture 从未被真实 session 跑过** —— builder 自断言通过，端到端没有。
+4. `capability_map` 仍无形状（设计决定）。
+5. 指南里"复现 session A 的 fixture"那份配方**不可复现** —— 它自称造"空项目"却不含研究对象，
+   而 M2/#2 的证据都指向有可跑的 `sim/`。`build_bootstrap_case.sh` 按证据建，不按配方建。
+
+### 下一步
+
+1. 跑一次 `run_case.sh bootstrap claude`（第一次真实运行，会暴露 fixture 与判据的问题）
+2. 跑一次 `run_case.sh rotation pi`（端到端验 pi，同时给 #1/#22 证据）
+3. 补 recovery / evaluator-conflict 的检查器
+
+### 动手前必须知道（本轮新增，已同步进 `GOTCHAS.md`）
+
+13. **判据要判"发生过什么"，不要判"字段里写着什么"**（B6）—— fixture 种好的答案会让检查恒真
+14. **自断言的 glob 要排除 vendored 目录**（B7）—— `rglob("test_*.py")` 会算上工具自带的测试
+15. **台账污染会让判据无法归因**（B8）—— transcript 写进 fixture 是"没人埋的异常"
+16. **`pi` 的调用形状**（D4）与 **凭据文件要先 `git check-ignore`**（C7）
+
+---
+
 ## 2026-09-17（第四轮）— gotcha 从日志里搬出来，研发轨道补上入口
 
 ### 会话概览
