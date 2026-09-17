@@ -167,15 +167,63 @@ class RunCommandTests(CommandTestCase):
         manifest = json.loads((self.run_dir("EXP-smoke-guard") / "manifest.json").read_text())
         self.assertEqual(manifest["status"], "running")
 
-    def test_replace_existing_is_an_explicit_opt_in(self) -> None:
+    def test_replace_existing_flag_is_removed_and_in_flight_is_always_refused(self) -> None:
+        # V1 P6: `--replace-existing` no longer exists. The flag is unknown to argparse,
+        # so passing it exits with code 2 before any tool logic runs. argparse raises
+        # SystemExit directly, so we catch it here rather than going through invoke_raw.
         self.invoke(["manifest", "--experiment-id", "EXP-smoke-replace", "--status", "running"])
 
-        code, envelope = self.invoke(
-            ["run", "--experiment-id", "EXP-smoke-replace", "--replace-existing", "--", "true"]
-        )
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as caught:
+                cli.main(
+                    _with_json([
+                        "run",
+                        "--root",
+                        str(self.root),
+                        "--experiment-id",
+                        "EXP-smoke-replace",
+                        "--replace-existing",
+                        "--",
+                        "true",
+                    ])
+                )
+        self.assertEqual(caught.exception.code, 2)
 
+        # Without the flag, an in-flight manifest is still refused unconditionally.
+        code, envelope = self.invoke(
+            ["run", "--experiment-id", "EXP-smoke-replace", "--", "true"]
+        )
+        self.assertEqual(code, 4, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EXPERIMENT_ALREADY_RUNNING")
+        manifest = json.loads((self.run_dir("EXP-smoke-replace") / "manifest.json").read_text())
+        self.assertEqual(manifest["status"], "running")
+
+    def test_a_finalised_run_can_be_rerun_under_the_same_experiment_id(self) -> None:
+        # V1 P6 counterpart: a finalised manifest is read for context, not for
+        # ownership. Re-invoking `run` with the same id against a finalised record
+        # must proceed and report a fresh child exit code.
+        self.invoke(["manifest", "--experiment-id", "EXP-smoke-rerun", "--status", "completed"])
+
+        code, envelope = self.invoke(
+            ["run", "--experiment-id", "EXP-smoke-rerun", "--", "true"]
+        )
         self.assertEqual(code, 0, envelope)
         self.assertEqual(envelope["payload"]["child_exit_code"], 0)
+
+    def test_a_pending_manifest_is_also_refused(self) -> None:
+        # V1 P6 tightens V0: the in-flight set is {pending, running}, not just
+        # running. A crash between `_write_manifest` and the status flip must not
+        # leave a half-written record open to overwrite. Verify the pending branch.
+        code, _ = self.invoke(
+            ["manifest", "--experiment-id", "EXP-smoke-pending", "--status", "pending"]
+        )
+        self.assertEqual(code, 0)
+
+        code, envelope = self.invoke(
+            ["run", "--experiment-id", "EXP-smoke-pending", "--", "true"]
+        )
+        self.assertEqual(code, 4, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EXPERIMENT_ALREADY_RUNNING")
 
 
 class FindingsCommandTests(CommandTestCase):

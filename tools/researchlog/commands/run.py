@@ -13,8 +13,11 @@ The three cases that are *not* the experiment's result:
   measured, so there is nothing to record.
 * **the run was killed or timed out** — `interrupted`, partial output kept, exit 3.
   Metadata about the session, never a conclusion about a hypothesis.
-* **a manifest already says `running`** — refused unless `--replace-existing`. This is
-  what stops an expensive run from being restarted by an agent that lost its context.
+* **the manifest is still in flight** (`pending` or `running`) — refused unconditionally.
+  This is what stops an expensive run from being restarted by an agent that lost its
+  context. Finalised manifests (`completed` / `interrupted` / `infra_failed` /
+  `env_blocked` / `env_unsupported` / `resource_exceeded` / `invalid`) are always
+  allowed; the previous run is read for context, not for ownership.
 
 The manifest is written before the child exists, so an interrupted run still has an
 identity to reconcile against.
@@ -67,9 +70,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--expected-output", action="append", default=[], metavar="PATH")
     parser.add_argument("--timeout", type=float, default=None, metavar="SECONDS")
-    parser.add_argument(
-        "--replace-existing", action="store_true", help="start even if a manifest says running"
-    )
+    # V1 P6: stale overwrite is forbidden. To rerun a finalised experiment, just
+    # re-invoke `run` with the same `--experiment-id`; the previous manifest is read
+    # for context, not for ownership. `--replace-existing` no longer exists.
     parser.add_argument(
         "--propagate-exit", action="store_true", help="exit with the child's own code"
     )
@@ -90,7 +93,7 @@ def run(args: argparse.Namespace) -> Result:
     experiment_id = args.experiment_id or ids.mint("experiment")
     manifest_path = paths.manifest(experiment_id)
     existing = _load_existing(manifest_path)
-    _refuse_running(existing, experiment_id, args)
+    _refuse_running(existing, experiment_id)
 
     started_at = _now()
     stdout_path = paths.stdout(experiment_id)
@@ -395,17 +398,27 @@ def _spawn_code(exc: OSError) -> int:
     return SHELL_FAILURE
 
 
-def _refuse_running(existing: Record | None, experiment_id: str, args: argparse.Namespace) -> None:
-    if existing is None or args.replace_existing:
+# An experiment is "in flight" while its manifest is not yet finalised. V0 only
+# guarded `running`; V1 (P6) also guards `pending`, because a crash between
+# `_write_manifest` and `_apply_manifest_flags` could otherwise leave a half-written
+# record open to overwrite. Finalised statuses — completed / interrupted /
+# infra_failed / env_blocked / env_unsupported / resource_exceeded / invalid — are
+# always allowed: the previous manifest is consulted for context, not for ownership.
+_IN_FLIGHT_STATUSES = frozenset({"pending", "running"})
+
+
+def _refuse_running(existing: Record | None, experiment_id: str) -> None:
+    if existing is None:
         return
-    if existing.get("status") != "running":
+    if existing.get("status") not in _IN_FLIGHT_STATUSES:
         return
     raise RefusedByPolicy(
         "EXPERIMENT_ALREADY_RUNNING",
-        f"{experiment_id} already has a manifest with status running",
+        f"{experiment_id} already has a manifest with status {existing.get('status')}",
         "inspect it with `researchlog job --experiment-id "
         f"{experiment_id}`; if the process is gone, finalise that run first. "
-        "Pass --replace-existing only to deliberately start a second run",
+        "V1 (P6) forbids `--replace-existing`: re-invoke `run` with the same "
+        "`--experiment-id` only after the previous run is finalised.",
     )
 
 
