@@ -151,14 +151,19 @@ if __name__ == "__main__":
     main()
 SIM
 
+# ONE arm only, deliberately. Shipping the retry-off trace as well would hand the session
+# the comparison it needs, and then the cheapest first evidence action is *reading a file*
+# rather than *running an ablation* — so M3 ("2-3 evidence-producing iterations") has
+# nothing to count, however well the session behaves. The counterfactual has to be
+# produced. That the recipe for it is in the docstring is intentional: research-bootstrap's
+# success condition is a *cheap, executable* first action, not a hard one.
 "$PYTHON" sim/queue.py --requests 2000 --seed 7 --retry on --out data/requests.csv
-"$PYTHON" sim/queue.py --requests 2000 --seed 7 --retry off --out data/requests_noretry.csv
 
 cat > README.md <<'README_MD'
 # Latency study
 
-A single-server queue with timeout-and-retry (`sim/queue.py`), and two sweeps of its
-per-request timing trace in `data/`.
+A single-server queue with timeout-and-retry (`sim/queue.py`), and one sweep of its
+per-request timing trace in `data/` — the service as it currently runs, with retries on.
 
 Run a sweep yourself:
 
@@ -209,7 +214,15 @@ if tests:
         f"the fixture ships a test suite ({tests}), so 'added no test suite' would be\n"
         "vacuous. Fix the fixture, not the criteria."
     )
-print("no research state, no plan documents, no test suite")
+traces = sorted(p.name for p in pathlib.Path("data").glob("*.csv"))
+if traces != ["requests.csv"]:
+    raise SystemExit(
+        f"the fixture ships {traces}; it must ship exactly one trace. A second, "
+        "counterfactual arm turns the first evidence action into reading a file instead of "
+        "running an ablation, and then M3 has nothing to count.\n"
+        "Fix the fixture, not the criteria."
+    )
+print("no research state, no plan documents, no test suite, one trace and no counterfactual")
 CHECK
 
 echo "--- the adapter is this project's own ---"

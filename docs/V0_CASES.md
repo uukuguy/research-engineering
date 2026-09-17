@@ -157,9 +157,16 @@ session 会不会建立 canonical state、会不会**去做 probe 而不是写 p
 tests/main/run_case.sh bootstrap claude
 ```
 
-fixture 里是一个单服务器队列 + 超时重试（`sim/queue.py`），和两份 per-request 的时序
-trace（`data/requests.csv` 开重试、`data/requests_noretry.csv` 关重试）。**没有 `research/`** ——
+fixture 里是一个单服务器队列 + 超时重试（`sim/queue.py`），和**一份** per-request 时序 trace
+（`data/requests.csv`，retry 开着，也就是服务当前的运行方式）。**没有 `research/`** ——
 建立它就是被测的东西。
+
+**为什么只有一份 trace，这是第一版踩出来的。** 第一版把 `requests_noretry.csv`（关重试那臂）
+也给了，结果是：最便宜的"第一个证据动作"变成了**读一个文件**，而不是**跑一次消融** —— 于是
+`research/runs/` 空着、记录全是 `E0` 且 `counts_as_evidence_iteration: false`，**M3 没有任何东西
+可数，无论 session 表现得多好**。让 session 自己跑出对照臂，正是让 M3 有东西可做的改法。
+`sim/queue.py` 的 docstring 里写着 `--retry on|off` —— 这是**故意**留的：`research-bootstrap`
+的成功条件是"**cheap, executable** next action"，不是"难"。
 
 这个 fixture 的因果结构是刻意做成不好归因的：retry 打开时 p99 从 20 ms 抬到 10 s，而
 `backoff_wait` 的均值只有 5 ms。**"时间花在 backoff 上"是错的答案**，正确的是 retry 反馈进了
@@ -279,6 +286,18 @@ CASE_PERMISSION_MODE=default tests/main/run_case.sh rotation claude 900
 卡在某个批准上 → 我们就知道协议到底需要哪个动词，再单独 allow 它。
 
 ---
+
+## 一次只跑一个案例
+
+跑完 `bootstrap` 再起 `pi`，不要同时。**但理由要说准**：`sim/queue.py` 是**离散事件模拟、
+固定 seed**，它的数字**不随 CPU 竞争变化** —— 并发**不会污染数据**。
+
+真正的代价是**注意力**。实测：`bootstrap` 那一次跑了 26 分钟，在读了 `sim/queue.py` 与两份 trace、
+做出实质观察（"两份 trace 到第 1850 行之前逐字节相同，之后分叉"）之后，**转去用 `ps` / `lsof`
+盘查机器上另外 6 个 `claude` PID 有没有碰它的 `research/` 目录**。它测的既然是延迟，看到机器上
+有别的 agent 在跑就想排除干扰 —— 这个念头不难理解，而**同时跑两个案例正是递给它这个念头的**。
+
+一次一个，注意力就没有这个出口。
 
 ## 与 GOTCHAS.md 的关系
 
