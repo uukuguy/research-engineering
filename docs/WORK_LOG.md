@@ -4,6 +4,84 @@
 
 ---
 
+## 2026-09-18 — Block 2 第一批：T3 STATUS.md milestone cache + stale-detection
+
+承接上一轮（P4 capability_map shape proposal）。架构师回"V1 还有一大堆工作没完成"，在
+Block 4/3/5/6 都被 P4/P5 阻塞的前提下，今夜走 Block 2 里**不依赖 P4/P5** 的子项。T3 是首选
+—— STATUS.md writer + reconcile stale-detection，边界清晰，验收 #4 + V1-D4 全 cover。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/status.py`**（新增）
+
+新 verb `status --write PATH`。默认写 `STATUS.md` 到 repo 根。Body 复用 `snapshot._build`
+的同款（git / environment / active / reconcile 摘要），头部加两行 markdown comment：
+
+* `<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->` —— 契约，让未来 reader 别当 source of truth
+* `<!-- last_evidence_modified: <epoch> -->` —— anchor，`reconcile` 解析它来判 staleness
+
+`--write` opt-in；不传 `--write` 时跟 snapshot 一样只读不写。
+`STATUS_NOT_IGNORED` warning 镜像 `SNAPSHOT_NOT_IGNORED` —— STATUS.md 在 root 会 dirty tree，
+提醒加 `.gitignore` 但不拒写。
+`STATUS_PATH_OUTSIDE_ROOT` 拒 root 之外的 `..` 越界。
+
+**`tools/researchlog/commands/__init__.py`**
+
+注册 `status` 到 `from researchlog.commands import (...)` 和 `MODULES` 元组。
+
+**`tools/researchlog/commands/reconcile.py`**
+
+* 模块顶部加 `_LAST_MODIFIED_RE` regex 和 `_STATUS_HEADER` 常量（不走 import `status`，避免
+  `status → snapshot → reconcile` 的循环）。
+* 新 detector `_stale_status` 挂到 `detectors` 元组尾部。
+* `_ledger_latest_mtime` 直接扫 `research/ledger/*.json` 而不是用 `state.Ledger`，让空 ledger
+  也能稳定跑 detector。
+* 三种 failure mode 报 `STATUS_STALE`（warning）：unreadable、缺 `DERIVED SNAPSHOT` 头、缺
+  `last_evidence_modified:` anchor、ledger mtime > cached mtime。
+
+**`tools/researchlog/tests/test_commands.py`**
+
+* `StatusCommandTests`（新）：no-write 不动盘、write 落地 + 头部存在、root 之外路径拒、
+  `STATUS_NOT_IGNORED` 提醒。
+* `ReconcileStaleStatusTests`（新）：无 STATUS.md → 静默、缺头 → 红、缺 anchor → 红、
+  empty ledger 上 fresh cache → 静默、ledger 推进 → 红。
+* 涉及 warning 的断言用 `assertIn(code, (0, 3))` 兼容 V0 的"warning 让 reconcile exit 3"
+  语义。
+
+### 变异验证
+
+把 `_stale_status` 整体替换为 `return []` —— 三个 positive-path stale-detection 测试
+都红，`'STATUS_STALE' not found in []` 准确报告 detector 没工作。回滚后 9 个新测试全过。
+
+### 现在能核验的状态
+
+```
+HEAD 24aa8da · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：T3 ✅ · T1 / T2 / T4 / T5 / T6 ⏳
+167 个 unittest 全绿（158 + 9 新）
+python3 tools/researchlog reconcile --json → exit 0 clean（本仓库无 STATUS.md）
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+22. **status.py → snapshot → reconcile 形成 import 环**。reconcile 自己复制 regex（不
+    import status）打破。代价：regex 改一次两个地方要同步。下一次想引入"共享 strings module"
+    时再抽象。
+23. **V0 reconcile 把 warning 当 exit 3**。新 detector 是 warning 级，新测试用
+    `assertIn(code, (0, 3))` 而不是 `assertEqual(code, 0)`。这是 V0 invariant 的延伸。
+
+### 下一步
+
+* **Block 2 / T2**(sharded ledger partition YYYY-MM)—— 独立可启，零依赖
+* **Block 2 / T5**(productivity telemetry 扩到 §21 KPI 全表)—— 独立可启，零依赖
+* **Block 2 / T6**(record --validate-line)—— record 已有路径，加边界
+* 等架构师回 P4 → T1（capability_map 写路径）
+* 等架构师触发 P5 → Block 3 / Block 4 / Block 5
+
+---
+
 ## 2026-09-18 — Block 1 第六批：P4 capability_map shape proposal
 
 承接上一轮（P2 reproduction 分桶）。本轮只产出一份设计提案文档，**不动 schema**，等
