@@ -383,3 +383,78 @@ p99 730ms vs 关掉 6.4ms），并自查修正了自己两处错误（分解采�
 1. 解 M1 的测量点（bounded bootstrap 或接受"canonical 干净、run 是进行中"的区分）
 2. 解 #1/#22 的环境阻塞
 3. 补 `AGENTS.md` 的两行
+
+---
+
+## 2026-09-17（第二轮）— 把 Claude Code 这条路做好
+
+### 会话概览
+
+架构师定调：**codex 放一放，把 Claude Code 做好**。于是这一轮不碰第二个客户端，
+专查 Claude Code 这条路上**声明与实现不一致**的地方 —— 结果找到一处大的。
+
+### 主线：workflow block 只覆盖了一家，而机器上长出了 70 个
+
+`AGENTS.md` 第 33 行写着"the generic software-delivery workflow skills are **disabled for this
+project mechanically**"，紧接着写明"brainstorming / a written plan / TDD / a review checklist
+的**缺失就是重点**"。而 deny 列表只列了 superpowers 一家。
+
+**实测**：在带项目 settings 的仓库里调用 `gsd-plan-phase` —— **整份 skill 正文加载了，没有任何拒绝**。
+这台机器上有 **65 个 `gsd-*`**，合起来提供的正是写好的 plan、测试生成、review checklist 和
+phase 脚手架。
+
+修法（`7bc632d`、`70ab9f5`）：`skillOverrides` 补 70 条（65 个 gsd + `discuss` / `review-plan` /
+`code-review-changes` / `test` / `frontend-test`）；`permissions.deny` 补 plugin 级的
+`dev-phase-manager`(9) 与 `planning-with-files`。现在覆盖 **80 个交付工作流、116 个名字**。
+
+**两个陷阱，都会产出"看起来对、其实什么都不做"的屏蔽** —— 都是这轮踩出来的：
+
+1. **`permissions.deny` 不支持通配。** `Skill(gsd-*)` 匹配不到任何东西 —— 在只 deny 这个模式的
+   settings 下调用 `gsd-plan-phase`，它照样加载。AGENTS.md 里把 `Skill(superpowers:*)` 当作家族
+   简写来写，读起来像一个可用的通配符，**不是**。
+2. **denied 名字里的 plugin 是版本目录上面那一层，不是 marketplace 目录。** `omc` marketplace 下的
+   plugin 叫 `oh-my-claudecode`，所以 `Skill(omc:autopilot)` 匹配不到任何东西。**这一条是漂移检查器
+   的 warning 列表发现的** —— 正是它被写出来的用途。
+
+第三个发现：**缓存里的 plugin ≠ 可用的 plugin**。检查器一开始把 plugin cache 当成可用集合，于是对着
+`oh-my-claudecode`（`enabledPlugins` 里是 **disabled**）报了 12 条不需要的屏蔽 —— 而**真正的缺口会被
+它挡在后面看不见**。现在先读 `enabledPlugins`。
+
+### 防漂移：`tools/check_workflow_block.py`
+
+一份清单不会注意到机器长大了，所以加了漂移检查（`7bc632d`）。它读**这台机器自己的** skill 清单
+（personal + 已启用 plugin），未覆盖的交付工作流一律 exit 1 点名；并且**反过来**检查：
+`AGENTS.md` 明文保留可用的 `systematic-debugging` / `using-git-worktrees` 若被误关，同样 exit 1。
+
+变异验证两个方向都做了：摘掉一个 plugin skill → exit 1 点名它；摘掉一个 personal skill → exit 1
+点名它；对照组 exit 0。
+
+这不是测试套件，是**配置漂移检查** —— 与 `install_research_skills.py --check` 同一个形状。
+
+### 两件顺手查清、结论是"不用动"的
+
+- **权限摩擦不存在。** 我全程用 `--dangerously-skip-permissions` 跑，所以从没暴露交互式的问题；
+  实测不加该参数跑 `researchlog validate` —— 直接通过。`permissions.defaultMode: "auto"` 加
+  `skipAutoPermissionPrompt` 已经免去逐条批准。**所以没有加 allow 列表** —— 那会是给一个不存在的
+  问题发明修法。
+- **skill frontmatter 干净。** 三个 skill 只有 `name` + `description`，没有 Claude 特有字段写错，
+  副本与 canonical 一致。
+
+### 文档
+
+- **`CLAUDE.md`**（Claude Code 适配文档，Claude 特有的机制正该住这里）新增 "The workflow block"
+  一节：两个机制不可互换、两个陷阱、以及漂移检查的跑法。
+- **`docs/V0_ACCEPTANCE_GUIDE.md`**：#1 / #22 改记为 **⏸ 架构师决定先放一放**，并写明
+  **V0 在 Claude Code 这条路径上是完整的**（其余 19 条全部实测通过）。
+
+### 一处顺带纠正的账面
+
+`#22` 的判据是"交给**另一客户端**"，不是"交给 codex"。这台机器上另有
+`opencode` / `cursor-agent` / `gemini` / `aider` / `crush` 五个 agent CLI —— 所以这条**并不缺验证
+路径**，只是架构师选择先不做。日后要验不必受 codex 限制。
+
+### 下一步
+
+1. `AGENTS.md` 的两处（命令清单缺 `current` / `env declare`；`Skill(superpowers:*)` 的措辞容易
+   被读成通配符）—— 该文件带着架构师的在途改动，等他提交后我来补
+2. 若日后要做第二个客户端：#22 用上面任一 CLI 即可

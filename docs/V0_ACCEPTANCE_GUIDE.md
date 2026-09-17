@@ -72,7 +72,7 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 | **M3** | 连续 2–3 个 evidence-producing iterations | ✅ | session A：块 `RB-001` 内 3 条证据，其中 2 条 `counts_as_evidence_iteration: true`（`belief_delta` refined / overturned） |
 | **M4** | session 被杀后只靠文件恢复 | ✅ | 演练 D1，7/7 |
 | **M5** | 不可行实验判为环境限制，而非科学失败 | ✅ | session A：`ENV-LIM-001..006` 以 `ENV_UNSUPPORTED` 入 `ENVIRONMENT.md`，各带 `verified_by`；6 条里没有一条被写成 `refuted`。**这条此前不可能通过** —— 三张表在 `env declare` 出现之前没有写入路径 |
-| **#1** | Codex 与 Claude Code 都能进入 Research Mode | ❌ | **`ENV_BLOCKED`，不是能力问题**（不变量 3）。三条路径都试过：默认后端 `chatgpt.com` / `api.openai.com` 超时；`aicoding.2233.ai` 可达但凭据 `OPENAI_API_KEY_0011AI` 不在 agent 环境；`openrouter.ai` 可达且 `OPENROUTER_API_KEY` **已设置**，但返回 `401 Unauthorized: User not found`（该 key 对 codex 的 `responses` 端点无效）。`codex exec` 本身可用（`codex-cli 0.153.4`） |
+| **#1** | Codex 与 Claude Code 都能进入 Research Mode | ⏸ **架构师决定先放一放** | Claude Code 一侧已全部实测（见本表其余各行）。Codex 一侧三条路径都试过、全部 `ENV_BLOCKED`：默认后端 `chatgpt.com` / `api.openai.com` 超时；`aicoding.2233.ai` 可达但凭据不在 agent 环境；`openrouter.ai` 可达且 `OPENROUTER_API_KEY` 已设置，但返回 `401 User not found`。`codex exec` 本身可用（`codex-cli 0.153.4`）。**这是环境不可行，不是能力缺口**（不变量 3）。另注：这台机器上还有 `opencode` / `cursor-agent` / `gemini` / `aider` / `crush` 五个 agent CLI，若日后要验这条，不必限定 codex |
 | **#2** | 没有 runnable system 也会自主做 probe | ✅ | session A 自建两支 probe（281 行 + 171 行）。**限定**：严格意义的"没有 runnable system"未被触发（`sim/queue.py` 可跑），判据按指南"由 M1+M3 覆盖"计 |
 | **#5** | 架构师不指定具体算法 | ✅ | session A 的方向只有问题（"尾延迟来自 queue 还是 retry"），未给算法；session 自选精确分解 + 消融对照 |
 | **#8** | 能自行构造至少一种合法 surrogate / harness | ✅ | session A 自建 `HARNESS-001`（`supports_evidence: E2`、`preserves` / `missing` 边界齐全），并明确 ENV-LIM-002"光靠 CSV 不可判定，必须插桩" |
@@ -87,7 +87,7 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 | **#19** | 不依赖 hooks/subagents/MCP/GitHub 也能完成完整 V0 loop | ✅ | **两次实测**。强版本 `--bare`（无 hooks / plugins / MCP / LSP，工具只剩 `Bash/Edit/Read`）：4 条证据且分类全对（含 `env_unsupported` 未变成科学否定）、2 个 commit + checkpoint、`validate` 0、`reconcile` clean、`ACTIVE: blocked` 并把缺口升级给架构师；**限定**：该次 skill 未自动加载。准确版本 `--settings '{"hooks":{}}' --strict-mcp-config`（保留 skill、只摘 hooks/MCP）：`mcp_servers: []`、裸 `ok` 出现 **0** 次（RTK hook 确认未生效）、**skill 已加载**（读了 `git-research-infrastructure.md`）、loop 跑完、`validate` 0、`reconcile` clean |
 | **#20** | `research-status` 能只读生成全局中文 Project Working Model | ✅ | 本轮实测：对 session A 的状态跑 `/research-status`，产出中文 Project Working Model（一行状态 / 块契约 / 三维成熟度 / 系统形状 / 近年实质进展 / Findings / 前沿 / 瓶颈），`reconcile` clean，全程只读 |
 | **#21** | 状态汇报正确区分 Established / Provisional / Refuted / Open 与三维 maturity | ✅ | 同一份报告：Findings 按 **Established(6) / Provisional(无) / Refuted(两个假说) / Open(无)** 分列，并说明"Refuted 是 hypothesis 的归宿，FINDINGS 记的是 belief"；三维成熟度**显式声明不合并为单一百分比**，且 Research Environment Maturity 逐能力列出可测/不可测 |
-| **#22** | status 报告交给另一客户端可快速建立正确认知，执行前仍走 Resume | ❌ | 依赖 #1，被同一环境阻塞。**素材已就绪**：#20 的中文报告可直接投喂（它已含块契约与 resume 所需的全部状态指针） |
+| **#22** | status 报告交给另一客户端可快速建立正确认知，执行前仍走 Resume | ⏸ **同上，随 #1 一起放一放** | 判据说的是"**另一客户端**"而非 codex，所以并不缺验证路径（上表其余五个 CLI 可选）。素材已就绪：#20 的中文报告含 resume 所需的全部状态指针 |
 
 ### 复现 session A 的 fixture（本表里唯一没有脚本化的那次）
 
@@ -108,6 +108,10 @@ python3 tools/install_research_skills.py --target /tmp/v0-research --quiet
 会得到 `templates/templates/research`，`init` 报 `TEMPLATES_ABSENT` —— 而那是 **fixture 的打包错误**，
 不是工具缺陷。第一次 M1 运行就撞上它，session 替我把 fixture 修好了。**fixture 里每个异常都必须
 是刻意埋的**，所以那次重跑了。
+
+**关于 #1 / #22**：它们是**整个矩阵里唯一的两个客户端项**，其余 19 条都已在 Claude Code 上实测通过。
+架构师已决定先把 codex 放一放、把 Claude Code 做好 —— 所以这两条记为**暂缓**，而不是未通过，
+也不是 V0 的缺口。**V0 在 Claude Code 这条路径上是完整的。**
 
 **这张表本身是这一轮的主要产物。** 在它存在之前，"V0 完成没有"这个问题**在仓库里无法回答** ——
 两个演练的结论散落在正文各处，而验收条目在另一张表里只有分组理由。
