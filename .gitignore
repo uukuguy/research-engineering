@@ -26,3 +26,11 @@ research/runs/**/artifacts/
 
 # Scratch snapshots written by `researchlog snapshot --write`.
 research/.derived/
+
+# Secrets. These patterns are deliberately NOT anchored, the opposite of the block
+# above: an unanchored `.env` matches at any depth, which is what a credential file
+# needs, and no tracked file is named `.env`, so there is nothing to swallow.
+# `.env.example` stays tracked -- it carries names, not values.
+.env
+.env.*
+!.env.example
