@@ -53,6 +53,11 @@ def tool_digest(root: pathlib.Path) -> str:
     tool = root / "tools" / "researchlog"
     digest = hashlib.sha256()
     for path in sorted(p for p in tool.rglob("*") if p.is_file()):
+        # Byte-caches are not the tool. Running the tool *creates* `__pycache__`, so
+        # including it makes the guard fire on every session that used the tool normally —
+        # a false defect on the criterion that is supposed to catch the one real case.
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
         digest.update(str(path.relative_to(tool)).encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -220,13 +225,29 @@ def crit_rotation_intent_recorded(ctx: Ctx):
     uncommitted write, and a write it committed itself.
     """
     changed = ctx.git("diff", ctx.baseline, "--stat", "--", "research/ACTIVE.json").strip()
-    if changed:
-        return PASS, f"ACTIVE.json changed since {ctx.baseline[:8]} — the session wrote it"
-    return FAIL, (
-        f"ACTIVE.json is unchanged since the fixture was built ({ctx.baseline[:8]}): the "
-        "session recorded no intent during the wait. The `next_action` text in the file is "
-        "the builder's, not its."
-    )
+    if not changed:
+        return FAIL, (
+            f"ACTIVE.json is unchanged since the fixture was built ({ctx.baseline[:8]}): the "
+            "session recorded no intent during the wait. The `next_action` text in the file "
+            "is the builder's, not its."
+        )
+
+    # Changing is necessary and not sufficient: the criterion is that the intent was
+    # recorded *while waiting*, and closing the run out afterwards also changes the file.
+    # A run that finishes while the session is still alive can be completed rather than
+    # waited on, and then the bookkeeping write looks identical to an intent write.
+    active = ctx.fixture / "research" / "ACTIVE.json"
+    result = ctx.run_dir(EXPERIMENT) / "result.json"
+    if result.exists() and active.exists():
+        if active.stat().st_mtime < result.stat().st_mtime:
+            return PASS, "ACTIVE.json was written before the run completed — recorded while waiting"
+        return UNJUDGED, (
+            "ACTIVE.json changed, but not until after the run completed, so the write is "
+            "bookkeeping rather than a recorded intent. The session outlived the run and "
+            "could finish the loop instead of waiting on it; whether that satisfies this "
+            "criterion is a question about the criterion, not about this run"
+        )
+    return PASS, f"ACTIVE.json changed since {ctx.baseline[:8]} while the run was still in flight"
 
 
 ROTATION = [
