@@ -116,7 +116,11 @@ This repository carries two tracks. `research/` is the state of the research the
 own home:
 
 - **`docs/WORK_LOG.md`** — dated entries, newest first. What was done, what is outstanding,
-  what to do next, and what to know before touching anything. **Start here.**
+  and what to do next. **Start here.**
+- **`docs/GOTCHAS.md`** — the traps that are currently live, kept as **state, not a log**: a
+  fixed trap is deleted rather than annotated. Read it before touching the tool. The log
+  cannot answer "which traps still apply", because a trap does not look stale the way a date
+  does.
 - `docs/V0_ACCEPTANCE_GUIDE.md` — the V0 acceptance criteria, the drill protocols, and their
   measured results. The reference behind the log.
 

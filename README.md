@@ -81,5 +81,17 @@ uv run python -m unittest discover -t tools -s tools/researchlog/tests -v
 
 ## Status
 
-V0. Design baseline: `docs/research-engineering-complete-design-v1.5.docx`.
-Review and revision log: `docs/RESEARCH_ENGINEERING_V1.5_REVIEW.html`.
+**V0**, complete on the Claude Code path: 19 of the 21 acceptance rows have measured
+evidence, the remaining 2 (`#1` / `#22`) are client-matrix rows the architect deferred,
+and nothing is failing. Design baseline:
+`docs/research-engineering-complete-design-v1.5.docx`. Review and revision log:
+`docs/RESEARCH_ENGINEERING_V1.5_REVIEW.html`.
+
+Three files carry the state of the work:
+
+- **`docs/WORK_LOG.md`** — start here. Dated, append-only record of developing this tool:
+  what was done, what is outstanding, what to do next.
+- `docs/V0_ACCEPTANCE_GUIDE.md` — the acceptance criteria, the drill protocols, and their
+  measured results. Holds the V0 status table.
+- `docs/GOTCHAS.md` — the traps that are currently live, kept as **state rather than a
+  log**: a fixed trap is deleted, not annotated.
