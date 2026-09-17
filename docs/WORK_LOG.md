@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-09-18 — Block 3 第一批（续）：S1 body move
+
+承接上一轮（S1 expert-skill 重组）。本轮把上一轮**留作下一轮做**的 reference body 迁移完成——
+3 个 V0 reference 文件 (`evaluation-design.md` / `experiment-review.md` / `retrospective.md`)
+的 body 整体迁入对应 skill 的 SKILL.md，删 V0 reference。
+
+### 这一轮交了什么
+
+* `skills/evaluation-design/SKILL.md` body 从 `references/evaluation-design.md` 迁入，
+  文本基本不动，唯一改 cross-reference 由 `environment-feasibility.md` → `environment-feasibility`
+  （router row 名）
+* `skills/experiment-review/SKILL.md` body 从 `references/experiment-review.md` 迁入，
+  同上 cross-reference 处理
+* `skills/retrospective/SKILL.md` body 从 `references/retrospective.md` 迁入，
+  "Reopening the search space" 段落点名 `research-search` 作为 V1 新加 skill
+* 3 个 V0 reference 文件删除
+* `skills/research-engineering/SKILL.md` router preamble 删除 "next iteration moves the
+  body" 注释（已迁完）
+
+### 验证
+
+* `python3 tools/install_research_skills.py --self --check` 双 client **0 drift**（16 files
+  each —— 19 - 3 个 deleted reference = 16）
+* 184 个 unittest 全绿
+* reconcile / validate exit 0
+
+### 现在能核验的状态
+
+```
+HEAD 524c9ea · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：5/6 ✅（T2/T3/T4/T5/T6） · T1 ⏳ 等 P4
+Block 3：S1 ✅ + body 已迁 · S2 ⏳ 等 P5
+```
+
+### 下一步
+
+Block 3 剩 S2（source-text schema 强制合并 P5）—— 等架构师触发 P5。
+Block 2 / T1 等架构师回 P4。
+
+S1 现在 body 全在自己 SKILL.md 里，router 已经标 bold skill。这条线收口了。
+
+---
+
 ## 2026-09-18 — Block 3 第一批：S1 expert-skill 重组
 
 承接上一轮（T4 env rebaseline）。Block 2 已基本收口（5/6 sub-block，剩 T1 等 P4），架构师
