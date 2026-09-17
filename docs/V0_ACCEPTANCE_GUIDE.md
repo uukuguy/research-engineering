@@ -89,6 +89,26 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 | **#21** | 状态汇报正确区分 Established / Provisional / Refuted / Open 与三维 maturity | ✅ | 同一份报告：Findings 按 **Established(6) / Provisional(无) / Refuted(两个假说) / Open(无)** 分列，并说明"Refuted 是 hypothesis 的归宿，FINDINGS 记的是 belief"；三维成熟度**显式声明不合并为单一百分比**，且 Research Environment Maturity 逐能力列出可测/不可测 |
 | **#22** | status 报告交给另一客户端可快速建立正确认知，执行前仍走 Resume | ❌ | 依赖 #1，被同一环境阻塞。**素材已就绪**：#20 的中文报告可直接投喂（它已含块契约与 resume 所需的全部状态指针） |
 
+### 复现 session A 的 fixture（本表里唯一没有脚本化的那次）
+
+四个演练都有 builder 脚本，因为它们要的是**精确到字节的状态**。session A 要的是一个**空项目**，
+配方比脚本更清楚，所以写在这里而不是再造一个 builder：
+
+```bash
+mkdir -p /tmp/v0-research/tools
+cp -R tools/researchlog /tmp/v0-research/tools/researchlog
+cp -R templates /tmp/v0-research/templates      # 注意：target 的 templates/ 必须不存在
+cp AGENTS.md /tmp/v0-research/
+mkdir -p /tmp/v0-research/.claude && cp .claude/settings.json /tmp/v0-research/.claude/
+python3 tools/install_research_skills.py --target /tmp/v0-research --quiet
+# CLAUDE.md 要写 fixture 自己的（见 build_recovery_drill.sh 里那段注释），不要复制本仓库的
+```
+
+`templates/` 那一行的注释是踩过的坑：先 `mkdir -p templates` 再 `cp -R src/templates templates`
+会得到 `templates/templates/research`，`init` 报 `TEMPLATES_ABSENT` —— 而那是 **fixture 的打包错误**，
+不是工具缺陷。第一次 M1 运行就撞上它，session 替我把 fixture 修好了。**fixture 里每个异常都必须
+是刻意埋的**，所以那次重跑了。
+
 **这张表本身是这一轮的主要产物。** 在它存在之前，"V0 完成没有"这个问题**在仓库里无法回答** ——
 两个演练的结论散落在正文各处，而验收条目在另一张表里只有分组理由。
 
