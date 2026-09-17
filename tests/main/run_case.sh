@@ -207,5 +207,25 @@ if [[ "$COMPLETE" != yes ]]; then
 fi
 
 echo "=== judge ==="
+# What counts as "the transcript" is client-specific, and reading the wrong artifact is how
+# a harness reports on something adjacent to what it judged.
+#
+# claude's `--output-format stream-json` emits every turn, so its stdout *is* the record.
+# pi's stdout in `-p` mode is its final message and nothing else — four kilobytes of summary
+# against a 254 KB session. Six criteria read the transcript for mentions, and on the first
+# pi run three of them failed a session that had said all of it: the words were in the
+# session log and never in the summary. The session log is where pi keeps the full record,
+# and `--session-dir` above is what keeps it inside this run.
+JUDGED_TRANSCRIPT="$TRANSCRIPT"
+if [[ "$CLIENT" == "pi" ]]; then
+  pi_log="$(ls -t "$WORKDIR"/pi-sessions/*.jsonl 2>/dev/null | head -1 || true)"
+  if [[ -n "$pi_log" ]]; then
+    JUDGED_TRANSCRIPT="$pi_log"
+  else
+    echo "warning: pi left no session log — mention criteria will read the summary only" >&2
+  fi
+fi
+echo "judged transcript: $JUDGED_TRANSCRIPT"
+
 "$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" "$CASE" "$FIXTURE" \
-  --baseline "$BASELINE" --tool-hash "$TOOL_HASH" --transcript "$TRANSCRIPT"
+  --baseline "$BASELINE" --tool-hash "$TOOL_HASH" --transcript "$JUDGED_TRANSCRIPT"
