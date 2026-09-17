@@ -367,6 +367,32 @@ V1 明确**不**做(原文 §1.4 / §20.3):
 
 ---
 
+## 附录 A.1:P5 的 sub-decision(已发现待 Architect 二次澄清)
+
+**问题**:附录 A 把 P5 决断措辞为"全部 signal 加 history + scope + expiry"。但 V0 的 `test_constraints.py::SignalTests::test_only_a_constraint_needs_scope_and_expiry` **明确**断言"VETO 永久直到被废止,不需要 scope/expiry"——即 V0 的协议语义是 **CONSTRAINT 才需要 scope/expiry**。
+
+§20.2 L2220 原文是 "ARCHITECT signal history / scope / expiry"——是机制升级的承诺,**不是**对每条 signal 都强制的字段。
+
+**Architect 在 AskUserQuestion 看到的选项**是"全部 signal 都加 history + scope + expiry",可能误读为"机制升级",选了它。但落到代码层,这意味着:
+
+| 信号类型 | V0 协议 | P5 实装(若按"全部")| 张力 |
+|---|---|---|---|
+| CONSTRAINT | scope/expiry 必填 | scope/expiry 必填 | 同 |
+| DECISION | source_text 必填,scope/expiry 无 | scope/expiry 必填 | **新** —— DECISION 何时过期? |
+| VETO | 无 scope/expiry(永久)| scope/expiry 必填 | **新** —— 与"永久直到废止"语义冲突 |
+| IMPLEMENT | 无 | scope/expiry 必填 | **新** —— IMPLEMENT 何时过期? |
+| OBSERVE/SUSPECT/DIRECTION/CHALLENGE | 无 | scope/expiry 必填 | **新** —— observation 何时过期? |
+
+**澄清请求**(Block 1.3 实装前必须 Architect 答):
+
+- **选项 a**:P5 = **机制升级**。`history[]` 字段**可选**加入(空 list 合法);`scope`/`expiry` 仍**仅 CONSTRAINT 必填**(V0 不变)。`history` 是 P5 真正的产出。
+- **选项 b**:P5 = **强制升级**。CONSTRAINT/DECISION/VETO 必须加 scope/expiry(history 可选);其他 5 类 signal 不变。
+- **选项 c**:P5 = **全部强制**(原始 P5 选项的字面解读)。DECISION/VETO/其他 6 类都加 scope/expiry。**意味着 V0 测试要改**(`test_only_a_constraint_needs_scope_and_expiry` 被推翻)。
+
+**现状**:此 sub-decision 阻塞 Block 1.3。其余 7 条 Block 1 sub-block 不受影响。
+
+---
+
 ## 附录 B:与 V0_ACCEPTANCE_GUIDE 的差异
 
 | 维度 | V0_ACCEPTANCE_GUIDE | V1_IMPLEMENTATION_PLAN |
