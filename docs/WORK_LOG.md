@@ -2,6 +2,63 @@
 
 本仓库的**开发记录**。新会话从这里接续：读最新一条即可知道"做到哪、下一步做什么、动手前要注意什么"。
 
+---
+
+## 2026-09-17 — V1 整体实施方案落盘
+
+> **未启动 V1 实现**。本轮只交付一份方案文档供架构师评审。
+
+### 产物（单一文件）
+
+`docs/design/V1_IMPLEMENTATION_PLAN.md` —— V1 实施方案：Autonomous Research Batches。
+
+- 沿用 `V0_ACCEPTANCE_GUIDE.md` 同模板（Day-N must vs V1 complete）
+- 覆盖设计文档 §20.2 全部 26 条"增加项"
+- 9 条 protocol 层决策已收集并落地为决断（P1-P9 见附录 A）
+- 工作分解为 6 个 bounded blocks，每块独立可推进 / 可中断 / 可回滚
+- 9 个 V1 drill 草图（V1-D1..V1-D9）
+- 风险表对位 V0 GOTCHAS（35 条中**会复发**的 7 条）+ V1 独有 6 条
+
+### 决策概览（详见文档附录 A）
+
+| ID | 决断 | 选择 |
+|---|---|---|
+| P1 | session 必须 commit | 强制 commit |
+| P2 | reproduction 分桶 | 分桶 |
+| P3 | idle-while-running | 不决断，列现状与风险 |
+| P4 | capability_map 形状 | Agent 起草，Architect 评审 |
+| P5 | signals 扩展 | 全部 signal 加 history + scope + expiry |
+| P6 | stale overwrite | 禁 `--replace-existing` |
+| P7 | heartbeat 协议 | 强制：所有 run 默认 30s heartbeat |
+| P8 | reject 消息 | 加 message + fix_hint |
+| P9 | worktree 写入 | single-writer |
+
+### 核验
+
+```bash
+git status --short
+# ?? docs/design/                                 # 仅新建目录，无 canonical state 改动
+python3 tools/researchlog reconcile --json | jq .exit_code
+# 0                                              # research/ 轨道干净
+```
+
+### 下一步（架构师评审后）
+
+1. **架构师评审 V1_IMPLEMENTATION_PLAN.md**——尤其是 §2（protocol 决断）、§4（验收清单草案）、§5（6 块分解）
+2. **评审通过后 commit**——本文档与 WORK_LOG 同 commit（`docs:` prefix）
+3. **启动 Block 1**——按 §5 顺序，先把 8 条 protocol 决断落到 `AGENTS.md` + schema 字段
+4. **Block 1.5（P4 capability_map shape）**——这是 Block 1 内第一个产出，会被 Block 2 / Block 3 / Block 4 依赖
+
+### 未触动
+
+- `research/` 轨道（idle，未变）
+- `tools/`（未改）
+- `skills/`（未改）
+- `tests/`（未改）
+- V0_ACCEPTANCE_GUIDE / V0_CASES（未改）
+
+---
+
 条目**带日期且只追加** —— 一条过期的条目看起来就是旧的，不会伪装成现状。这正是它不需要被重新
 生成或校验的原因（而"当前状态快照"需要）。
 
