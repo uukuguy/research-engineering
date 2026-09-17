@@ -4,6 +4,83 @@
 
 ---
 
+## 2026-09-18 — Block 1 第六批：P4 capability_map shape proposal
+
+承接上一轮（P2 reproduction 分桶）。本轮只产出一份设计提案文档，**不动 schema**，等
+架构师评审。Block 1.5 是 P4 的全部范围。
+
+### 这一轮交了什么
+
+**`docs/design/CAPABILITY_MAP_SHAPE_PROPOSAL.md`**（新增，168 行）
+
+提案 9 字段 shape：
+
+* 必填：`id`、`capability`、`status`、`reuse_counter`
+* 可选：`supports_evidence`、`first_used_at`、`last_used_at`、`last_used_by_evidence_id`、`notes`
+
+`reuse_counter` 是 V1 §2.1 P4 唯一点名必含的字段，V1-D7 测试 + V1 complete #2 都钉它。
+`status` 沿 harness / limitation 二分用 `AVAILABLE | LIMITED | UNSUPPORTED`，理由见提案 §6。
+
+### 提案里刻意列了"考虑过但丢弃的字段"
+
+让架构师能直接**反驳**而不必从头读：
+
+* cross-ref 到 limitations / harnesses —— Block 2 / T1 才有的字段，硬外键得等 harness id 稳定
+* category —— 已经被 `available.{compute,simulator,data,external_services}` + `harnesses[]` +
+  `limitations[]` 三层表达
+* 自由 `description` 长文本 —— 鼓励没人读的散文
+* `cost_estimate` —— "成本"是多维（wall clock / token / GPU / 钱 / 机会），pinning 一种会锁死 schema
+
+每个都有理由，架构师不同意可以直接在文档上划。
+
+### 提案结尾三个具体决策点
+
+1. **字段集**：9 字段是不是够。`reuse_counter + id` 是不可谈判的，其余可议。
+2. **状态词汇**：`AVAILABLE | LIMITED | UNSUPPORTED` 三分，还是更细分
+   （`AVAILABLE | DEGRADED | LIMITED | UNSUPPORTED` 等）。
+3. **optional vs required**：现在的"required-only-where-data-is-always-known"
+   取向 vs 更宽的"required 多 null"。
+
+### 为什么提案**不动 schema**
+
+V1 §2.1 P4 原文："Block 1.5 出 shape proposal，经 Architect 一票通过后落
+`environment.schema.json`" —— 出提案是 P4 的全部范围。schema 紧固在评审通过后单独立 commit。
+**forward-compatible 紧固**：当前 `capability_map` 是 `type: array`（无 items 约束），
+空数组在 `items: <object>` 下仍合法 —— V0 任何 instance 不破坏。
+
+### V1-D7 6 断言对照
+
+| 断言 | 提案关 |
+|---|---|
+| `capability_map shape 通过 schema` | ✅ items 改 typed object |
+| `≥3 entries 写入` | 由 T1（Block 2）写路径负责，本提案不写 |
+| `reuse_counter 字段存在` | ✅ required field |
+| `harness declare 合法` | 不在本提案；harnesses[] 已合法 |
+| `env rebaseline 触发 fingerprint 变` | 不在本提案；Block 2 / T4 |
+| `changed` 谓词不再永远 `UNRESOLVED` | 不在本提案；Block 2 / T4 |
+
+**提案直接关 2 条**,其余 4 条 unblock。
+
+### 现在能核验的状态
+
+```
+HEAD d0b3ea0 · 工作树干净
+Block 1 进度：1.1 P1 ✅ · 1.2 P2 ✅ · 1.3 P5 sub-decision ✅ · 1.4 P6 ✅ · 1.5 P4 提案 ✅ · 1.6 P7 ✅ · 1.7 P8 ✅ · 1.8 P9 ✅
+158 个 unittest 全绿
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+**Block 1 协议层 8 个 sub-block 现在只剩 P5（架构师触发）。** 所有不依赖 P5 的都落完了。
+
+### 下一步
+
+等架构师回提案 (d0b3ea0)。如果架构师要扩范围：
+* 加 c/树/agent-sdk 调研 → 单独立项，本会话不主动开
+* 启动 Block 2（Tool 入场费）→ 等架构师触发，因为 T1 / T4 依赖 P4 schema
+
+---
+
 ## 2026-09-18 — Block 1 第五批：P2 reproduction 分桶
 
 承接上一轮（P7 run heartbeat）。本轮做 P2——`record` 自带 `iteration_kind`，`reproduction`
