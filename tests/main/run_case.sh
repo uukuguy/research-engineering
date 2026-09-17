@@ -80,8 +80,34 @@ esac
 # different binary, and pretending otherwise is what #22 exists to find out.
 case "$CLIENT" in
   claude)
-    AGENT=(claude -p "$PROMPT" --dangerously-skip-permissions
-           --output-format stream-json --verbose)
+    # `--dangerously-skip-permissions` is load-bearing today, and that is a defect in the
+    # harness rather than a requirement of the case. The fixture copies the project's
+    # `.claude/settings.json`, which carries `permissions.deny` and `skillOverrides` but no
+    # `defaultMode` and no `allow` list — so headless, every tool call would wait for an
+    # approval nobody is there to give.
+    #
+    # Two reasons to want it gone, and the second is the stronger one:
+    #
+    #   Security: the agent runs with every permission bypassed. The exposure is the
+    #   developer's own machine and an in-repo fixture, not untrusted input — but it is a
+    #   real bypass and a sandbox would be the honest place for it.
+    #
+    #   Validity: a case that only completes because permissions were bypassed does not
+    #   tell us what happens in the architect's own session, which is permissioned. The
+    #   acceptance criterion is that the protocol works without a human present; a harness
+    #   that removes the permission system is testing a different thing.
+    #
+    # Set CASE_PERMISSION_MODE=default to run without the flag. That run is the experiment:
+    # if it completes, the flag can go; if it stalls at an approval, we learn exactly which
+    # verb the protocol needs and can allow-list that one.
+    PERMISSION_MODE="${CASE_PERMISSION_MODE:-bypass}"
+    if [[ "$PERMISSION_MODE" == "bypass" ]]; then
+      AGENT=(claude -p "$PROMPT" --dangerously-skip-permissions
+             --output-format stream-json --verbose)
+    else
+      AGENT=(claude -p "$PROMPT" --output-format stream-json --verbose)
+    fi
+    echo "permission mode: $PERMISSION_MODE (CASE_PERMISSION_MODE)" >&2
     ;;
   pi)
     # Three things about pi, each checked rather than assumed:

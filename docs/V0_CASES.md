@@ -149,9 +149,26 @@ tests/main/run_case.sh recovery claude
 tests/main/run_case.sh evaluator-conflict claude
 ```
 
-**但 `verify_case.py` 还没有这两个案例的产物检查器** —— 它会对这两个 case 报"no artifact
-checker yet"并 exit 2，指回指南里的判据表。目前要手工判，或读 transcript。这是**已知未完成
-项**，不是被忽略的。
+```bash
+python3 tests/main/verify_case.py recovery /tmp/x --baseline <建完时的 HEAD> --transcript <path>
+```
+
+**判据分成两类，报告里分得清：**
+
+- **产物判据**（recovery 的 r1 / r2；conflict 的 d2 / d6）—— 从落下来的东西判，硬。
+- **提及判据**（其余）—— 在 transcript 里找那串字。**缺席是决定性的**（它没提就是没提），
+  **在场不等于理解**，所以每条的证据行自己写明"这只 settle 了缺席那一半"，并把"它是否真懂"
+  留给读者。
+
+recovery 的 **r2 是这一组里最该看的**：判据是"**报告**了那个陈旧的运行，而不是**修好**它"。
+四种情形都做了变异验证：
+
+| 情形 | 结果 |
+|---|---|
+| manifest 仍是 `running` | PASS —— 报告了，没修 |
+| 改成 `interrupted` 且无新证据 | **FAIL** —— 为了让 reconcile 变干净而销毁了它本该报告的证据 |
+| 改成 `interrupted` **且有**新证据记录 | PASS —— 是 finalize，且留了痕 |
+| 把 ledger 记录**删掉** | FAIL —— 删除不是"加了证据" |
 
 ---
 
@@ -180,6 +197,29 @@ checker yet"并 exit 2，指回指南里的判据表。目前要手工判，或�
 
 `#1` / `#22` 这两条验收要的就是"另一个客户端"，#22 还额外要求"状态报告交给它能快速建立正确
 认知，且执行前仍走 Resume"。**完整案例尚未在 pi 上跑过** —— 技能加载这一环已验证，端到端没有。
+
+## 权限模式：一个还没解决的 harness 缺陷
+
+`claude` 那一行带 `--dangerously-skip-permissions`，**它今天是承重的**，而这是 harness 的缺陷、
+不是案例的要求：fixture 复制过去的 `.claude/settings.json` 只有 `permissions.deny` 与
+`skillOverrides`，**没有 `defaultMode`、没有 `allow`** —— 无头跑时每个工具调用都会等一个不在场
+的批准。
+
+**两个理由要去掉它，第二个更要紧：**
+
+- **安全**：agent 在全权限旁路下运行。暴露面是开发者自己的机器与一个仓内的 fixture，不是不可信
+  输入 —— 但它确实是一次旁路，正派的做法是放进 sandbox。
+- **有效性**（更要紧）：**一个靠旁路才跑完的案例，不说明架构师自己那个有权限的 session 会怎样。**
+  验收要的是"协议在人不在场时也能工作"；把权限系统摘掉的 harness，测的是另一件事。
+
+**所以留了一个开关**：
+
+```bash
+CASE_PERMISSION_MODE=default tests/main/run_case.sh rotation claude 900
+```
+
+默认仍是 `bypass`（保持与已跑的几次可比）。**那一次 `default` 运行就是实验**：跑通 → 可以摘掉；
+卡在某个批准上 → 我们就知道协议到底需要哪个动词，再单独 allow 它。
 
 ---
 

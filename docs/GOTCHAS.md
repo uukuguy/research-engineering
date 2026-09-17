@@ -80,6 +80,15 @@ then read the failing cases." —— 于是**任何读内容的检查都会判�
 正确做法是拿 fixture **建完那一刻的 commit** 做基线（`run_case.sh` 的 `--baseline`），判
 "它相对那一刻变了没有" —— 无论 session 留的是未提交改动还是自己提交了。
 
+### B9. `git diff` 看不见未跟踪文件，而"新增"几乎总是未跟踪的
+
+同一个检查器里踩了两次：`git diff <baseline> -- research/ledger` 对**新建**的证据记录**什么都不
+报**。改用 `git status --porcelain`（`??` 即未跟踪）。
+
+**但还有第二半**：`--porcelain` 的输出里**删除**也是变化（` D`），所以"有任何变化"不等于"加了
+东西" —— 把删除当成新增，会让一个**删掉 ledger** 的 session 读起来像是一个**追加**了证据的。
+要按状态码筛：只有含 `?` 或 `A` 的才算新增。
+
 ### B7. 自断言的 glob 要排除 vendored 目录
 
 `rglob("test_*.py")` 会把 `tools/researchlog/tests/` 一起算进去，于是"session 有没有加测试套件"
