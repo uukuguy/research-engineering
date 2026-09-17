@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-09-18 — Block 2 第三批：T6 record --validate-line
+
+承接上一轮（T2 ledger partition YYYY-MM）。本轮做 T6——新增 `--validate-line` flag，
+让 record 跑 schema / constraint / derive pass 但**不写 ledger / 不 commit / 不 claim id**。
+这是 V1 §20.2 §15 parallel writer guard 的实装。一次提交，两轮变异验证。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/record.py`**
+
+* 新 flag `--validate-line` —— action=store_true
+* `run()` 顶部 try/except StateInvalid 包 `_build` + `_inspect`——`--validate-line`
+  时 catch 后转成 Result（带 findings + exit code），非 validate-line 时 re-raise
+* validate-line 早返回：payload `validated: True, wrote: False, evidence_id: None,
+  findings: [...]`；errors 时 exit_code 设 EXIT_STATE_INVALID（2）
+* `document` 加 `dict[str, Any] | None = None` 初始化 + 后续 assert 提示契约，
+  让 pyright 与人类 reader 都看清"validate-line return 之后 document 必有值"
+
+**为什么 try/except 要包 `_build`** —— `_build` 内部会 raise StateInvalid（`EXPERIMENT_FLAG_CONFLICT` /
+`ARTIFACT_ROLE_WITHOUT_ARTIFACT` / `EVIDENCE_FILE_UNREADABLE` / `EVIDENCE_SOURCE_MALFORMED` /
+`EVIDENCE_SOURCE_NOT_OBJECT` 五个拒绝站点）。如果 try 只到 `_inspect`，这五个都绕过
+validate-line，崩溃验证器。
+
+**`tools/researchlog/tests/test_commands.py::RecordValidateLineTests`**（新）
+
+* `test_validate_line_writes_nothing_to_disk` —— `tree()` 是 content-hash，任意新增
+  文件让断言失败
+* `test_validate_line_does_not_make_a_git_commit` —— `git rev-list --count HEAD` before/after
+  必须相等
+* `test_validate_line_surfaces_rejections_without_writing` —— `EXPERIMENT_FLAG_CONFLICT`
+  是 `_build` 内部 raise，验证 catch 在 `run` 里转成 Result
+* `test_validate_line_reports_a_clean_run_via_findings` —— payload `findings` 永远是 list
+
+### 变异验证
+
+1. **validate-line 早返回绕开** (`if args.validate_line: pass`) —— reject 测试 fail
+   `TOOL_INTERNAL / AssertionError`，no-commit 测试 fail（commit 真的发生）
+2. **try/except 删掉** —— `--no-experiment --experiment-id` 组合在 `_build` raise 时
+   `payload` 没构建，`envelope["payload"]["wrote"]` 抛 `KeyError`
+
+### 现在能核验的状态
+
+```
+HEAD d9fbcd6 · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：T2 ✅ · T3 ✅ · T6 ✅ · T1 / T4 / T5 ⏳
+174 个 unittest 全绿（170 + 4 新）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+27. **`--validate-line` 必须 catch `_build` 内部 raise**，不能只 catch `_inspect` 之后的。
+    五个 reject 站点是 `_build` 路径上的，try 范围是契约的一部分。
+28. **validate-line 的 exit code 是显式设的**。warnings-only exit 0，errors exit 2。
+    不显式设的话 warning 会被 `EXIT_FINDINGS_PRESENT`（3）带跑，caller 拿 exit code 判定会误判。
+
+### 下一步
+
+Block 2 剩：
+* **T5 productivity telemetry** —— 把 max_tokens only 扩到 §21 KPI 全表
+* 等架构师回 P4 → T1
+* 等架构师触发 P5 → Block 3 / 4 / 5
+
+---
+
 ## 2026-09-18 — Block 2 第二批：T2 ledger partition YYYY-MM
 
 承接上一轮（T3 STATUS.md milestone cache）。本轮做 T2——`research/ledger/YYYY-MM/EV-*.json`
