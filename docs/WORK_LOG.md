@@ -4,6 +4,92 @@
 
 ---
 
+## 2026-09-18 — Block 2 第二批：T2 ledger partition YYYY-MM
+
+承接上一轮（T3 STATUS.md milestone cache）。本轮做 T2——`research/ledger/YYYY-MM/EV-*.json`
+分区。**V1 方案 §2.2 T2 写"partition migration 已在 `state.py::_load_shards`"——这是方案
+作者的理解错位**：V0 `_load_shards` 用 `glob("*.json")`（flat），不是 partition。**T2 的真正
+实装**是改 record 写路径到 `evidence_in_partition` + 改 _load_shards 到 `rglob` + 老 flat 文件
+继续读。一次提交，两轮变异验证。
+
+### 这一轮交了什么
+
+**`tools/researchlog/repo.py`**
+
+* 新 method `ResearchPaths.evidence_in_partition(evidence_id)` → `ledger/YYYY-MM/EV-*.json`
+* 新 helper `_evidence_month(evidence_id)` 解析 id 里的 `YYYYMMDDTHHMMSSZ` 戳，返 `YYYY-MM`；
+  malformed id（手写 fixture）回落到字面量 `unpartitioned`，永不与真月份混淆
+* 新 regex `_EVIDENCE_MONTH_RE` 锚定 `^[A-Z]+-(\d{4})(\d{2})\d{2}T\d{2}\d{2}\d{2}Z-`
+
+**`tools/researchlog/commands/record.py`**
+
+`ids.claim_new("evidence", paths.evidence_in_partition)` 一行改 —— id 在 mint 时已经定下
+时间戳，partition 完全是 id 推导，无新字段。
+
+**`tools/researchlog/state.py`**
+
+`_load_shards` 改 `rglob("*.json")` —— partition + flat 同时读。不递归的话单个新写就
+与 reconcile / validate 失联。
+
+**`tools/researchlog/commands/compare.py` + `validate.py` + `reconcile.py`**
+
+三个 reader 都加 partition-first + flat-fallback 链：
+* `compare._load` partition → flat → `EVIDENCE_NOT_FOUND`
+* `validate` 检查"memory 有 record 但 file absent" 时同样 partition-first
+* `_ledger_latest_mtime` 用 `rglob`，否则 partition 写完 reconcile 的 `STATUS_STALE` 不触发
+
+**`tests/test_commands.py::LedgerPartitionTests`**（新）
+
+* `test_record_writes_the_shard_under_a_month_subdirectory` —— 写路径 contract：
+  partition 存在 + flat **不**被创建
+* `test_reconcile_walks_partitioned_and_flat_shards` —— 读路径 contract：
+  `evidence_records == 2`，partition + flat 都数上（**这一条是变异**的核心 catcher）
+* `test_unpartitioned_fallback_for_hand_written_ids` —— 手写 fixture 走 `unpartitioned`
+
+**`tests/test_integration.py`**
+
+predicate 端到端测试直接读 ledger 文件，按 id 推 partition。
+
+### 变异验证
+
+1. **`_load_shards` 退回 `glob`**：partition 写入的 evidence 漏读 → `evidence_records == 1`
+   不等于 2，红。
+2. **`_evidence_month` 永远返 `"unpartitioned"`**：partition 字符串不再是 `YYYY-MM`，
+   测试 `assertNotEqual(partition, "unpartitioned")` 红。
+
+### 现在能核验的状态
+
+```
+HEAD 4a0db1d · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：T2 ✅ · T3 ✅ · T1 / T4 / T5 / T6 ⏳
+170 个 unittest 全绿（167 + 3 新）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+24. **T2 partition 决策不是 0 成本**。V1 方案说"已在 _load_shards"是错的——V0 是 flat。
+    真实装需要改 record 写路径 + state loader + compare / validate / reconcile 的 reader
+    都要走 partition-first。**`compare` 和 `validate` 也会因为 flat 路径找不到新 evidence 而
+    报 NOT_FOUND / SHARD_MISSING**，必须一起改。
+25. **partition 字符串从 evidence_id 推导**，不存 wall clock。测试用 `_evidence_month`
+    而不是 `_now()` 算 partition，避免 wall clock 跨月时 fixture 漂移。
+26. **`unpartitioned` 是 fallback 不是 placeholder**。手写 fixture（V0 时代遗留、第三方
+    import）走这条路径；reconcile 必须能 load 它，否则 schema migration 期间 evidence
+    "静默丢"（V1 §6.2 风险）。
+
+### 下一步
+
+Block 2 剩：
+* **T5 productivity telemetry** —— 把 max_tokens only 扩到 §21 KPI 全表
+* **T6 record --validate-line** —— record 边界，单条 record 合法 vs run evidence 足够分开
+* 等架构师回 P4 → T1
+* 等架构师触发 P5 → Block 3 / 4 / 5
+
+---
+
 ## 2026-09-18 — Block 2 第一批：T3 STATUS.md milestone cache + stale-detection
 
 承接上一轮（P4 capability_map shape proposal）。架构师回"V1 还有一大堆工作没完成"，在
