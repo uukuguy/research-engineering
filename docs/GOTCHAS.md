@@ -157,6 +157,24 @@ uv run --python 3.12 python -m unittest discover -t tools -s tools/researchlog/t
 永远改 `skills/`，然后 `python3 tools/install_research_skills.py --self`；`--check` 会 diff
 canonical vs installed，并在漂移时非零退出。
 
+### C8. 判一个**别人正在跑**的任务，用 PID + artifact 双信号，别用一次 `ps`
+
+踩过：两次 `ps | grep` 返回空（模式太窄、外加我自己 `head` 截断），据此宣布"两个运行都已结束"，
+并**判了一个还在飞的 fixture**。而当时**第二个信号就在手上** —— 我打印过 transcript 的大小，却
+没有回头再测一次；它 7 分钟里从 708 KB 长到 2.89 MB。
+
+这正是 CLAUDE.md §3 那条 HARD RULE 说的场景，而我用了单一信号。**观察别人的长任务时**同样适用：
+
+```bash
+# 进程存亡
+ps -eo pid,etime,command | grep -F "<fixture 路径或 run_case>"     # 按路径找，别按进程名猜
+# artifact 是否在动 —— 这才是决定性的那个
+f=<transcript 或日志>; a=$(wc -c <"$f"); sleep 15; b=$(wc -c <"$f"); echo "$a -> $b"
+```
+
+**正在长的 artifact 就是"还活着"**，比任何一次 `ps` 都可靠。反过来，`ps` 空**不构成**结论 ——
+它可能只是被过滤、被截断，或模式写窄了。
+
 ### C7. 新的凭据文件出现时，先 `git check-ignore` 再 `git add -A`
 
 项目本地 `.env` 曾被漏在 `.gitignore` 之外，而提交流程用 `git add -A` —— 下一步就会把密钥提交
