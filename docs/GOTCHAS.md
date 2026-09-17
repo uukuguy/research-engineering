@@ -131,6 +131,30 @@ the window"、顺带写了 "I did not adopt a competing reading" 的 session 被
 tests/main/check_negative_control.sh    # 四案例 + stub，6 秒，零模型成本；每案例必须红
 ```
 
+### B13. 种植式 fixture 里，builder 的 `.replace()` 链会**静默失败**
+
+踩过（由 `recovery` 的**真实运行**发现，三条我都独立复核过）：`build_recovery_drill.sh` 用三个
+`.replace()` 链给 probe 种一处"未完成的工作"。**其中两个 pattern 在当前模板里根本不存在** ——
+`.replace()` 不报错、原样返回。于是作者以为种下了"死掉的 session 正在加 `--closed-loop`"，
+实际种下的是一行**会崩的重复代码**（HEAD 早就完整支持那个 flag；
+`ArgumentParser().add_argument()` 返回的是 Action，再 `.parse_args()` 就是 AttributeError）。
+
+**后果不是"fixture 脏了"，是判据的前提没了**：D1 判据 2 要判"理解那处 dirty diff 的意图"，而那个
+意图**推不出来** —— 那处 diff 读起来只是**损坏**，不是在办的事。
+
+**规则**：种植式 fixture 里，任何"改工作区造状态"的字符串替换都必须带断言 —— **pattern 必须匹配到**
+（匹配不到就失败），**且改完的状态必须能满足它要支撑的那条判据**。三条具体的：
+
+1. 种下的 diff **只有一处**，且**工作树版本必须能跑**（fixture 自己的 stdout 就是它跑出来的）；
+2. 凡有对照臂，**两臂输出必须有实质差异** —— 否则"对照"只是换了个打印前缀；
+3. manifest 声明的 `expected_outputs` 必须与 probe 实际写什么**一致** —— 否则那次运行在构造上
+   就无法满足自己的完成条件。
+
+**同族变体（同一轮）**：那个 probe 的五个 residual 是**源码常量**，不读任何 trace。"演练的探测桩
+可以造假"与"它必须**自洽**"是两件事 —— 前者是省事，后者是判据的前提。一个不自洽的探测桩会让
+session 顺着链走到最上游，然后（正确地）宣布"没有任何主张有计算支撑"，而**判据分不清这是在处理
+埋下的谜题，还是发现了作者的 bug**（见 B8）。
+
 ### B10. "还没发生"不是"不可能发生"
 
 踩过：看到 `research/runs/` 是空的、记录全是 `E0`，就下结论"这个 fixture 让 M3 **不可能**发生"——
