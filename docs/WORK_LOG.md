@@ -287,3 +287,99 @@ AGENTS.md 写着 "**Never hand-edit that JSON — use the tool**"。没有动词
    ```
    本轮就是这样把 7 个 commit 推上去的。**根治办法是把 `origin` 换成 SSH URL**（`gh` 的配置
    本来就是 ssh 协议），但那属于改架构师的仓库配置，留给他定。
+
+---
+
+## 2026-09-17 — 按设计要求跑完 V0 验收
+
+### 会话概览
+
+架构师定目标："按设计要求完成 V0，research-engineering 是 skills 开发，不是上线系统的功能发布，
+不要过重的工程测试"。做法因此不是补测试，而是**每条验收跑一次、留一份可查产物**。
+
+先立 **V0 状态表**（指南新增一节）—— 在此之前"V0 完成没有"这个问题在仓库里**无法回答**：两张旧表
+回答的是"为什么这样分组"，不是"哪条验过了"。把分组理由当状态表读，会把没验过的条目当成已完成。
+这张表本身就是本轮的主要产物。
+
+### 结果：20/22 有实测证据，2 条环境阻塞
+
+| 组 | 结果 |
+|---|---|
+| Day-1 must | M2 / M3 / M4 / M5 ✅；M1 见下 |
+| V0 complete | #2 #5 #8 #10 #11 #12 #13 #14 #15 #16 #18 #19 #20 #21 ✅ |
+| 阻塞 | **#1 / #22 = `ENV_BLOCKED`**（不是失败） |
+
+### 一次 session 覆盖六条（session A）
+
+在**全新空项目**（无 `research/`）上给一个高层方向，不给算法："尾延迟来自 queue 还是 retry？"
+一次运行拿下 M2 / M3 / M5 / #2 / #5 / #8：
+
+- **M2**：它**完全没有碰** fixture 的 `sim/` 与 `data/`，改动全在两支自建 probe（281 + 171 行）
+  与研究状态；无 plan 文档、无新增测试套件
+- **M3**：块 `RB-001` 内 3 条证据，2 条 `counts_as_evidence_iteration: true`
+- **M5**：`ENV-LIM-001..006` 以 `ENV_UNSUPPORTED` 入 `ENVIRONMENT.md`，各带 `verified_by` ——
+  **6 条里没有一条被写成 `refuted`**。这条此前**不可能通过**：三张表在 `env declare` 出现之前
+  没有写入路径
+- **#8**：自建 `HARNESS-001`，带 `supports_evidence` 与 `preserves` / `missing` 边界
+
+它的科学结论也值得记：**用消融实验推翻了按毫秒归因的答案** —— `backoff_wait` 是内生变量，
+只有 `queue_wait` 已超阈值才会被赋值，所以"方差份额"不等于"因果贡献"；正确的归因是反事实。
+它还**证明了 fixture 里那句 "Stable by construction" 是错的**（util 0.8、retry 打开时队列真的跑飞，
+p99 730ms vs 关掉 6.4ms），并自查修正了自己两处错误（分解采样点取错、provenance 误判）。
+
+### CLI 层一次跑掉四条
+
+- **#12**：预算 2、记满 3 条 → 块**运行期间**报 `BLOCK_ITERATION_BUDGET_EXCEEDED`（用派生 count）
+- **#15**：12 个并发 `record` → 12 条记录、12 个互异 ID、文件名与 ID 全等
+- **#16**：`code_state.commit` 是**工作区** commit，不等于加入该记录的 commit
+- **#18**：`Evidence:` trailer 给出 commit→EV，`code_state.commit` 给出 EV→commit；构造违规后
+  `SELF_REFERENTIAL_COMMIT` 准确报出（这条检查是真的接线的）
+
+### #19 跑了两次，第二次才是准确条件
+
+第一次 `--bare`：无 hooks / plugins / MCP / LSP，工具只剩 `Bash/Edit/Read` —— loop 跑完了，
+4 条证据分类全对。**但它把 skill 发现也关掉了**，而那不在 #19 列的（hooks/subagents/MCP/GitHub）
+之内，所以那次契约只来自 AGENTS.md。
+
+第二次改用 `--settings '{"hooks":{}}' --strict-mcp-config --mcp-config '{"mcpServers":{}}'`：
+保留 skill、只摘 hooks 与 MCP。判据是**可观测**的 —— `mcp_servers: []`，且 RTK hook 留下的
+裸 `ok` 出现 **0** 次；skill 确实加载了（读了 `git-research-infrastructure.md`）。loop 跑完，
+`validate` 0、`reconcile` clean。
+
+### #1 / #22 的三条路径都试过
+
+| 路径 | 结果 |
+|---|---|
+| codex 默认后端 | `chatgpt.com` / `api.openai.com` **超时** |
+| `aicoding.2233.ai` | 可达，但凭据 `OPENAI_API_KEY_0011AI` **不在 agent 环境里** |
+| `openrouter.ai` | 可达，`OPENROUTER_API_KEY` **已设置**，但返回 `401 Unauthorized: User not found` |
+
+`codex exec` 本身可用（`codex-cli 0.153.4`）。所以这是**环境不可行，不是能力缺口**（不变量 3）——
+不变量存在的意义正是把这两者分开，所以这里记 `ENV_BLOCKED` 而不是"未通过"。
+
+### 两处我自己犯的错，都留了痕
+
+1. **fixture 打包错误**：M1 第一次跑时我 `mkdir -p templates` 之后又 `cp -R src/templates templates`，
+   于是变成 `templates/templates/research`，session 拿到 `TEMPLATES_ABSENT` 并**替我把 fixture 修好了**
+   （它自己的 commit `fix: repair vendored template path...`）。这是"没人埋的异常"，所以 M1 重跑。
+   drill builder 没有这个问题 —— 它们不预先建 `templates/`。
+2. **commit message 里的反引号**：`git commit -m "…\`code_state\`…"` 会把反引号当命令替换执行，
+   词从消息里**静默消失**（提交成功、消息残缺、不报错）。丢过 `code_state` 与
+   `SELF_REFERENTIAL_COMMIT` 两个词。已记入 gotcha 记忆：**永远写文件再 `-F`**。
+
+### 开放项
+
+- **M1**：bootstrap 本身已验证（canonical 八件齐备、plan 文档 0），但那次 session 建完状态后
+  继续做了一轮远超范围的研究（在查本机 `perf_counter` 的精度），留下 3 个 `ORPHAN_RUN`，
+  于是 `reconcile` 不干净。**判据本身无歧义，是测量点的问题** —— M1 测的是 bootstrap，
+  测量该取在 bootstrap 完成那一刻。
+- **#1 / #22**：需要你解。最省的是你在自己的交互 shell 里跑一次 codex（凭据在那里），
+  或把可用的 provider 凭据放进 agent 环境。素材已就绪：#20 产出的中文报告可直接投喂。
+- `capability_map` 仍无形状（设计决定）。
+- `AGENTS.md` 的命令清单仍缺 `current` 与 `env declare` 两行 —— 该文件带着你的在途改动，我没动。
+
+### 下一步
+
+1. 解 M1 的测量点（bounded bootstrap 或接受"canonical 干净、run 是进行中"的区分）
+2. 解 #1/#22 的环境阻塞
+3. 补 `AGENTS.md` 的两行
