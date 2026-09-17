@@ -58,6 +58,42 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 
 ---
 
+## V0 状态表 —— 每条现在站在哪
+
+上面两张表回答的是"**为什么这样分组**"。这张表回答另一个问题："**哪条真的验过了**"。
+两者必须分开：把分组理由当成状态表读，会把没验过的条目当成已完成。
+
+`✅` = 有实测产物且指向具体文件/演练；`⏳` = 未验或本轮运行中；`❌` = 验过但不通过。
+
+| 条 | 验收 | 状态 | 证据 / 缺什么 |
+|---|---|---|---|
+| **M1** | 全新 repo 建最小 canonical state，且不写重型 plan | ⏳ | 本轮 session A（空项目，无 `research/`） |
+| **M2** | 不默认写长 plan 与大量 tests | ⏳ | 同上，观察其产物 |
+| **M3** | 连续 2–3 个 evidence-producing iterations | ⏳ | 同上 |
+| **M4** | session 被杀后只靠文件恢复 | ✅ | 演练 D1，7/7 |
+| **M5** | 不可行实验判为环境限制，而非科学失败 | ⏳ | D1 覆盖前半（`env_unsupported`、`belief_delta: none`）；后半"限制进入 `ENVIRONMENT.md`"本轮才有写入路径（`env declare`） |
+| **#1** | Codex 与 Claude Code 都能进入 Research Mode | ⏳ | 待 codex 运行（`codex exec` 可用） |
+| **#2** | 没有 runnable system 也会自主做 probe | ⏳ | 随 M1+M3 一起看 |
+| **#5** | 架构师不指定具体算法 | ⏳ | 随 M3 一起看（本轮方向未指定算法） |
+| **#8** | 能自行构造至少一种合法 surrogate / harness | ⏳ | D1 与 D3 的 fixture 里有合法 surrogate，但那是 fixture 造的，不是 session 造的 |
+| **#10** | 缺失/失真的 evaluator 被当成 Research Subject | ✅ | 演练 D3：session 反解出 proxy 的闭式、判 `EVIDENCE_INVALID` |
+| **#11** | canonical 带 `schema_version` 且中断写入后安全恢复 | ✅ | §26.4 五格探测，全过 |
+| **#12** | Block Contract 阻止无界重复 exploitation | ✅ | 本轮实测：预算 2、记满 3 条 → 块**运行期间**报 `BLOCK_ITERATION_BUDGET_EXCEEDED`（用派生 count） |
+| **#13** | long-running experiment 跨 session 不被重复启动 | ✅ | 演练 D2 |
+| **#14** | model/data/prompt/config 在 comparison 中 stable identity | ✅ | §26.4 末行修复后端到端复验 |
+| **#15** | 并行 writer 使用 collision-resistant IDs | ✅ | 本轮实测：12 个并发 `record` → 12 条记录、12 个互异 ID、文件名与 ID 全等 |
+| **#16** | Git/Evidence transaction 无 self-referential commit hash | ✅ | 本轮实测：`code_state.commit` 是**工作区** commit，不等于加入该记录的 commit |
+| **#18** | Git commit/diff 与 Evidence 能双向定位 | ✅ | 本轮实测：`Evidence:` trailer 给出 commit→EV，`code_state.commit` 给出 EV→commit；构造违规后 `SELF_REFERENTIAL_COMMIT` 准确报出 |
+| **#19** | 不依赖 hooks/subagents/MCP/GitHub 也能完成完整 V0 loop | ⏳ | 本轮排期（`claude --bare --append-system-prompt-file AGENTS.md`） |
+| **#20** | `research-status` 能只读生成全局中文 Project Working Model | ⏳ | 需要一个值得汇报的状态，取自 session A 的产物 |
+| **#21** | 状态汇报正确区分 Established / Provisional / Refuted / Open 与三维 maturity | ⏳ | 同上 |
+| **#22** | status 报告交给另一客户端可快速建立正确认知，执行前仍走 Resume | ⏳ | 依赖 #1 与 #20 |
+
+**这张表本身是这一轮的主要产物。** 在它存在之前，"V0 完成没有"这个问题**在仓库里无法回答** ——
+两个演练的结论散落在正文各处，而验收条目在另一张表里只有分组理由。
+
+---
+
 ## 演练 D1：Session Recovery Benchmark
 
 阻塞性，属 **M4**。规范出处 §12.16 与 §26.2。
