@@ -34,3 +34,4 @@ research/.derived/
 .env
 .env.*
 !.env.example
+tools/v1_d9_report.json
