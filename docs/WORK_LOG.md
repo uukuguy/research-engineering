@@ -458,3 +458,73 @@ phase 脚手架。
 1. `AGENTS.md` 的两处（命令清单缺 `current` / `env declare`；`Skill(superpowers:*)` 的措辞容易
    被读成通配符）—— 该文件带着架构师的在途改动，等他提交后我来补
 2. 若日后要做第二个客户端：#22 用上面任一 CLI 即可
+
+---
+
+## 2026-09-17（第三轮）— 收尾补完与交接
+
+### 这一轮只做了一件事
+
+补完上一轮列在"下一步"里的 `AGENTS.md` 两处（`03a92c4`）：命令清单加 `current` 与
+`env declare`；deny 列表那句 `Skill(superpowers:*)` 改成"一个 skill 一个精确名字"，并指向漂移
+检查 —— 因为它是**读起来像通配符、实际匹配不到任何东西**的写法，而 70 个交付工作流就是这么漏掉的。
+
+**该文件同时带着架构师自己的 DeepSeek 后端规则**（3 行，本会话加的），一并提交了，commit message
+里写明那段不是 Claude 写的。工作树因此**完全干净**。
+
+### 现在的状态（可核验，不是回忆）
+
+```
+HEAD 03a92c4 · 工作树干净 · 本地 = 远端
+V0 状态表：21 行 = 19 ✅ + 2 ⏸（#1/#22 架构师决定暂缓）+ 0 ❌
+python3 tools/check_workflow_block.py    → 覆盖 80 个交付工作流 / 116 个名字
+python3 tools/researchlog validate       → exit 0
+python3 tools/researchlog reconcile      → exit 0 clean
+python3 tools/install_research_skills.py --self --check → 两个 client 无漂移
+tests/main/build_*.sh                    → 3 个 drill builder，各自自断言
+tools/                                   → check_workflow_block.py · install_research_skills.py · researchlog/
+```
+
+**V0 在 Claude Code 这条路径上是完整的。** 唯一未验的两条是客户端矩阵项，架构师明确说先放一放。
+
+### 这个会话（09-14 起）一共交出了什么
+
+- **19 项 V0 验收拿到实测证据**（每条一次运行 + 一份可查产物，不为任何一条搭测试框架）
+- **七条缺陷修掉**，全部带变异验证：`research:current` 未接线、`env record` 三张表无写入路径、
+  `record` 拒绝时不带 message/fix hint、不变量 #4 从未执行、三个 fixture 缺陷、workflow block 只覆盖
+  一家
+- **V0 状态表**（指南新增一节）—— 在它之前"V0 完成没有"在仓库里**无法回答**
+- 三个 drill fixture 现在都**自断言**自己的状态（注册表≠定义、adapter 是自己的、补丁确实生效）
+
+### 开放项
+
+1. **`capability_map` 没有形状** —— `ENVIRONMENT.md` 里它是个空数组，任何地方都没有一条 entry 示例。
+   它是审计里**第三个**"声明了没有消费者"的字段（前两个是 `research:current` 和三张表）。
+   **给它定形状是设计决定，按架构师规则不由 Claude 定。**
+2. **#1 / #22 暂缓** —— 判据是"另一客户端"，不限于 codex。这台机器上另有
+   `opencode` / `cursor-agent` / `gemini` / `aider` / `crush` 五个 agent CLI；#22 的素材也早已就绪
+   （`research-status` 的中文报告含 resume 所需的全部状态指针）。
+3. 漂移检查有 **8 条 warning**（知识类 skill 的描述里含 "plan"/"test" 等词）。它们是"提示去看"，
+   不是失败；要消掉就得逐个判断并加进白名单，目前认为不值得。
+
+### 动手前必须知道（本会话新增的四条，与前几轮的一起看）
+
+9. **`permissions.deny` 与 `skillOverrides` 都不支持通配。** 前者管 plugin 命名空间、后者管
+   personal 级 skill，都要**一个 skill 一个精确名字**。`Skill(gsd-*)` 匹配不到任何东西 —— 实测过。
+   而且 denied 名字里的 **plugin 是版本目录上面那层，不是 marketplace 目录**（`omc` marketplace 下
+   的 plugin 叫 `oh-my-claudecode`）。
+10. **缓存里的 plugin ≠ 可用的 plugin。** 只有 `enabledPlugins` 里为真的才可达。把 plugin cache 当
+    可用集合会**报出不需要的屏蔽，同时把真正的缺口挡在后面**。
+11. **`git commit -m "…\`x\`…"` 里的反引号是命令替换** —— 词会从消息里静默消失，提交成功、消息
+    残缺、不报错。**永远写文件再 `-F`。** 本会话丢过两个词。
+12. **fixture 打包别先建 `templates/`。** `mkdir -p templates && cp -R src/templates templates` 会得到
+    `templates/templates/research`，`init` 报 `TEMPLATES_ABSENT` —— 那是**打包错误不是工具缺陷**，
+    但会让 session 花时间去修 fixture。
+
+### 下一步
+
+按优先级：
+
+1. `capability_map` 的形状（架构师的设计决定）
+2. 若要做第二个客户端：#22 用现有任一 CLI 即可，不必等 codex
+3. 消掉漂移检查的 8 条 warning（低价值，可长期挂着）
