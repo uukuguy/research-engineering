@@ -4,6 +4,79 @@
 
 ---
 
+## 2026-09-18 — Block 2 第四批：T5 telemetry report
+
+承接上一轮（T6 record --validate-line）。本轮做 T5——新增 `researchlog telemetry --report`
+verb，报 §21 KPI 全表。
+
+**关键判断**：4 个 KPI 里只有 2 个当前可算（`time_to_first_e1` / `time_to_first_e3`），另 2 个
+（`session_recovery_accuracy` / `discriminating_experiment_without_architect_correction`）需要
+session event log + ARCHITECT.md reader——这些是 Block 3/4 的基础设施，不是 T5 子任务。
+**不发 silent zeros**：每个 unavailable row 同时进 payload 和 envelope findings（warning 级），
+让下一会话看见缺口而不是被"看起来正常的 0"骗。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/telemetry.py`**（新增）
+
+* 新 verb `telemetry --report`
+* 4 行 KPI table（payload）+ 4 行人类可读（stdout）
+* `_time_to_first(ledger, active, target_level)` —— `session_epoch` 是 mint id 不是
+  timestamp，用 `_id_to_epoch` 抽出 `YYYYMMDDTHHMMSSZ`，减 first evidence 的 `created_at`
+* `_unavailable(kpi, reason)` —— 缺口统一表示，reason 既进 payload 又进 envelope findings
+* `_id_to_epoch(epoch_id)` —— 拆 mint id 的时间戳段，malformed id 返 None 让 caller 报 unavailable
+
+**`tools/researchlog/commands/__init__.py`**
+
+注册 `telemetry`。
+
+**`tests/test_commands.py::TelemetryReportTests`**（新）
+
+* `test_report_lists_four_kpis` —— 钉 4 行 table 形状；未来扩也走同一 row 列表
+* `test_unavailable_kpis_carry_their_reason` —— 每个 unavailable row **必须**有 reason
+* `test_unavailable_kpis_surface_as_warnings` —— 每行一个 `TELEMETRY_KPI_UNAVAILABLE` warning
+* `test_time_to_first_e1_reports_unavailable_with_empty_ledger` —— 空 ledger 报 unavailable
+  而不是 0（"看起来正常的 0"是 canonical "looks fine, isn't" 失败模式）
+* `test_time_to_first_e1_reports_unavailable_without_a_matching_evidence` —— session_epoch
+  有但无对应 evidence → unavailable
+* `test_time_to_first_e1_measures_after_a_real_record` —— rotate session + record 一条 E1
+  后 row 翻 `status: ok` + 数字 value（不钉具体数字，钉 shape 和 unit）
+
+### 变异验证
+
+把 `_time_to_first` stub 成永远返 unavailable —— `test_time_to_first_e1_measures_after_a_real_record`
+红了 `'unavailable' != 'ok'`，准确钉 detector 应满足的契约。回滚。
+
+### 现在能核验的状态
+
+```
+HEAD 736b80c · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：T2 ✅ · T3 ✅ · T5 ✅ · T6 ✅ · T1 / T4 ⏳
+180 个 unittest 全绿（174 + 6 新）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+29. **T5 实际只完成 50%**。4 个 KPI 里 2 个需要 session event log + ARCHITECT.md reader——这
+    些是 Block 3/4 的基础设施，不是 T5。架构师回 P5 + 启 Block 3/4 时再补全。T5 这轮把
+    "缺口可见"做到位（unavailable + warning）是关键，免得未来 silent zero 骗人。
+30. **`session_epoch` 是 mint id 不是 timestamp**。解码 `_id_to_epoch` 抽 `YYYYMMDDTHHMMSSZ`
+    段（位置在 kind prefix 之后、hex suffix 之前）。hand-written id 走 fallback。
+
+### 下一步
+
+Block 2 剩：
+* **T4 fingerprint/rebaseline** —— `predicate.py` 填实 + 新 `researchlog env rebaseline`。部分
+  依赖 P4 capability_map schema（V1-D7 #5）——但 `changed` 谓词不再永远 `UNRESOLVED` 这条本身
+  不依赖 P4。
+* 等架构师回 P4 → T1
+* 等架构师触发 P5 → Block 3 / 4 / 5
+
+---
+
 ## 2026-09-18 — Block 2 第三批：T6 record --validate-line
 
 承接上一轮（T2 ledger partition YYYY-MM）。本轮做 T6——新增 `--validate-line` flag，
