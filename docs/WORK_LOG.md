@@ -4,6 +4,81 @@
 
 ---
 
+## 2026-09-17 — Block 1 第四批：P7 run heartbeat
+
+承接上一轮（P1 record-after-commit）。本轮做 P7 —— `run` 的子进程 supervise 在子进程仍在
+跑期间定期 bump manifest 的 `heartbeat_or_last_observed_at` 字段，默认 30s；`--heartbeat-interval 0`
+显式 opt-out。一次提交，一轮变异验证，五轮稳定性验证。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/manifest.py`**
+
+抽出 `bump_heartbeat(record)` helper：单独更新 heartbeat 字段，不动其他。`_apply(--heartbeat)`
+路径改调它，`manifest --heartbeat` 的现有行为不变。
+
+**`tools/researchlog/commands/run.py`**
+
+* `--heartbeat-interval` flag，默认 30.0；0 关闭。
+* `_start_heartbeat(record, manifest_path, interval, stop)`：daemon thread，每 `interval` 秒
+  bump 一次。sleep loop 拆 0.2s slice 检查 `stop()` —— Ctrl+C / session stop 在 1s 内能拆
+  loop，不是卡到下一个完整 interval。
+* `interval <= 0` → 返回 None，不起 thread（opt-out 路径 0 成本）。
+* 心跳写盘失败被吞（best-effort）：下一次 bump 或 closeout 总会 publish 状态。
+
+**`tools/researchlog/tests/test_commands.py::RunCommandTests`**
+
+* `test_heartbeat_is_bumped_while_the_child_runs`（新）：起一个真 subprocess 跑
+  `sleep 1.8` + `--heartbeat-interval 0.2`，从测试线程 polling 两次 manifest：~0.55s 一次、
+  ~1.55s 一次，断言 `second > first`（ISO 8601 字典序 == 时间序）。
+* `test_heartbeat_interval_zero_disables_bumps`（新）：`--heartbeat-interval 0` 关闭 daemon，
+  closeout 心跳仍正常落盘。
+
+### 为什么 polling 故意跨秒 floor
+
+`_now()` 用 `timespec="seconds"` —— 0.2s / 0.4s / 0.6s / 0.8s 心跳都被 floor 到同一秒。两次
+polling 如果都跨同一秒 floor，`assertLess(first, second)` 会假阴性（即使 daemon 在跑）。
+
+解法：让两个 polling 时刻**故意落在不同秒**（0.55s + 1.0s）。`time.sleep(0.55)` + json 解析
++ `time.sleep(1.0)` + json 解析 ≈ wall-clock 1.55s，肯定跨秒。bump 在 0.2/0.4/0.6/0.8/1.0/1.2/1.4s，
+0.55s 时读到 0.4 bump (T+0.0)，1.55s 时读到 1.4 bump (T+1.0)——**字典序必然 second > first**。
+
+### 变异与稳定性
+
+* **变异**：把 `_start_heartbeat` 内部函数掏空（只留 early-return None），两个 sample 落
+  在同一秒 floor，`assertLess` 红，且把 `first=... second=...` 都打出来。
+* **稳定性**：5 轮全套测试连续 OK，5 轮单测连续 OK。Timing race 在初版（polling 0.4+0.6）
+  上偶发（5 轮中 1 轮 fail），扩到 0.55+1.0 后稳定。
+
+### 现在能核验的状态
+
+```
+HEAD fd20bf6 · 工作树干净
+Block 1 进度：1.1 P1 ✅ · 1.3 P5 sub-decision ✅ · 1.4 P6 ✅ · 1.6 P7 ✅ · 1.7 P8 ✅ · 1.8 P9 ✅
+            1.2 P2 reproduction 分桶 · 1.5 P4 capability_map shape
+58 个 unittest 全绿（含 2 个新 P7 heartbeat 测试）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道
+
+18. **`_now()` 用 `timespec="seconds"`** —— 所有跨秒断言要注意 floor。sub-second 测试要么
+    跨 floor 边界，要么用 `process.returncode` 而非时间戳判定。
+19. **daemon thread 是 best-effort**：写盘失败被吞，但 closeout 路径一定会写。所以**心跳
+    不存在不代表进程没在跑**——读不到心跳时 `job --experiment-id` 是更可靠的判定。
+
+### 下一步
+
+剩两条协议层 sub-block：
+
+1. **Block 1.2 P2 reproduction 分桶**（schema + record 命令分流计数）
+2. **Block 1.5 P4 capability_map shape proposal**（写文档等架构师评审；不动 schema）
+
+P5（Block 1.3）等架构师触发——V0 测试不动。
+
+---
+
 ## 2026-09-17 — Block 1 第三批：P1 record-after-commit
 
 承接上一轮（P6 + P8）。本轮只做 P1，是 Block 1 最大的一块——`record` 命令从此
