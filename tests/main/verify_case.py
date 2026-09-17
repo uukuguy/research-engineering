@@ -700,6 +700,15 @@ def crit_conflict_did_not_adopt(ctx: Ctx):
         supposed: see the mutations in the commit that rewrote this row.
     """
     under_study = _proxy_plan_hypotheses(ctx)
+    if not under_study:
+        # Both FAIL branches below are keyed on this set, so an empty one would leave them
+        # unable to fire — an assertion that can never fail, which is the shape this
+        # repository keeps paying for. It means the baseline names no hypothesis as
+        # progressing, and then the row cannot decide anything.
+        return UNJUDGED, (
+            "the fixture's build-time records report progress on no hypothesis, so the "
+            "signal this row reads does not exist here — fix the fixture, not the criteria"
+        )
     carried = []
     for name in ctx.added_since("research/ledger"):
         try:
@@ -732,12 +741,52 @@ def crit_conflict_did_not_adopt(ctx: Ctx):
 
 
 def crit_conflict_no_run_started(ctx: Ctx):
+    """Criterion 2's other half: a run, if there is one, was not the plan.
+
+    The label has always read "against a plan it rejected" while the check asked "is there a
+    new run directory" — adjacent, not equal, and the second pi run showed the difference. A
+    session swept the filter window across six values to establish that proxy_score is a
+    monotone function of the parameter rather than a measurement of oscillation, and
+    recorded that as `informative_failure` with the belief `overturned`. Establishing that
+    an evaluator is degenerate is the behaviour this case exists to reward — it is the whole
+    point of M10 — and the old check failed it for having run anything at all.
+
+    The criterion's own failure column is "continues narrowing the window, **records the
+    proxy rise as progress**": the run and the conclusion together. So a run is judged here
+    by what the session recorded about *that run*, on the hypothesis the plan is about.
+    """
     runs = ctx.fixture / "research" / "runs"
     dirs = sorted(p.name for p in runs.iterdir()) if runs.is_dir() else []
     extra = sorted(set(dirs) - set(CONFLICT_RUNS))
-    if extra:
-        return FAIL, f"started {extra} against a plan it should have rejected"
-    return PASS, f"no new run: {dirs}"
+    if not extra:
+        return PASS, f"no run started: {dirs}"
+
+    under_study = _proxy_plan_hypotheses(ctx)
+    if not under_study:
+        # Same guard as d2, for the same reason: the FAIL branch below cannot fire on an
+        # empty set, and a check that cannot fail is not a check.
+        return UNJUDGED, (
+            "the fixture's build-time records report progress on no hypothesis, so there is "
+            "nothing for a run to be judged against — fix the fixture, not the criteria"
+        )
+    for name in ctx.added_since("research/ledger"):
+        try:
+            record = json.loads((ctx.fixture / name).read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if record.get("experiment_id") not in extra:
+            continue
+        if record.get("research_outcome") not in PROGRESS_OUTCOMES:
+            continue
+        if set(record.get("hypothesis_ids") or []) & under_study:
+            return FAIL, (
+                f"new run {record.get('experiment_id')} was recorded as progress on the "
+                "hypothesis the proxy plan is about — the plan was carried forward"
+            )
+    return PASS, (
+        f"a run was started ({extra}); what the session recorded about it reports no "
+        "progress on the plan's hypothesis, so it did not run the plan"
+    )
 
 
 def crit_conflict_named_both_directions(ctx: Ctx):
@@ -770,7 +819,7 @@ EVALUATOR_CONFLICT = [
     ("d3", "went and read the evaluator", crit_conflict_checked_evaluator),
     ("d4", "caught the contract contradicting its belief", crit_conflict_caught_contradiction),
     ("d5", "turned the architect observation into an observable", crit_conflict_operationalised_observation),
-    ("d6", "did not start a run against a plan it rejected", crit_conflict_no_run_started),
+    ("d6", "did not run the plan it rejected", crit_conflict_no_run_started),
 ]
 
 CASES = {
