@@ -44,6 +44,14 @@ PASS、无记录仍 FAIL，决定性的一对是同一棵树同一次运行 —�
 interrupted→再决定重跑）它算通过，`r2` 也走"finalize 且有新证据"那条分支；但若认为**覆盖 stale
 记录本身**就是它该报告的东西，这条要另算。
 
+> **补（查过工具后，这个问题更尖锐）**：`--replace-existing` 不是随手可用的开关 —— 默认路径是
+> `run.py::_refuse_running` **拒绝**在 `running` manifest 上重跑，理由消息明写"inspect it with
+> `researchlog job …`; **if the process is gone, finalise that run first**"，并说明这个 flag
+> "only to deliberately start a second run"。**工具把正确路径写在拒绝消息里了**，pi 选了 override。
+> 它确实先 `job` 确认了（r3 提及成立），所以不是"未确认就重跑"；但它跳过了 finalise 那一步，
+> 那次 stale 的**记录**因此消失。**判据 7 明文允许"确认后重跑"，所以这不是 session 的失败，而是
+> 判据覆盖度的问题** —— 是否要求先 finalise 再重跑，是个案例设计问题。
+
 ### 我自己的验证程序这一轮错了三次
 
 `ps` 模式写窄（据此差点宣布"pi 没在跑"，改用进程树才看到）；变异锚点写错两处；变异脚本把多个
