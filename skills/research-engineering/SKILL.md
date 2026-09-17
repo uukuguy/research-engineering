@@ -176,7 +176,7 @@ state predicates, not topics — if the state does not hold, do not load the fil
 
 | Observed state | Load |
 |---|---|
-| active experiment has `execution_status != completed` and no `result.json` | not a research problem — reconcile first (`§ Resume comes first`) |
+| active experiment has `execution_status != completed` and no `result.json` | not a research problem — reconcile first (`§ Resume comes first`). It *is* a continuity one: `references/session-continuity.md`, which carries what a waiting session must record |
 | an architect message arrived that is not a plain task instruction | `references/architect-signals.md` |
 | choosing the next experiment, or a result's evidence level is not obvious | `references/evidence-model.md` |
 | the desired evidence cannot be produced here (`ENV_BLOCKED` / `ENV_UNSUPPORTED` / `RESOURCE_EXCEEDED`) | `references/environment-feasibility.md` |
