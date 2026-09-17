@@ -853,6 +853,107 @@ class EnvDeclareTests(CommandTestCase):
         self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
 
 
+class RecordRejectTests(CommandTestCase):
+    """V1 P8: every reject the `record` command emits carries a `fix_hint`.
+
+    The `Finding` dataclass has carried the field from V0, but a sweep of the
+    `record` code path found five rejection sites that raised `StateInvalid`
+    / `PreconditionMissing` without filling it. Without `fix_hint`, the agent
+    side of P8's contract ("message readable, fix_hint actionable") fails:
+    the human sees "subject incomplete" but is not told which subject.
+    """
+
+    def _assert_every_finding_has_fix_hint(self, envelope: dict) -> None:
+        for finding in envelope["findings"]:
+            self.assertTrue(
+                finding.get("fix_hint", "").strip(),
+                f"finding {finding.get('code')!r} must carry a non-empty fix_hint; "
+                f"got {finding!r}",
+            )
+
+    def test_experiment_flag_conflict_carries_fix_hint(self) -> None:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does it hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "probe ran",
+                "--no-experiment",
+                "--experiment-id", "EXP-conflict",
+            ]
+        )
+        self.assertEqual(code, 2, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EXPERIMENT_FLAG_CONFLICT")
+        self._assert_every_finding_has_fix_hint(envelope)
+
+    def test_artifact_role_without_artifact_carries_fix_hint(self) -> None:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does it hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "probe ran",
+                "--no-experiment",
+                "--artifact-role", "primary",
+            ]
+        )
+        self.assertEqual(code, 2, envelope)
+        self.assertEqual(
+            envelope["findings"][0]["code"], "ARTIFACT_ROLE_WITHOUT_ARTIFACT"
+        )
+        self._assert_every_finding_has_fix_hint(envelope)
+
+    def test_unreadable_evidence_file_carries_fix_hint(self) -> None:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does it hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "probe ran",
+                "--no-experiment",
+                "--evidence-file", "/no/such/path/no/where.json",
+            ]
+        )
+        self.assertEqual(code, 5, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EVIDENCE_FILE_UNREADABLE")
+        self._assert_every_finding_has_fix_hint(envelope)
+
+    def test_evidence_source_not_object_carries_fix_hint(self) -> None:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does it hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "probe ran",
+                "--no-experiment",
+                "--from-json", "[1, 2, 3]",
+            ]
+        )
+        self.assertEqual(code, 2, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EVIDENCE_SOURCE_NOT_OBJECT")
+        self._assert_every_finding_has_fix_hint(envelope)
+
+
 class HumanRenderingTests(unittest.TestCase):
     """Human output must carry the actionable half of a finding.
 

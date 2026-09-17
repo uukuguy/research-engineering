@@ -265,6 +265,8 @@ def _apply_identity(document: dict[str, Any], args: argparse.Namespace) -> None:
                     SEVERITY_ERROR,
                     "-",
                     "--no-experiment and --experiment-id cannot both be given",
+                    "drop --no-experiment if you meant to bind this evidence to an experiment, "
+                    "or drop --experiment-id if you meant a standalone observation",
                 )
             ]
         )
@@ -326,6 +328,7 @@ def _apply_science(
                     SEVERITY_ERROR,
                     "-",
                     "--artifact-role was given without --artifact",
+                    "pass --artifact PATH alongside --artifact-role ROLE, or remove --artifact-role",
                 )
             ]
         )
@@ -399,7 +402,9 @@ def _read_source(location: str) -> str:
         return Path(location).read_text(encoding="utf-8")
     except OSError as exc:
         raise PreconditionMissing(
-            "EVIDENCE_FILE_UNREADABLE", f"cannot read {location}: {exc}"
+            "EVIDENCE_FILE_UNREADABLE",
+            f"cannot read {location}: {exc}",
+            "check the path, permissions, and that the file exists; pass - to read from stdin",
         ) from exc
 
 
@@ -414,6 +419,8 @@ def _parse_document(raw: str, origin: str) -> dict[str, Any]:
                     SEVERITY_ERROR,
                     origin,
                     f"line {exc.lineno} column {exc.colno}: {exc.msg}",
+                    "validate the JSON locally with `python -m json.tool < source` and "
+                    "fix the parse error before re-invoking record",
                 )
             ]
         ) from exc
@@ -425,6 +432,8 @@ def _parse_document(raw: str, origin: str) -> dict[str, Any]:
                     SEVERITY_ERROR,
                     origin,
                     "top level is not an object",
+                    "wrap the evidence in {...} at the top level; arrays and scalars are "
+                    "not valid evidence documents",
                 )
             ]
         )
