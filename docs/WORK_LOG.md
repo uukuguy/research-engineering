@@ -11,6 +11,67 @@
 
 ---
 
+## 2026-09-17（第十轮）— fixture 把字节缓存提交进了历史；`#22` 演练通过，V0 状态表全绿
+
+### fixture 的 `.gitignore` —— 一个"身份哈希算的是什么"的问题
+
+四个 builder 都**没有 `.gitignore`**，于是 `git add -A` 把 `__pycache__` 提交了（一个 bootstrap
+fixture 里 73 个 `.pyc`）。后果有两层，第二层才是要紧的：
+
+1. 任何一次工具运行都让工作树变脏，脏在 session 从未碰过的文件上 —— **没人埋的异常**（B8），
+   也正是 B11 里 `tool_digest` 那条的原始形态；
+2. **两次 run 的"代码身份"一直在哈希 `.pyc` 的字节抖动**。`code_state` 刻意排除 `research/`
+   （否则每条证据身份都唯一、`compare` 永久 `ATTRIBUTION_FORBIDDEN`），所以排除之后剩下的
+   "脏"就只剩工具自己重写的字节缓存 —— `dirty: true` 看起来像"运行用的是改过的代码"，
+   实际什么都没说明。
+
+加上 `.gitignore` 后脏消失，身份变成诚实的 `dirty: false` —— 而**诚实暴露了第二处不一致**：
+那次在飞的运行，命令里带的 `--closed-loop` **只存在于后来种下的未提交改动里**，而 manifest
+记录的是"代码干净"，两者描述的不是同一棵树。
+
+修法：**把种植移到两次 run 之前**，并让状态提交**排除**那处改动（`git reset -- probes/…`）。于是
+两次 run 的身份就是那棵种过的树，`stdout.log` 里的数字就是那棵树会打印的。两条自断言守着她，
+**变异验证各自触发正确的那条**：把种植移回 run 之后 → "Plant the unfinished work before the
+runs"；多脏一个文件 → "the drill describes exactly one change"。
+
+（我的**前两次变异尝试都错了**：一次种进了不存在的文件（Python traceback），一次先触发了上游断言。
+**因别的原因红，只说明 builder 脆，不说明那条断言在工作** —— 所以是重写而不是接受。）
+
+### `#22` 演练：通过，而且比预期更有信息量
+
+素材：pi 那次 `bootstrap` 的真实产出。claude 跑 `/research-status` 出报告 → 交给 **pi**。
+
+**报告自己就是一次自检**：它开出一份 STATUS INTEGRITY WARNING，点了四条 `reconcile` **不覆盖**
+的不一致（分支名无人比较、`dirty_expected=true` 关掉了唯一的 Git 检测器、73 个 tracked `.pyc`、
+`environment_id` 三处不一致）—— 第 3 条正是**我几分钟前那次 prep 的半截修法**（只加 ignore、
+没 `git rm --cached`；builder 侧我的修法是对的）。
+
+**pi 的两半都成立**：
+
+- **Resume 在前**：动作次序是 读 skill + `ACTIVE.json` + `git status` → 读 `CURRENT/ARCHITECT/
+  BOUNDARIES` + `reconcile` → **之后**才动状态。**报告是上下文，不是状态的替代品。**
+- **认知正确且更好**：它复述 RB-001 已结题、`FND-…c5da` 是 durable belief，然后**去工具源码里
+  核对**报告的每条断言，把核不动的落成 `ENV-LIM-002/003`（环境限制，不是科学否定），**再顺着
+  finding 自己写下的 limitation 做真研究**：threshold sweep 找到 `RETRY_THRESHOLD ∈ [30,40]ms`
+  的**相变**（T≥40ms 时 p99=19.91ms，与 retry-off 臂三位小数一致），并把"70ms hold-time"从
+  **触发器**修正为**放大器**。产出侧 `validate` exit 0。
+
+**一处如实记录**：结束时 `reconcile` 仍报"工作树脏" —— 根因是那份素材由**旧** builder 生成、
+带着 73 个 tracked `.pyc`。pi 选择文档化而非 `git rm --cached`。判据不要求终点干净，故不影响
+判定，但它确实留在那里。
+
+### V0 状态表：**21/21 全 ✅**
+
+架构师把 `#1` 改判为"另一个客户端也能进入 Research Mode"（第二个客户端记 pi；codex 明确暂缓），
+`#22` 由本次演练补齐。**0 ⏸、0 ⏳、0 ❌。**
+
+### 下一步（V1 候选，未开工）
+
+协议**无提交要求**（`code_state.commit` 因此可能指向 fixture 自己的 commit，让 #18 的双向映射
+没有东西可映射）；`max_evidence_iterations` **绑不住复现工作**。
+
+---
+
 ## 2026-09-17（第九轮）— 三个案例在 pi 上全过，而每一个都先修掉一处"答隔壁问题"的检查
 
 架构师口径：**claude code / pi 能跑通即可**，codex 暂缓。三个案例在 pi 上跑完，最终**全部 7/7**，
