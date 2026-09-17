@@ -224,6 +224,18 @@ canonical vs installed，并在漂移时非零退出。
 这是 B11 那一族的又一例：**"门禁的退出码"与"python 找不到文件的退出码"是两件事**，而我读了后者
 当场判前者。
 
+**同一分钟内还踩了它的另一半**：`python3 … validate | head -1; echo "exit=$?"` —— **`$?` 是 `head`
+的退出码，不是工具的**。管道里 `$?` 取的是**最后一个**命令。要取前面那个，用 `${PIPESTATUS[0]}`
+（bash）或**干脆别接管道**：
+
+```bash
+python3 tools/researchlog validate >/dev/null 2>&1; echo "exit=$?"   # 正确
+python3 tools/researchlog validate | head -1; echo "exit=$?"          # 读的是 head 的
+```
+
+所以这条完整是两半：**别静音你读判决的检查**；**别让管道替你决定那个退出码是谁的**。
+两半合起来是一件事 —— **确认你读的那个数字，确实是你要的那个东西的数字。**
+
 ### C8. 判一个**别人正在跑**的任务，用 PID + artifact 双信号，别用一次 `ps`
 
 踩过：两次 `ps | grep` 返回空（模式太窄、外加我自己 `head` 截断），据此宣布"两个运行都已结束"，

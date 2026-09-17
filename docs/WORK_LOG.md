@@ -11,6 +11,80 @@
 
 ---
 
+## 2026-09-17 — 交接
+
+> 新会话从这里接续。**下面每一条都可以当场核验，不是回忆** —— 命令与期望输出都给了。详尽的
+> 叙述在下面那条（第六轮）里，这里只放**立刻要用的东西**。
+
+### 可核验的现状
+
+```bash
+git rev-parse --short HEAD          # c85cef5
+git status --porcelain              # 空
+git ls-remote <ssh-url> main        # c85cef50 —— 与本地相同
+```
+
+```bash
+python3 tools/researchlog validate >/dev/null 2>&1;                  echo $?   # 0
+python3 tools/researchlog reconcile >/dev/null 2>&1;                 echo $?   # 0
+python3 tools/check_workflow_block.py >/dev/null 2>&1;               echo $?   # 0（80 工作流 / 116 名字 / 8 warning）
+python3 tools/install_research_skills.py --self --check >/dev/null 2>&1; echo $?  # 0
+```
+
+**注意这两行的写法**：不接管道、不静音 —— `cmd | head -1; echo $?` 读的是 `head` 的退出码。
+见 `GOTCHAS.md` C9。
+
+| | 值 |
+|---|---|
+| **V0 状态表** | 21 行 = **19 ✅ + 2 ⏸**（#1/#22，架构师暂缓）+ 0 ❌ |
+| **`research/` 轨道** | `ACTIVE.status: idle`、`ledger/` 0 条、`runs/` 0 个 —— **正常状态，不是空缺** |
+| **案例集** | 4 个 builder + `run_case.sh` + `verify_case.py`，见 `docs/V0_CASES.md` |
+| **工具动词** | 15 个（含本轮新增的 `boundaries`） |
+
+### 两条轨道别混
+
+`research/` 是**这个工具所服务的研究**的状态（`researchlog` 维护）；`docs/WORK_LOG.md` 是**开发这个
+工具**的记录。本仓库的 `ACTIVE.json` 保持 `idle` 是**正常状态**。
+
+### 本轮（第六轮）做了什么
+
+1. **案例集跑起来了**，架构师亲手跑了两遍：`bootstrap claude` **7/7 PASS**、`rotation pi`
+   **4 PASS / 2 UNJUDGED / 0 FAIL**（#1/#22 的第一份端到端证据）。
+2. **案例发现了我 fixture 里的真 bug** —— docstring 声称的 `total_latency` 分解对 217/2000 行不成立
+   （重试循环每轮加一次 service 抽样，而 `service_time` 只记第一次）。已修，并加了**本来能抓到它
+   的断言**。
+3. **`BOUNDARIES.md` 补上了动词**（第 4 例"声明了但没人接线"，且在**那句声称问题已修好的话里**）。
+4. **判据 5 的形状问题**修了：新增 `c6`（run 先完成时判"有没有把 loop 走完"）。
+5. **实验回答了它自己**：M3 不依赖那个缺陷 —— 修好之后 7/7，而且研究质量**强于基线**。
+
+### 下一步（有顺序）
+
+1. **跑 `recovery` 与 `evaluator-conflict`** —— 它们的检查器已写、已变异验证，但**从未对真实运行
+   跑过**。这是案例集最后一块没被真实运行碰过的地方。
+   ```bash
+   tests/main/run_case.sh recovery claude
+   tests/main/run_case.sh evaluator-conflict claude
+   ```
+2. **`pi` 的完整案例**：`rotation pi` 已跑（4 PASS / 2 UNJUDGED / 0 FAIL），但**其余三个案例没在
+   pi 上跑过**。#1/#22 需要的是"另一个客户端能进入 Research Mode"，现在各有一个数据点。
+3. **V1 候选**（详见第六轮 entry）：协议**无提交要求**（`code_state.commit` 因此可能指向 fixture
+   自己的 commit，让 #18 的双向映射没有东西可映射）；`max_evidence_iterations` **绑不住复现工作**。
+
+### 动手前必须知道
+
+**全部在 `GOTCHAS.md`，读它**（那是当前为真的清单，与这份日志分工不同：日志说"当时发生了什么"）。
+本轮新加的四条最相关：
+
+- **B10** "还没发生"不是"不可能发生" —— 快照不是判决
+- **B11** 写检查器时最大的缺陷类：**检查的东西与标签声称的相邻**（本轮 11 例）
+- **C8** 判别人正在跑的任务用 PID + artifact 双信号；**别用代理信号代替直接测量**
+- **C9** 别静音你读判决的检查；别让管道替你决定退出码是谁的
+
+**一条给下一个会话的**：本轮我自己的**验证程序**犯了 6 次同类错误（比代码里那 11 处更难自查）。
+**凡是要据以下结论的数字，先确认你读的确实是那个东西的数字。**
+
+---
+
 ## 2026-09-17（第六轮）— 案例集跑起来了，而它发现的第一个缺陷是我的
 
 ### 会话概览
