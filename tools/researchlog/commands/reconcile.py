@@ -66,6 +66,7 @@ def run(args: argparse.Namespace) -> Result:
         _submission_budget,
         _token_budget,
         _gitignore_guard,
+        _worktree_multi_writer,
     )
     for detector in detectors:
         for finding in detector(paths, ledger, args):
@@ -415,6 +416,87 @@ def _gitignore_guard(
             "excluded directory, so negation patterns will not help",
         )
     ]
+
+
+def _worktree_multi_writer(
+    paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
+) -> list[Finding]:
+    """P9 single-writer enforcement: only one worktree may write research/ at a time.
+
+    Multi-writer is structurally unsafe — a merge conflict in canonical state silently
+    loses one writer's work. The detector flags every dirty worktree beyond the first,
+    so the agent has a name to act on rather than a vague "stop writing".
+
+    The check is on `research/` specifically, not the whole tree: `code_state` already
+    tracks general dirtiness, and a code change on a sibling worktree is unrelated to
+    canonical state. The protocol binds canonical state, not code.
+    """
+    if not jgit.is_repository(paths.root):
+        return []
+    worktrees = _list_worktrees(paths.root)
+    if len(worktrees) <= 1:
+        return []
+    dirty: list[dict[str, str]] = []
+    for wt in worktrees:
+        wt_path = wt.get("path")
+        if not wt_path:
+            continue
+        # Skip detached worktrees the porcelain check can't address safely — detached
+        # worktrees that dirty research/ are still illegal; we just can't reach them here
+        # without making the detector's false-negative rate worse than its signal.
+        porcelain = jgit.git(
+            ["status", "--porcelain", "--", repo.RESEARCH_DIR], cwd=Path(wt_path)
+        )
+        if porcelain.ok and porcelain.stdout.strip():
+            dirty.append(wt)
+    if len(dirty) <= 1:
+        return []
+    paths_repr = ", ".join(wt["path"] for wt in dirty)
+    return [
+        Finding(
+            "WORKTREE_MULTI_WRITER",
+            SEVERITY_ERROR,
+            repo.RESEARCH_DIR,
+            f"{len(dirty)} worktrees have dirty changes under {repo.RESEARCH_DIR}: "
+            f"{paths_repr}",
+            "P9 enforces single-writer on research/. Commit / stash the other writers "
+            "first, then re-run `reconcile`; merging canonical state across worktrees "
+            "loses one writer's record silently",
+        )
+    ]
+
+
+def _list_worktrees(root: Path) -> list[dict[str, str]]:
+    """Parse `git worktree list --porcelain` into a list of {path, head, branch}.
+
+    Format (per worktree, blank-line separated):
+        worktree /abs/path
+        HEAD abc1234
+        branch refs/heads/main
+
+    Detached worktrees carry no `branch` line and are skipped from the dict — they are
+    still surfaced via `path` and `head`, which is enough to decide whether to probe them.
+    """
+    result = jgit.git(["worktree", "list", "--porcelain"], cwd=root)
+    if not result.ok:
+        return []
+    worktrees: list[dict[str, str]] = []
+    for block in result.stdout.split("\n\n"):
+        if not block.strip():
+            continue
+        entry: dict[str, str] = {}
+        for line in block.splitlines():
+            if line.startswith("worktree "):
+                entry["path"] = line[len("worktree ") :].strip()
+            elif line.startswith("HEAD "):
+                entry["head"] = line[len("HEAD ") :].strip()
+            elif line.startswith("branch "):
+                # refs/heads/<branch> → <branch>
+                parts = line[len("branch ") :].strip().split("/")
+                entry["branch"] = parts[-1] if parts else ""
+        if "path" in entry:
+            worktrees.append(entry)
+    return worktrees
 
 
 def _age_minutes(timestamp: object) -> float | None:

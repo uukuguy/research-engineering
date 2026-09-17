@@ -717,5 +717,92 @@ class OrphanDetectionTests(GitRepoCase):
         self.assertFalse((self.root / "research" / "runs" / experiment_id / "result.json").exists())
 
 
+class WorktreeMultiWriterTests(GitRepoCase):
+    """P9 single-writer enforcement: two worktrees dirtying research/ at once is illegal.
+
+    Multi-writer is structurally unsafe — canonical state has no merge strategy and a
+    conflict silently loses one writer's record. The detector reports it loudly so the
+    agent has a name to act on, and lets the single-writer case pass cleanly.
+    """
+
+    def add_worktree(self, name: str) -> Path:
+        """Attach a linked worktree at <root>/.worktrees/<name> on a new branch."""
+        wt_path = self.root / ".worktrees" / name
+        wt_path.parent.mkdir(parents=True, exist_ok=True)
+        self._git("worktree", "add", "-q", "-b", f"wt/{name}", str(wt_path))
+        return wt_path
+
+    def test_a_single_worktree_with_dirty_research_passes(self) -> None:
+        """The main worktree is the legitimate writer; dirtying research/ there is fine."""
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "research state")
+        (self.root / "research" / "ACTIVE.json").write_text(
+            (self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8")
+            + "\n"
+        )
+        code, envelope = self.run_cli("reconcile")
+        self.assertEqual(code, 0, envelope)
+        self.assertTrue(envelope["payload"]["clean"])
+        self.assertNotIn("WORKTREE_MULTI_WRITER", [f["code"] for f in envelope["findings"]])
+
+    def test_two_worktrees_dirtying_research_at_once_is_reported(self) -> None:
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "research state")
+        wt = self.add_worktree("sibling")
+
+        (self.root / "research" / "ACTIVE.json").write_text(
+            (self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8")
+            + "\n"
+        )
+        (wt / "research" / "ACTIVE.json").write_text(
+            (wt / "research" / "ACTIVE.json").read_text(encoding="utf-8")
+            + "\n"
+        )
+
+        code, envelope = self.run_cli("reconcile")
+        self.assertEqual(code, 2, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("WORKTREE_MULTI_WRITER", codes)
+        finding = next(f for f in envelope["findings"] if f["code"] == "WORKTREE_MULTI_WRITER")
+        self.assertEqual(finding["severity"], "error")
+        self.assertIn(str(self.root), finding["message"])
+        self.assertIn(str(wt), finding["message"])
+        self.assertTrue(finding.get("fix_hint"))
+
+    def test_only_one_of_two_worktrees_dirty_passes(self) -> None:
+        """A second worktree present but clean does not trigger the detector."""
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "research state")
+        self.add_worktree("idle")
+        (self.root / "research" / "ACTIVE.json").write_text(
+            (self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8")
+            + "\n"
+        )
+
+        code, envelope = self.run_cli("reconcile")
+        self.assertEqual(code, 0, envelope)
+        self.assertNotIn("WORKTREE_MULTI_WRITER", [f["code"] for f in envelope["findings"]])
+
+    def test_two_worktrees_dirty_but_only_one_on_research_passes(self) -> None:
+        """Code-only changes on a sibling worktree are not a canonical-state conflict."""
+        self.init_state()
+        self._git("add", "-A")
+        self._git("commit", "-qm", "research state")
+        wt = self.add_worktree("code-only")
+
+        (self.root / "research" / "ACTIVE.json").write_text(
+            (self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8")
+            + "\n"
+        )
+        (wt / "src_scratch.py").write_text("x = 1\n", encoding="utf-8")
+
+        code, envelope = self.run_cli("reconcile")
+        self.assertEqual(code, 0, envelope)
+        self.assertNotIn("WORKTREE_MULTI_WRITER", [f["code"] for f in envelope["findings"]])
+
+
 if __name__ == "__main__":
     unittest.main()
