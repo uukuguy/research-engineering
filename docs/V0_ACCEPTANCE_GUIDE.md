@@ -67,7 +67,7 @@ M4 合并了原文 #6 与 #17 —— 两条说的是同一件事（重启后只�
 
 | 条 | 验收 | 状态 | 证据 / 缺什么 |
 |---|---|---|---|
-| **M1** | 全新 repo 建最小 canonical state，且不写重型 plan | ⏳ | 本轮干净重跑中（首次运行被我 fixture 的打包错误污染，已隔离重跑） |
+| **M1** | 全新 repo 建最小 canonical state，且不写重型 plan | ✅ | 本轮实测（空项目、无 `research/`）：canonical 八件齐备、`reconcile` exit 0 clean、`validate` exit 0、**plan 类文档 0、测试套件 0**、工作树干净。**测量点说明**：M1 测的是 bootstrap，所以这次把 prompt 限定在"建立状态、不要开始实验" —— 更早一次未限定的运行在 bootstrap 之后继续做了一轮远超范围的研究（查本机 `perf_counter` 精度），留下 3 个 `ORPHAN_RUN`；判据无歧义，问题只在测量该取在哪一刻 |
 | **M2** | 不默认写长 plan 与大量 tests | ✅ | session A：**完全没有碰 `sim/` 与 `data/`**；改动只在两支自建 probe 与研究状态；无 plan 文档、无新增测试套件 |
 | **M3** | 连续 2–3 个 evidence-producing iterations | ✅ | session A：块 `RB-001` 内 3 条证据，其中 2 条 `counts_as_evidence_iteration: true`（`belief_delta` refined / overturned） |
 | **M4** | session 被杀后只靠文件恢复 | ✅ | 演练 D1，7/7 |
