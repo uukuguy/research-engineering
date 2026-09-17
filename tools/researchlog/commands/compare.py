@@ -82,7 +82,13 @@ def run(args: argparse.Namespace) -> Result:
 
 
 def _load(paths: repo.ResearchPaths, evidence_id: str) -> dict[str, Any]:
-    path = paths.evidence(evidence_id)
+    # V1 Block 2 / T2: new shards live under `<YYYY-MM>/`. The flat form is
+    # still loaded as a fallback so pre-partition shards keep working until
+    # they are migrated (or retired). `record` writes only the partition
+    # form; `compare` accepts either.
+    path = paths.evidence_in_partition(evidence_id)
+    if not path.is_file():
+        path = paths.evidence(evidence_id)
     if not path.is_file():
         raise PreconditionMissing(
             "EVIDENCE_NOT_FOUND",

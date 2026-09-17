@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from researchlog.errors import Finding, PreconditionMissing, SEVERITY_ERROR
 
@@ -25,6 +26,28 @@ CANONICAL_MARKDOWN: tuple[str, ...] = (
     "ENVIRONMENT.md",
     "FINDINGS.md",
 )
+
+
+# V1 Block 2 / T2: `evidence_id` carries a `YYYYMMDDTHHMMSSZ` stamp from
+# `ids.mint`; partition shards into `<YYYY-MM>/`. The leading 4 chars
+# become the year, the next 2 the month. Anchored so a malformed id
+# (e.g. a hand-written fixture) is caught at the path boundary rather
+# than silently landing in a directory called "EV-...".
+_EVIDENCE_MONTH_RE = re.compile(r"^[A-Z]+-(\d{4})(\d{2})\d{2}T\d{2}\d{2}\d{2}Z-")
+
+
+def _evidence_month(evidence_id: str) -> str:
+    """Return the `YYYY-MM` partition name for an evidence id.
+
+    Falls back to `unpartitioned` for ids that do not match the mint
+    format (test fixtures, hand-written evidence). The fallback directory
+    name still parses as a literal string and is never mistaken for a real
+    month, so `reconcile` can report its presence without ambiguity.
+    """
+    match = _EVIDENCE_MONTH_RE.match(evidence_id)
+    if match is None:
+        return "unpartitioned"
+    return f"{match.group(1)}-{match.group(2)}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +79,18 @@ class ResearchPaths:
 
     def evidence(self, evidence_id: str) -> Path:
         return self.ledger / f"{evidence_id}.json"
+
+    def evidence_in_partition(self, evidence_id: str) -> Path:
+        """V1 Block 2 / T2: ledger shard under `research/ledger/YYYY-MM/`.
+
+        `evidence_id` carries a timestamp prefix (`EV-20260917T...`); this
+        method extracts the `YYYY-MM` component and returns the same file
+        inside a month subdirectory. The flat form returned by `evidence()`
+        is still read by `_load_shards`, so old shards and new partitions
+        coexist during the migration.
+        """
+        month = _evidence_month(evidence_id)
+        return self.ledger / month / f"{evidence_id}.json"
 
     def markdown(self, name: str) -> Path:
         return self.research / name

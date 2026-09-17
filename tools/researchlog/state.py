@@ -165,7 +165,11 @@ def evidence_referenced_by_findings(ledger: Ledger) -> set[str]:
 def _load_shards(paths: repo.ResearchPaths, ledger: Ledger) -> None:
     if not paths.ledger.is_dir():
         return
-    for path in sorted(paths.ledger.glob("*.json")):
+    # V1 Block 2 / T2: ledger shards now live under `<YYYY-MM>/` partitions
+    # for any new write, but the pre-partition flat shards from V0 still
+    # sit at the ledger root and must keep loading. `rglob` walks both
+    # depths and ignores anything that is not a `.json` file.
+    for path in sorted(paths.ledger.rglob("*.json")):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:

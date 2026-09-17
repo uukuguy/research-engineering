@@ -100,7 +100,13 @@ def _check_evidence(paths: repo.ResearchPaths, ledger: state.Ledger, result: Res
             result.add(finding)
         for finding in schema.version_findings("evidence", record, where=evidence_id):
             result.add(finding)
-        evidence_path = paths.evidence(evidence_id)
+        # V1 Block 2 / T2: new shards live under `<YYYY-MM>/`. Try the partition
+        # form first, then fall back to the flat form so pre-partition
+        # shards keep validating. The path in the finding is whichever
+        # form was checked — the reader can tell which one is missing.
+        evidence_path = paths.evidence_in_partition(evidence_id)
+        if not evidence_path.is_file():
+            evidence_path = paths.evidence(evidence_id)
         if not evidence_path.is_file():
             result.add(
                 Finding(

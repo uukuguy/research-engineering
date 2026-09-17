@@ -556,18 +556,17 @@ def _stale_status(
 
 
 def _ledger_latest_mtime(paths: repo.ResearchPaths) -> int | None:
-    """Newest mtime across `research/ledger/*.json`, as an integer epoch.
+    """Newest mtime across `research/ledger/**/*.json`, as an integer epoch.
 
-    Returns None when the directory is missing or has no JSON entries.
-    Iterates the directory rather than `state.Ledger` because the cache
-    detector must work even when the ledger is empty / unreadable; the
-    directory scan is cheap and side-effect free.
+    V1 Block 2 / T2 shards live under `<YYYY-MM>/`; `rglob` walks both
+    the flat V0 layout and the partitioned layout. Returns None when the
+    directory is missing or has no JSON entries.
     """
     if not paths.ledger.is_dir():
         return None
     latest: int | None = None
-    for entry in paths.ledger.iterdir():
-        if entry.is_file() and entry.suffix == ".json":
+    for entry in paths.ledger.rglob("*.json"):
+        if entry.is_file():
             mtime = int(entry.stat().st_mtime)
             if latest is None or mtime > latest:
                 latest = mtime

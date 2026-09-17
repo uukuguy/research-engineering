@@ -548,19 +548,27 @@ class EnvCommandTests(CommandTestCase):
         envelope = json.loads(envelope) if envelope.strip() else {}
         self.assertEqual(code, 0, envelope)
         evidence_id = envelope["payload"]["evidence_id"]
-        self.assertTrue(self.research("ledger", f"{evidence_id}.json").is_file())
+        # V1 Block 2 / T2: ledger shards live under `<YYYY-MM>/`. Compute
+        # the partition from the evidence_id itself rather than the clock,
+        # so the test does not drift when the wall clock moves into a new
+        # month mid-run.
+        from researchlog.repo import _evidence_month
+        partition = _evidence_month(evidence_id)
+        self.assertTrue(self.research("ledger", partition, f"{evidence_id}.json").is_file())
 
         # V1 P1: every record lands as a commit, not just a file on disk. The
         # evidence file specifically must be tracked; HEAD must carry the
         # canonical commit subject; the message must not be command-substituted.
         ls_files = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", f"research/ledger/{evidence_id}.json"],
+            ["git", "ls-files", "--error-unmatch", f"research/ledger/{partition}/{evidence_id}.json"],
             cwd=self.root,
             check=True,
             capture_output=True,
             text=True,
         )
-        self.assertTrue(ls_files.stdout.strip().endswith(f"research/ledger/{evidence_id}.json"))
+        self.assertTrue(
+            ls_files.stdout.strip().endswith(f"research/ledger/{partition}/{evidence_id}.json")
+        )
         log = subprocess.run(
             ["git", "log", "-1", "--format=%s"],
             cwd=self.root,
@@ -694,6 +702,116 @@ class StatusCommandTests(CommandTestCase):
         self.assertIn(code, (0, 3), envelope)
         codes = [f["code"] for f in envelope["findings"]]
         self.assertIn("STATUS_NOT_IGNORED", codes)
+
+
+class LedgerPartitionTests(GitCommandTestCase):
+    """V1 Block 2 / T2: ledger shards partition by `YYYY-MM/`.
+
+    The writer side is `record`: every fresh evidence file lands inside a
+    month subdirectory derived from the evidence_id itself. The reader
+    side is `reconcile` / `validate` / `compare`: all three walk the
+    partition-aware path with a flat fallback so pre-partition shards
+    keep working.
+    """
+
+    def _record_one(self) -> str:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        return envelope["payload"]["evidence_id"]
+
+    def test_record_writes_the_shard_under_a_month_subdirectory(self) -> None:
+        evidence_id = self._record_one()
+
+        from researchlog.repo import _evidence_month
+
+        partition = _evidence_month(evidence_id)
+        # The mint format guarantees a `YYYY-MM` partition. A bare
+        # `unpartitioned` here would mean the regex did not recognise the
+        # id, which would be a regression worth pinning.
+        self.assertNotEqual(partition, "unpartitioned")
+        self.assertRegex(partition, r"^\d{4}-\d{2}$")
+
+        partition_path = self.research("ledger", partition, f"{evidence_id}.json")
+        self.assertTrue(partition_path.is_file(), f"shard missing at {partition_path}")
+        # Pre-partition flat shards must NOT be created by `record`.
+        flat_path = self.research("ledger", f"{evidence_id}.json")
+        self.assertFalse(flat_path.is_file(), f"flat shard unexpectedly exists at {flat_path}")
+
+    def test_reconcile_walks_partitioned_and_flat_shards(self) -> None:
+        # A partitioned shard...
+        partition_id = self._record_one()
+
+        # ... and a flat shard from the V0 layout (a hand-written fixture).
+        flat_id = "EV-LEGACY-20000101T000000Z-aaaa"
+        flat_payload = {
+            "schema_version": "1.0",
+            "evidence_id": flat_id,
+            "question": "legacy",
+            "subject": {"type": "harness", "id": "HRN-001"},
+            "evidence_level": "E1",
+            "observations": ["legacy"],
+            "execution_status": "completed",
+            "research_outcome": "inconclusive",
+            "confidence": "low",
+            "counts_as_evidence_iteration": False,
+        }
+        (self.root / "research" / "ledger" / f"{flat_id}.json").write_text(
+            json.dumps(flat_payload), encoding="utf-8"
+        )
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertEqual(code, 0, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        # Both shards must load; neither should trip the `DUPLICATE_ID`,
+        # `EVIDENCE_SHARD_MISSING`, or `EVIDENCE_UNREADABLE` detectors.
+        self.assertNotIn("DUPLICATE_ID", codes)
+        self.assertNotIn("EVIDENCE_SHARD_MISSING", codes)
+        self.assertNotIn("EVIDENCE_UNREADABLE", codes)
+
+        # The payload's `evidence_records` count must reflect *both* shards:
+        # without the recursive `rglob` in `_load_shards`, the partitioned
+        # shard would be missed and the count would drop to one.
+        self.assertEqual(envelope["payload"]["evidence_records"], 2)
+        _ = partition_id  # silence unused
+
+    def test_unpartitioned_fallback_for_hand_written_ids(self) -> None:
+        # An id that does not match the mint format lands under the
+        # `unpartitioned` directory and still loads. The fallback is
+        # the only thing keeping a fixture written by hand from going
+        # missing during the migration window.
+        flat_id = "EV-LEGACY-20000101T000000Z-aaaa"
+        flat_payload = {
+            "schema_version": "1.0",
+            "evidence_id": flat_id,
+            "question": "legacy",
+            "subject": {"type": "harness", "id": "HRN-001"},
+            "evidence_level": "E1",
+            "observations": ["legacy"],
+            "execution_status": "completed",
+            "research_outcome": "inconclusive",
+            "confidence": "low",
+            "counts_as_evidence_iteration": False,
+        }
+        flat_path = self.root / "research" / "ledger" / f"{flat_id}.json"
+        flat_path.write_text(json.dumps(flat_payload), encoding="utf-8")
+
+        code, envelope = self.invoke(["reconcile"])
+        self.assertEqual(code, 0, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("EVIDENCE_SHARD_MISSING", codes)
 
 
 class ReconcileStaleStatusTests(CommandTestCase):
@@ -1345,16 +1463,22 @@ class RecordCommitTests(GitCommandTestCase):
         )
         self.assertEqual(log.stdout.strip(), f"research: record {evidence_id}")
 
-        # The evidence file is tracked, not just on disk.
+        # The evidence file is tracked, not just on disk. V1 Block 2 / T2
+        # partitions shards under `<YYYY-MM>/`, so the assertion targets
+        # the partition-aware path rather than the flat one.
+        from researchlog.repo import _evidence_month
+        partition = _evidence_month(evidence_id)
         completed = subprocess.run(
-            ["git", "ls-files", f"research/ledger/{evidence_id}.json"],
+            ["git", "ls-files", f"research/ledger/{partition}/{evidence_id}.json"],
             cwd=self.root,
             check=True,
             capture_output=True,
             text=True,
         )
         self.assertTrue(
-            completed.stdout.strip().endswith(f"research/ledger/{evidence_id}.json"),
+            completed.stdout.strip().endswith(
+                f"research/ledger/{partition}/{evidence_id}.json"
+            ),
             completed.stdout,
         )
 

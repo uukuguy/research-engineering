@@ -706,7 +706,14 @@ class EnvironmentSnapshotTests(GitRepoCase):
         self.assertEqual(code, 0, envelope)
 
         evidence_id = envelope["payload"]["evidence_id"]
-        record = json.loads((self.root / "research" / "ledger" / f"{evidence_id}.json").read_text())
+        # V1 Block 2 / T2: shards live under `<YYYY-MM>/`. Look up the
+        # partition from the id rather than the wall clock so the test
+        # does not drift across a month boundary mid-run.
+        from researchlog.repo import _evidence_month
+        partition = _evidence_month(evidence_id)
+        record = json.loads(
+            (self.root / "research" / "ledger" / partition / f"{evidence_id}.json").read_text()
+        )
         self.assertEqual(record["environment"]["sim_physics_hz"], 30)
 
     def test_a_changed_predicate_invalidates_when_the_value_moves(self) -> None:

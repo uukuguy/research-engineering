@@ -137,7 +137,7 @@ def run(args: argparse.Namespace) -> Result:
     if errors:
         raise StateInvalid(errors)
 
-    evidence_id, path = ids.claim_new("evidence", paths.evidence)
+    evidence_id, path = ids.claim_new("evidence", paths.evidence_in_partition)
     document["evidence_id"] = evidence_id
     validator = schema.load_validator("evidence")
     ioutil.write_json_atomic(path, document, validator=validator)
