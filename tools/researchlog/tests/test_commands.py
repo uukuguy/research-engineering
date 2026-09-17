@@ -1215,6 +1215,72 @@ class CurrentBlockTests(CommandTestCase):
         self.assertIn("SCHEMA_VIOLATION", [f["code"] for f in envelope["findings"]])
 
 
+class EnvRebaselineTests(CommandTestCase):
+    """V1 Block 2 / T4: `env rebaseline` refreshes the comparability fingerprint.
+
+    The fingerprint is the anchor every `changed` predicate on a record
+    compares against. The rebaseline command is the explicit "I know
+    what I'm doing" refresh: it advances the fingerprint, records a
+    `rebaseline` history entry, and does not introduce a fake
+    environment change just to update the anchor.
+    """
+
+    def _read_environment_block(self) -> dict:
+        # ENVIRONMENT.md has a `research:environment` fenced JSON block.
+        # Read it via the schema helper rather than json.loads on the
+        # whole file, which would misparse the surrounding markdown.
+        from researchlog import schema
+        text = self.research("ENVIRONMENT.md").read_text(encoding="utf-8")
+        block = schema.find_block(text, "environment")
+        assert block is not None, f"could not parse environment block from {text!r}"
+        return block
+
+    def _fingerprint(self) -> str | None:
+        return (self._read_environment_block().get("comparability") or {}).get("fingerprint")
+
+    def test_rebaseline_changes_the_fingerprint(self) -> None:
+        before = self._fingerprint()
+
+        code, envelope = self.invoke(["env", "rebaseline"])
+        self.assertEqual(code, 0, envelope)
+
+        after = self._fingerprint()
+        self.assertNotEqual(before, after)
+        self.assertEqual(envelope["payload"]["previous_fingerprint"], before)
+        self.assertEqual(envelope["payload"]["fingerprint"], after)
+
+    def test_rebaseline_records_a_history_entry(self) -> None:
+        code, envelope = self.invoke(
+            ["env", "rebaseline", "--reason", "manual refresh"]
+        )
+        self.assertEqual(code, 0, envelope)
+
+        history = self._read_environment_block().get("history") or []
+        rebaselines = [entry for entry in history if entry.get("type") == "rebaseline"]
+        self.assertEqual(len(rebaselines), 1)
+        self.assertEqual(rebaselines[0]["reason"], "manual refresh")
+        self.assertEqual(rebaselines[0]["fingerprint"], self._fingerprint())
+
+    def test_rebaseline_does_not_introduce_a_material_change(self) -> None:
+        # The history entry is `type: rebaseline`, not
+        # `environment_change`. Audit readers must be able to tell a
+        # no-op refresh apart from a real environment move.
+        self.invoke(["env", "rebaseline", "--reason", "first"])
+
+        history = self._read_environment_block().get("history") or []
+        self.assertTrue(history, "history must carry the rebaseline entry")
+        self.assertNotEqual(history[-1]["type"], "environment_change")
+
+    def test_rebaseline_default_reason_is_machine_readable(self) -> None:
+        # When the caller omits `--reason`, the resulting history
+        # entry must still carry *some* reason string so the next
+        # session can branch on the field without KeyError.
+        self.invoke(["env", "rebaseline"])
+        history = self._read_environment_block().get("history") or []
+        self.assertTrue(history)
+        self.assertTrue(history[-1].get("reason"))
+
+
 class EnvDeclareTests(CommandTestCase):
     """The declared tables had no write path.
 

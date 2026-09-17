@@ -89,7 +89,26 @@ def configure(parser: argparse.ArgumentParser) -> None:
     )
     declare.add_argument("file", metavar="FILE", help="the entry document")
 
-    for action in (record, query, show, declare):
+    # V1 Block 2 / T4: force-update the comparability fingerprint without
+    # adding a new history entry. The fingerprint is the anchor every
+    # `changed` predicate on a record compares against; if the lab
+    # changed something that did not flow through `env record` (a manual
+    # edit, a third-party file drop, a CI artefact), the next session's
+    # predicates will silently keep comparing against the stale anchor.
+    # `rebaseline` is the explicit "I know what I'm doing, refresh the
+    # anchor" command.
+    rebaseline = actions.add_parser(
+        "rebaseline",
+        help="refresh the comparability fingerprint without recording a change",
+    )
+    rebaseline.add_argument(
+        "--reason",
+        default="manual rebaseline",
+        metavar="TEXT",
+        help="free-form note; lands in the history entry that records the refresh",
+    )
+
+    for action in (record, query, show, declare, rebaseline):
         _accept_shared_flags(action)
 
 
@@ -112,6 +131,9 @@ def run(args: argparse.Namespace) -> Result:
 
     if args.action == "declare":
         return _declare(paths, text, block, args.table, _read_change(args.file))
+
+    if args.action == "rebaseline":
+        return _rebaseline(paths, text, block, args.reason)
 
     change = _read_change(args.file)
     return (
@@ -205,6 +227,67 @@ def _declare(
     for finding in findings:
         result.add(finding)
     result.human = f"declared {changed} in {paths.environment.name}"
+    return result
+
+
+def _rebaseline(
+    paths: repo.ResearchPaths,
+    text: str,
+    block: dict[str, Any],
+    reason: str,
+) -> Result:
+    """V1 Block 2 / T4: refresh the comparability fingerprint.
+
+    The fingerprint is the anchor every `changed` predicate on a record
+    compares against. If the lab changed something outside `env record`
+    (a manual edit, a third-party file drop, a CI artefact) the next
+    session's predicates will silently keep comparing against the stale
+    anchor. `rebaseline` is the explicit "I know what I'm doing, refresh
+    the anchor" command — it advances the fingerprint, records a small
+    history entry noting the refresh, and does not introduce any new
+    environment variable. Without this command, the only way to update
+    the anchor was to fake a `env record` with no real change.
+    """
+    _require_writable_block(block, paths.environment)
+    updated = json.loads(json.dumps(block, ensure_ascii=False))
+    comparability = updated.setdefault("comparability", {})
+    previous_fingerprint = comparability.get("fingerprint")
+    # A rebaseline is, by construction, *not* a material change. The
+    # history entry uses `status: COMPATIBLE` so downstream readers
+    # (audit logs, future `changed` walks) can tell a no-op refresh
+    # apart from a real environment move.
+    if comparability.get("status") is None:
+        comparability["status"] = "COMPATIBLE"
+    rebaseline_changes = {"rebaseline": reason}
+    comparability["fingerprint"] = _fingerprint(updated, rebaseline_changes)
+    comparability["last_material_change"] = (
+        (block.get("comparability") or {}).get("last_material_change") or _now()
+    )
+    updated.setdefault("history", []).append(
+        {
+            "type": "rebaseline",
+            "at": _now(),
+            "previous_fingerprint": previous_fingerprint,
+            "fingerprint": comparability["fingerprint"],
+            "reason": reason,
+            "comparability": comparability.get("status"),
+        }
+    )
+
+    paths.environment.write_text(
+        schema.replace_block(text, "environment", updated), encoding="utf-8"
+    )
+
+    result = Result(
+        payload={
+            "previous_fingerprint": previous_fingerprint,
+            "fingerprint": comparability["fingerprint"],
+            "reason": reason,
+        },
+        human=(
+            f"rebaseline advanced the fingerprint to {comparability['fingerprint']}"
+        ),
+    )
     return result
 
 
