@@ -84,14 +84,24 @@ case "$CLIENT" in
            --output-format stream-json --verbose)
     ;;
   pi)
-    # pi reads AGENTS.md and CLAUDE.md natively; its skills are not auto-discovered from
-    # this fixture's `.agents/skills`, so the path is passed explicitly. Credentials live
-    # in the project's own .env, not in the agent background environment.
+    # Three things about pi, each checked rather than assumed:
+    #
+    #   1. It reads AGENTS.md and CLAUDE.md natively.
+    #   2. It does not discover this fixture's `.agents/skills` on its own, and `--skill`
+    #      needs the absolute path -- a relative one silently loads nothing and the session
+    #      runs with the user's skills instead.
+    #   3. `--no-skills` is pi's equivalent of the workflow block. Without it pi loads the
+    #      user-level delivery-workflow skills -- brainstorming, writing-plans,
+    #      test-driven-development, project-state -- which AGENTS.md says are mechanically
+    #      disabled for this project. `.claude/settings.json` does that on the Claude side;
+    #      there is no project-level equivalent for pi, so the flag is the mechanism.
+    #
+    # Credentials live in the project's own .env, not in the agent background environment.
     set -a
     # shellcheck disable=SC1091
     . "$SOURCE_ROOT/.env"
     set +a
-    AGENT=(pi -p "$PROMPT" --skill "$FIXTURE/.agents/skills" --approve)
+    AGENT=(pi -p "$PROMPT" --no-skills --skill "$FIXTURE/.agents/skills" --approve)
     ;;
   *)
     echo "unknown client: $CLIENT" >&2

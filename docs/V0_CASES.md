@@ -81,10 +81,19 @@ next_action: "Wait for the sweep to finish, then read the failing cases."
 `--baseline` 就是为此存在的：它取 fixture 建完那一刻的 HEAD，`ACTIVE.json` 只要与那一刻不同
 就算数 —— 无论 session 是留下未提交的改动，还是自己提交了。
 
-**这条判据目前是 FAIL 的**（见 `WORK_LOG.md` 2026-09-17 第四轮）。失败的机制不在那句话，
-在路由：`SKILL.md` 里有两行匹配同一状态，先匹配的那行只说了"先 reconcile"、不指向任何
-reference，于是 session 走完 reconcile 就停了，从没读到 `session-continuity.md`。已改路由，
-等待重跑验证。
+**这条判据的历史值得留着**，因为它演示了"改措辞"与"改路由"的区别：
+
+- 两次 FAIL。第一次的解读是"session 拒绝预写"，但那是**从行为倒推的理由**，不是它说的。
+  追踪链路才看到真相：session 读了 AGENTS.md 列的 6 个 canonical 文件 + manifest + probe，
+  **对任何 reference 的 Read 调用为 0** —— `session-continuity.md` 从未进入它的工作路径，
+  尽管 skill 本身确实加载了。
+- 根因在路由：`SKILL.md` 里**两行匹配同一状态**，先匹配的那行只说了"先 reconcile"、不指向
+  任何 reference，于是 session 走完 reconcile 就停了。
+- 改那一行（指向 `session-continuity.md`）后重跑：**5/5**，c5 PASS。它写下的是一段**意图**
+  （"Decision: attach/observe. The run was NOT restarted..."、"Wait for EXP-0200 to exit, then
+  read probes/sweep.json..."），不是结论。
+
+**所以：措辞已经是对的，问题一直是它没被走到。** 换个说法重写那句话不会有任何效果。
 
 ### 副作用：这个 fixture 会留下一个真进程
 
@@ -151,19 +160,26 @@ checker yet"并 exit 2，指回指南里的判据表。目前要手工判，或�
 | 客户端 | 怎么进入 Research Mode | 状态 |
 |---|---|---|
 | `claude`（缺省） | `claude -p "<两行>" --dangerously-skip-permissions --output-format stream-json --verbose` | 已实测 |
-| `pi` | `pi -p "<两行>" --skill <fixture>/.agents/skills --approve` | **凭据已通，调用形状未实测** |
+| `pi` | `pi -p "<两行>" --no-skills --skill <fixture>/.agents/skills --approve` | 调用形状已实测（技能加载已验证）；**完整案例未跑过** |
 
-`pi` 的两点与 Claude Code 不同，两者都不是等价替换：
+`pi` 的三点与 Claude Code 不同，**没有一条是等价替换**：
 
-1. **它原生读 `AGENTS.md` 与 `CLAUDE.md`**（其 `--no-context-files` 的说明即"Disable AGENTS.md
-   and CLAUDE.md discovery and loading"），但**不从 fixture 的 `.agents/skills` 自动发现 skills**，
-   所以路径要显式传给 `--skill`。
-2. **凭据在项目自己的 `.env` 里**，不在 agent 的后台环境里。`run_case.sh` 会 source 它。
-   注意 `pi auth check` 报 `ready` 只表示**配了**凭据，不表示**凭据有效** —— 实测三个 provider
-   全部 `ready` 而全部 401。
+1. **它原生读 `AGENTS.md` 与 `CLAUDE.md`** —— `--no-context-files` 的说明就是"Disable AGENTS.md
+   and CLAUDE.md discovery and loading"。
+2. **不从 fixture 的 `.agents/skills` 自动发现 skills，而且 `--skill` 要绝对路径。** 实测：传
+   相对路径 `.agents/skills` 时它**静默加载 0 个** research 技能、转而去加载用户级的 18 个 ——
+   于是 session 跑在一个不是这个项目的技能集上。这是**没有报错的失败**。
+3. **`--no-skills` 是 pi 这边的 workflow block 等价物。** 不加它，pi 会加载用户级的
+   `brainstorming` / `writing-plans` / `test-driven-development` / `project-state` —— 正是
+   `AGENTS.md` 声明对本项目**机械禁用**的那一批。Claude 一侧靠 `.claude/settings.json` 的
+   `permissions.deny` + `skillOverrides`；**pi 没有项目级的等价机制**，所以这个 flag 就是机制。
+
+**凭据在项目自己的 `.env` 里**，不在 agent 的后台环境里，`run_case.sh` 会 source 它。注意
+`pi auth check` 报 `ready` 只表示**配了**凭据，不表示**凭据有效** —— 实测三个 provider 全部
+`ready` 而全部 401。
 
 `#1` / `#22` 这两条验收要的就是"另一个客户端"，#22 还额外要求"状态报告交给它能快速建立正确
-认知，且执行前仍走 Resume"。**目前还没有跑过** —— 上面那个 `pi` 行是待验的。
+认知，且执行前仍走 Resume"。**完整案例尚未在 pi 上跑过** —— 技能加载这一环已验证，端到端没有。
 
 ---
 
