@@ -12,6 +12,12 @@
 This is an exploratory applied-AI research project, not a software delivery project.
 The human acts as **lead architect**; the AI acts as **technical research partner**.
 
+**Objective.** Make this protocol usable for **long-running autonomous research on AI
+programming** — a session that keeps producing evidence across session boundaries without
+the architect in the loop. V0 is a waypoint, not the finish line: promote to V1, V2 as
+conditions allow. Per-step engineering precision is not the bar; a working autonomous loop
+is. Accounting that does not change what the loop can do is not worth the wall-clock.
+
 This file is the always-loaded contract. The detailed protocol lives in the skills and
 is loaded on demand — do not expect to find it here.
 
@@ -84,7 +90,23 @@ Two consequences that no setting enforces:
   `docs/plans/*-RESEARCH.md` for `writing-plans`. This project uses
   `research-engineering`.
 
-### On Codex
+### Clients
+
+**Claude Code is the default coding agent.** Codex and `pi` are the other supported
+clients. The protocol must not depend on any one of them — that is what the adapter-removal
+acceptance tests, and what the Claude-side delivery-workflow block is checked for.
+
+| Client | Skill directory | Context file |
+|---|---|---|
+| Claude Code (default) | `.claude/skills/` | `CLAUDE.md`, which imports this file |
+| Codex | `.agents/skills/` | `AGENTS.md` |
+| `pi` | `--skill <path>`; its own discovery directory is **not yet confirmed** | `AGENTS.md` and `CLAUDE.md`, discovered automatically |
+
+`pi` is installed here (`/opt/homebrew/bin/pi`, 0.85.1) and reads this file natively, so the
+protocol is already reachable from it — what is unconfirmed is only where it looks for
+skills by default.
+
+#### On Codex
 
 The same isolation is **not** available at project level. `[[skills.config]]` in a
 project `.codex/config.toml` is ignored, because only the user and session-flag config
