@@ -4,6 +4,67 @@
 
 ---
 
+## 2026-09-18 — Block 2 第五批：T4 env rebaseline
+
+承接上一轮（T5 telemetry report）。本轮做 T4——`researchlog env rebaseline` 强制更新 fingerprint。
+
+**关键发现**：T4 一半（`predicate.py` 填实让 `changed` 谓词不再永远 `UNRESOLVED`）**V0 已经做了**——
+`_then_fingerprint` 从 record 取 environment / inputs / code_state，`predicate.evaluate` 诚实地报告
+VALID / INVALIDATED / UNRESOLVED。Gotchas A4（`environ` 快照是 `changed` 谓词的前提）已关闭。
+
+T4 真正的实装只是 **`env rebaseline` sub-action**。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/env.py`**
+
+* 新 sub-action `rebaseline`（与 `record` / `query` / `show` / `declare` 并列），可选 `--reason`
+  （默认 `manual rebaseline`）
+* 直接走 `schema.replace_block`，**不**走 `_merge`——rebaseline 不是 material change
+* `comparability.status` 保持上一值（或 `COMPATIBLE` 若空），不假装"刚变了"
+* `comparability.last_material_change` **保留**——rebaseline 不重写这个字段，否则会静默影响
+  planner 用它做的 wall-clock budget 判定
+* history entry `type: "rebaseline"`（不是 `environment_change`），audit reader 能区分
+  no-op refresh 与真实环境变化
+
+**`tests/test_commands.py::EnvRebaselineTests`**（新）
+
+* `test_rebaseline_changes_the_fingerprint` —— `previous_fingerprint` / `fingerprint` 都正确
+* `test_rebaseline_records_a_history_entry` —— `type: rebaseline` + reason + 新 fingerprint
+* `test_rebaseline_does_not_introduce_a_material_change` —— `type` 不等于 `environment_change`
+* `test_rebaseline_default_reason_is_machine_readable` —— 默认 reason 非空，避免 caller
+  `history[-1].reason` KeyError
+
+### 变异验证
+
+注释掉 fingerprint 更新行 —— `test_rebaseline_changes_the_fingerprint` 红，
+`None == None` 准确报告 fingerprint 没动。回滚。
+
+### 现在能核验的状态
+
+```
+HEAD 464d9a9 · 工作树干净
+Block 1 协议层 8/8 ✅
+Block 2：T2 ✅ · T3 ✅ · T4 ✅ · T5 ✅ · T6 ✅ · T1 ⏳
+184 个 unittest 全绿（180 + 4 新）
+python3 tools/researchlog reconcile --json → exit 0 clean
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增）
+
+31. **`env rebaseline` 必须保留 `last_material_change`**。不然 planner 看不出这是 no-op。
+32. **T4 一半（predicate 填实）V0 已做**。V1 方案 §2.2 T4 把"predicate.py 填实"列为 T4 工作
+    实属描述错位——V0 关闭 Gotchas A4 时已经做了。T4 的真实工作量是 rebaseline verb。
+
+### 下一步
+
+Block 2 剩：
+* **T1 capability_map write path** —— 等 P4 评审通过才能落 `env record --capability` / `--harness`
+* 然后看架构师是否触发 Block 3 / Block 4 / Block 5
+
+---
+
 ## 2026-09-18 — Block 2 第四批：T5 telemetry report
 
 承接上一轮（T6 record --validate-line）。本轮做 T5——新增 `researchlog telemetry --report`
