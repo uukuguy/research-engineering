@@ -1419,6 +1419,107 @@ class RecordRejectTests(CommandTestCase):
         self._assert_every_finding_has_fix_hint(envelope)
 
 
+class RecordValidateLineTests(GitCommandTestCase):
+    """V1 Block 2 / T6: `--validate-line` runs the schema / derive pass
+    without writing the ledger file or the git commit.
+
+    The flag separates "is one record legal?" from "does this run
+    produce enough evidence?". A parallel-writer guard calls the
+    former before claiming an id; `validate` covers the latter.
+    """
+
+    def _invoke_validate(self, *extra: str) -> tuple[int, dict]:
+        argv = [
+            "record",
+            "--question", "does the mechanism hold?",
+            "--subject-type", "mechanism",
+            "--subject-id", "M-014",
+            "--level", "E1",
+            "--execution-status", "completed",
+            "--research-outcome", "inconclusive",
+            "--confidence", "low",
+            "--observation", "the probe ran",
+            "--no-experiment",
+            "--validate-line",
+            *extra,
+        ]
+        return self.invoke(argv)
+
+    def test_validate_line_writes_nothing_to_disk(self) -> None:
+        before = self.tree()
+
+        code, envelope = self._invoke_validate()
+
+        self.assertEqual(code, 0, envelope)
+        self.assertTrue(envelope["payload"]["validated"])
+        self.assertFalse(envelope["payload"]["wrote"])
+        self.assertIsNone(envelope["payload"]["evidence_id"])
+        # The working tree must not have gained a ledger shard or a git
+        # commit. `tree()` is content-hashed, so any new file under the
+        # root trips the assertion.
+        self.assertEqual(before, self.tree())
+
+    def test_validate_line_does_not_make_a_git_commit(self) -> None:
+        # `before` is the count of commits on the test fixture's
+        # baseline; `after` is the count after `--validate-line`.
+        # They must be equal: nothing should have been committed.
+        before = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self._invoke_validate()
+        after = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(before.stdout.strip(), after.stdout.strip())
+
+    def test_validate_line_surfaces_rejections_without_writing(self) -> None:
+        # An invalid combination (--no-experiment plus --experiment-id)
+        # must report the rejection, exit non-zero, and still leave the
+        # working tree untouched.
+        before = self.tree()
+
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+                "--experiment-id", "EXP-conflict",
+                "--validate-line",
+            ]
+        )
+        self.assertEqual(code, 2, envelope)
+        self.assertEqual(envelope["findings"][0]["code"], "EXPERIMENT_FLAG_CONFLICT")
+        # `wrote=False` is part of the validated-line contract: the
+        # caller asked for validation only and the tool respected it.
+        self.assertFalse(envelope["payload"]["wrote"])
+        self.assertEqual(before, self.tree())
+
+    def test_validate_line_reports_a_clean_run_via_findings(self) -> None:
+        # A clean validate still emits an envelope whose `findings`
+        # field is present (so callers branching on the field do not
+        # trip on KeyError), and whose count is zero.
+        code, envelope = self._invoke_validate()
+
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(envelope["payload"]["findings"], [])
+        self.assertEqual(envelope["findings"], [])
+
+
 class RecordCommitTests(GitCommandTestCase):
     """V1 P1: `record` must commit the evidence file it just wrote.
 

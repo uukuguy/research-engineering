@@ -125,18 +125,87 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="evidence bumps completed_evidence_iterations; reproduction bumps "
              "reproduction_iterations and never counts toward the block budget",
     )
+    # V1 Block 2 / T6: validate without writing. Lets a caller (or a
+    # parallel-writer guard) ask "is this record legal?" without claiming
+    # an id, writing to disk, or committing. The exit code and findings
+    # are the contract; nothing under research/ changes.
+    parser.add_argument(
+        "--validate-line",
+        action="store_true",
+        help="run the schema / constraint / derive pass without writing "
+             "the ledger file or the git commit",
+    )
 
 
 def run(args: argparse.Namespace) -> Result:
     paths = repo.require(args.root)
-    document, warnings = _build(args, paths)
-    document["evidence_id"] = ids.mint("evidence")  # provisional, for validation only
 
-    findings = _inspect(document, warnings)
+    # V1 Block 2 / T6: when `--validate-line` is set, `_build` and
+    # `_inspect` failures (which raise `StateInvalid`) are caught here
+    # and converted into a non-writing Result so the caller can branch
+    # on the envelope. Without this, `--validate-line` would only ever
+    # protect errors raised after `_inspect`, leaving every `_build`
+    # internal rejection (e.g. `EXPERIMENT_FLAG_CONFLICT`) to crash
+    # the validator before it had a chance to report.
+    document: dict[str, Any] | None = None
+    try:
+        document, warnings = _build(args, paths)
+        document["evidence_id"] = ids.mint("evidence")  # provisional, for validation only
+        findings = _inspect(document, warnings)
+    except StateInvalid as exc:
+        if not args.validate_line:
+            raise
+        findings = list(exc.findings)
+
     errors = [f for f in findings if f.severity == SEVERITY_ERROR]
-    if errors:
+    if errors and not args.validate_line:
         raise StateInvalid(errors)
 
+    # V1 Block 2 / T6: --validate-line separates "is one record legal?" from
+    # "does this run produce enough evidence?". The flag runs the same
+    # build / inspect / derive pass a real record would, then bails out
+    # before claiming an id, writing to disk, or committing. The exit
+    # code and the `findings` envelope are the contract a caller (or a
+    # parallel-writer guard) branches on.
+    if args.validate_line:
+        result = Result(
+            payload={
+                "validated": True,
+                "wrote": False,
+                "evidence_id": None,
+                "findings": [
+                    {
+                        "code": f.code,
+                        "severity": f.severity,
+                        "subject": f.subject,
+                        "message": f.message,
+                        "fix_hint": f.fix_hint,
+                    }
+                    for f in findings
+                ],
+            },
+            human=("validation passed; nothing written to disk"
+                   if not errors else
+                   f"validation failed with {len(errors)} error(s); nothing written to disk"),
+        )
+        for finding in findings:
+            result.add(finding)
+        # Set exit_code explicitly: warnings raise no exit, errors want
+        # the same code the write path would have raised (2 for
+        # `StateInvalid`). Without this, a clean validate against a
+        # repo with an INFO-class finding would exit 3 instead of 0.
+        from researchlog.errors import EXIT_STATE_INVALID
+        if errors:
+            result.exit_code = EXIT_STATE_INVALID
+        return result
+
+    # Past this point `document` is guaranteed non-None: the
+    # `--validate-line` branch returned above, and the `errors and not
+    # args.validate_line` branch raised earlier. The annotation in the
+    # try block is `dict[str, Any] | None` so pyright can narrow it
+    # through the except; the assert documents the invariant for human
+    # readers without re-introducing the type confusion.
+    assert document is not None, "validate-line returned above; document must be set"
     evidence_id, path = ids.claim_new("evidence", paths.evidence_in_partition)
     document["evidence_id"] = evidence_id
     validator = schema.load_validator("evidence")
