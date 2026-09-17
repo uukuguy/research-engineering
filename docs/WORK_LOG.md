@@ -4,6 +4,88 @@
 
 ---
 
+## 2026-09-17 — Block 1 第二批：P6 收 `--replace-existing` + P8 补 record 的 fix_hint
+
+承接上一轮（Block 1 首批：P5 sub-decision 落地 + P9 detector 跑通）。架构师选 P5 = 机制升级
+（history[] 可选加；scope/expiry 仍仅 CONSTRAINT 必填；V0 测试不动），并指定本轮范围 = P6 + P8。
+两个 sub-block 各一提交，两次变异验证。
+
+### 这一轮交了什么
+
+**Block 1.4 P6 — 禁 stale overwrite（`7c62d51`）**
+
+`tools/researchlog/commands/run.py`：
+
+* 删除 `--replace-existing` flag（V1 不允许任何 override）。
+* `_refuse_running` 改成"in-flight 永远拒"——`{pending, running}` 两个状态都拒。V0 只看
+  `running`，但 `_write_manifest` 之前如果进程崩，会留下一个 `pending` 的半成品。新条件比
+  V0 紧，关掉了一个隐藏 overwrite 窗口。
+* 文档字符串同步：现在"start even if a manifest says running"这段已无意义。
+
+`tools/researchlog/tests/test_commands.py::RunCommandTests`：
+
+* 原 `test_refuses_to_restart_an_experiment_whose_manifest_says_running` 不动，仍钉 running 拒绝。
+* `test_replace_existing_is_an_explicit_opt_in` 替换为
+  `test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`：argparse 拒
+  `--replace-existing` 时 `SystemExit(code=2)`；去掉 flag 后 in-flight 仍被拒。
+* 新增 `test_a_finalised_run_can_be_rerun_under_the_same_experiment_id`：completed 不被
+  视为 ownership，可以同 `--experiment-id` 重跑——这是 P6 的反半边。
+* 新增 `test_a_pending_manifest_is_also_refused`：钉 V0→V1 收紧的差异。
+
+变异验证：缩 in-flight set 到 `{running}` 让 only `pending` 测试红；`_refuse_running` 掏空
+让三个 in-flight 测试**全部**红而 `finalised` 测试仍绿。两条都证明测试在钉它声称的事。
+
+**Block 1.7 P8 — record 的 fix_hint 全数补齐（`a58568d`）**
+
+`Finding` dataclass 早就有 `fix_hint` 字段，但 `record` 的五个拒绝站点没用它。补了：
+
+* `EXPERIMENT_FLAG_CONFLICT`：丢 `--no-experiment` 或丢 `--experiment-id`。
+* `ARTIFACT_ROLE_WITHOUT_ARTIFACT`：要么 `--artifact PATH` 一起给，要么删 `--artifact-role`。
+* `EVIDENCE_FILE_UNREADABLE`：先检查 path/权限/存在，或传 `-` 走 stdin。
+* `EVIDENCE_SOURCE_MALFORMED`：`python -m json.tool < source` 先验，再重跑。
+* `EVIDENCE_SOURCE_NOT_OBJECT`：顶层包成 `{...}`，数组和标量不算合法。
+
+测试 `RecordRejectTests`（新 class）每条端到端跑，`_assert_every_finding_has_fix_hint` 扫 envelope
+上所有 finding，断言 `fix_hint.strip()` 非空。变异：把 `EXPERIMENT_FLAG_CONFLICT.fix_hint`
+清空，对应测试**红**——而且报错信息把代码名和空字符串都打印出来，不是 silent green。
+
+### 现在能核验的状态
+
+```
+HEAD a58568d · 2 个新 commit 落地
+Block 1 进度：1.3 P5 sub-decision ✅ · 1.4 P6 ✅ · 1.7 P8 ✅ · 1.8 P9 ✅
+            1.1 P1 record-after-commit · 1.2 P2 reproduction 分桶 · 1.5 P4 capability_map shape
+            · 1.6 P7 run heartbeat
+54 个 unittest 全绿（含 4 个新 P8 reject 测试）
+python3 tools/researchlog reconcile --json → exit 0
+python3 tools/researchlog validate       → exit 0
+```
+
+### 动手前要知道（这一轮新增 + 上轮提到）
+
+13. **`PreconditionMissing` → exit 5，不是 exit 2。** 写测试时猜错一次。`StateInvalid=2` /
+    `RefusedByPolicy=4` / `PreconditionMissing=5` / `EXIT_FINDINGS_PRESENT=3` / `EXIT_OK=0`。
+    这条不是 V0 漏掉的（既有 `test_heartbeat_without_a_manifest_is_a_precondition_failure` 已钉过），
+    是 P8 新测试要断 P8 的外缘时撞到的。
+14. **P8 验收在 record 上**（V1 方案 §4 #8 + V1-D8 都点名 record），其他命令的 reject 路径
+    是另一个 sub-block 的事。这一轮我只动 record.py。
+
+### 下一步
+
+按架构师选的 P5 = 机制升级，今晚 Block 1 的剩余：
+
+1. **Block 1.1 P1 record-after-commit**（最大块：record 写完 evidence 后自动 `git add
+   research/ledger/ research/ACTIVE.json && git commit -F msg_file`；新增错误码 `COMMIT_REQUIRED`
+   / `COMMIT_FAILED`；detached worktree 路径需要预检——V1 方案 §6.2 列过这个风险点）
+2. **Block 1.6 P7 run heartbeat**（run.py 子进程 supervise 30s 默认；ACTIVE 加 `heartbeat_or_last_observed_at`）
+3. **Block 1.2 P2 reproduction 分桶**（ACTIVE schema + evidence schema 加 `reproduction_iterations`
+   + `iteration_kind`；record 命令分流计数）
+4. **Block 1.5 P4 capability_map shape proposal**（写提案文档，等架构师评审；不直接动 schema）
+
+P5 (Block 1.3) 等架构师触发——V0 测试不动，schema 升级只是 `history[]` 可选加。等架构师说。
+
+---
+
 ## 2026-09-17 — Block 1 首批：P5 二次澄清 + P9 实装
 
 承接上一轮（V1 整体方案落盘）。本轮启动 Block 1，但只做了一处澄清 + 一条 sub-block。理由写在 §本轮做了什么。
