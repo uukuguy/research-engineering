@@ -317,10 +317,16 @@ def crit_bootstrap_evidence_iterations(ctx: Ctx):
             continue
         if data.get("counts_as_evidence_iteration") is True:
             counted += 1
-    if counted == 0:
-        return FAIL, f"{len(records)} records, none counts_as_evidence_iteration"
     note = f" ({len(unreadable)} unreadable)" if unreadable else ""
-    return PASS, f"{len(records)} records, {counted} counted as evidence iterations{note}"
+    # The guide's pass condition, verbatim: three iterations each producing an `EV-*`, and
+    # at least one of them counted. An earlier version of this check asked only for one
+    # counted record, which is looser than the row it implements — a criterion whose label
+    # says one thing and whose check says another is how a mismatch goes unnoticed.
+    if len(records) < 3:
+        return FAIL, f"{len(records)} evidence record(s); the criterion asks for three iterations"
+    if counted < 1:
+        return FAIL, f"{len(records)} records, none counts_as_evidence_iteration"
+    return PASS, f"{len(records)} records (>=3), {counted} counted as evidence iterations{note}"
 
 
 def crit_bootstrap_env_not_refuted(ctx: Ctx):
