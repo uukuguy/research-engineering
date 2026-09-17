@@ -11,6 +11,81 @@
 
 ---
 
+## 2026-09-17 — 交接（V0 收尾）
+
+> 新会话从这里接续。**下面每一条都可以当场核验**，不是回忆。
+
+### 可核验的现状
+
+```bash
+git rev-parse --short HEAD          # 8c3de91
+git status --porcelain              # 空
+git ls-remote <ssh-url> main        # 8c3de91 —— 与本地相同
+```
+
+```bash
+python3 tools/researchlog validate >/dev/null;                       echo $?   # 0
+python3 tools/researchlog reconcile >/dev/null;                      echo $?   # 0
+python3 tools/check_workflow_block.py >/dev/null;                    echo $?   # 0
+python3 tools/install_research_skills.py --self --check >/dev/null;  echo $?   # 0
+bash tests/main/check_negative_control.sh;                           echo $?   # 0
+```
+
+**别用 `for c in "tools/researchlog validate" …; do python3 $c; done`** —— zsh 不做词分割，那会
+得到 `exit=2`，看起来像工具坏了，其实是 python 去找一个含空格的文件名（`GOTCHAS.md` C9 第二半）。
+这一轮我踩了两次。
+
+| | 值 |
+|---|---|
+| **V0 状态表** | **21 行 = 21 ✅ + 0 ⏸ + 0 ⏳ + 0 ❌**（`#1` 架构师改判为"另一个客户端也能进入 Research Mode"，第二客户端记 **pi**；codex 明确暂缓） |
+| **`research/` 轨道** | `ACTIVE.status: idle`、`ledger/` 0 条、`runs/` 0 个 —— **正常状态，不是空缺** |
+| **案例集** | 4 个 builder + `run_case.sh` + `verify_case.py` + `check_negative_control.sh` |
+| **裁判** | 已**钉住**：`run_case.sh` 在 build 时把 `verify_case.py` 复制进运行私有的 workdir，判时用那份（源树中途被改不影响判读） |
+
+### 这一轮做了什么（九个 commit，全部已推）
+
+1. **负对照当场抓到检查器说谎**：`d2` 把 fixture 种下的文本当成 session 的行为来判（两个方向都
+   错），`r2` 的消息声称它没测的事。修完补上零成本闸门 `check_negative_control.sh`（四案例，6 秒）
+2. **真实运行抓到 fixture 三处不自洽**（种下的改动自己会崩、两臂只差一个打印前缀、
+   `expected_outputs` 在构造上无法满足）→ 修 + 四条自断言（各带变异验证）+ 补上 §12.16 判据 2
+   此前**没有任何一行在判**的 `r7`
+3. **pi 上三个案例全过**（`recovery` / `evaluator-conflict` / `bootstrap`，各 7/7）—— 而**每一个的
+   第一份判读都是检查器答错了隔壁问题**：`r2` 与提及判据读错产物、`d6` 判"有没有新 run 目录"、
+   `b5` 要 ≥3 而判据原文是 2–3
+4. **fixture 没有 `.gitignore`** → 提交了字节缓存 → 两次 run 的"代码身份"一直在哈希 `.pyc` 的抖动；
+   清掉噪声后暴露真不一致（种植在 run **之后**，而 manifest 声称用了那个 flag）→ 种植移到 run 之前
+5. **`#22` 演练通过** → V0 状态表全绿
+
+### 下一步（有顺序）
+
+1. **V1 候选**（两个，未开工）：协议**无提交要求** —— `code_state.commit` 因此可能指向 fixture
+   自己的 commit，让 `#18` 的双向映射没有东西可映射；`max_evidence_iterations` **绑不住复现工作**
+2. **一条未抹平的账**：`#22` 的素材由**旧** builder 生成、带 73 个 tracked `.pyc`，所以它结束时
+   `reconcile` 不干净（`ENV-LIM-002`）。builder 已修；判定材料写在 `V0_ACCEPTANCE_GUIDE.md` 的
+   `#22` 行里，素材本身在 `/tmp`（会随重启消失）
+3. **claude 侧三个案例不在同一版 fixture 上**：`recovery` 的 6/6 是**修 fixture 之前**跑的；
+   `evaluator-conflict` 在 claude 上**从未真实跑过**（pi 侧有 7/7）。若要"同一版仪器、两个客户端"
+   的完整矩阵，还需 2 个 claude session —— 但 `#1` 的证据按架构师口径**已经够了**，这属于加固
+
+### 动手前必须知道
+
+**全部在 `GOTCHAS.md`**（那是当前为真的清单，与这份日志分工不同）。这一轮新增/改动最相关的：
+
+- **B15** fixture 提交字节缓存 → "代码身份"哈希算在缓存上；**`.gitignore` 对已跟踪文件无效**
+- **B14** 判一个 session 要判**它留下的那个产物**：pi 的 stdout 是摘要（4 KB），session log 才是
+  记录（254 KB）
+- **B13** 种植式 fixture 的 `.replace()` 链**静默失败**
+- **B12** 验证检查器时别拿**实现里的字符串**去构造验证用例
+- **B11** 现有**四个**可操作的检查（新增两条：**它会不会惩罚本该奖励的行为？**、**键集合为空时
+  它还能失败吗？**）
+
+**一条给下一个会话的**：这一轮我的**验证程序自己错了五次**（`ps` 模式写窄、变异锚点写错、变异
+脚本把多个 case 铺进同一目录互相覆盖、两次变异"因别的原因变红"却被当成通过、以及上面 C9 那次）。
+第六轮写过"**凡是要据以下结论的数字，先确认你读的确实是那个东西的数字**" —— 它仍然作数，而且
+我仍然会犯。
+
+---
+
 ## 2026-09-17（第十轮）— fixture 把字节缓存提交进了历史；`#22` 演练通过，V0 状态表全绿
 
 ### fixture 的 `.gitignore` —— 一个"身份哈希算的是什么"的问题
