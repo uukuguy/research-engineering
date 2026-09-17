@@ -11,6 +11,94 @@
 
 ---
 
+## 2026-09-17（第六轮）— 案例集跑起来了，而它发现的第一个缺陷是我的
+
+### 会话概览
+
+架构师把目标定成"**可用于长时间自主研究 AI 编程**"，V0 是路标；并把案例集**亲自跑了两遍**
+（`bootstrap claude` 与 `rotation pi`）。两个案例都跑完并留下判定。**本轮最有价值的东西不是任何
+一个判定，而是 `bootstrap` 那次发现了我 fixture 里的一个真 bug —— 而我在它发现之前，先给出了
+两个错的诊断。**
+
+### 判定
+
+| 案例 | 结果 |
+|---|---|
+| `bootstrap claude` | **7/7 PASS**（旧 fixture，含那个分解 bug） |
+| `rotation pi` | **4 PASS / 2 UNJUDGED / 0 FAIL** —— #1/#22 的第一份端到端证据 |
+
+`rotation pi` 那次 pi 走完了整个 loop：等到 run 结束、读结果、记 `EV-…6dd6`、以 `belief_delta: none`
+关掉 `RB-021`、带完整 provenance footer 提交。**它甚至通过 router 加载了 `session-continuity.md`**
+—— 修好 router 之前 Claude 三次都没读到那份文件。
+
+### 案例发现的 fixture 缺陷（我的）
+
+`bootstrap` 的 session **独立重算了**恒等式 `total_latency = queue_wait + service_time +
+backoff_wait`，在 2000 行里查出 **217 行违反**，记为一次 `counts: true` 的迭代（`refuted` /
+`refined`）。**它是对的**：重试循环每轮 `total += wait + rng.expovariate(...)` 加了一次新的
+service 抽样，而 `service_time` 只记第一次 —— 每个重试过的请求**差 1.6–35 ms**。
+
+而 docstring 明写"Total latency decomposes into…"。**fixture 既没有那个性质，又声称有** ——
+本仓库最忌的形状。已修（`6267fe9`）：`service_time` 累加全部 attempts；docstring 改成
+"成立到列所记录的六位小数"；builder 加断言，**变异验证在 `0.034606s` 触发 —— 正是 session 报的数**。
+
+### 我自己被证伪的三个诊断（都记进 GOTCHAS）
+
+1. **"旧 fixture 把消融替它做好了，所以 M3 不可能发生"** —— 证伪：它在那个 fixture 上产出了
+   `counts: true` 的迭代，而且**用过**那条对照臂。撤掉对照臂的改动已**回退**。教训：**"还没发生"
+   不是"不可能发生"的证据**（记入 B10）。
+2. **"交接没有接线"** —— 证伪：`ACTIVE.next_action` 留下的是"seeds 0..199 多种子复现两个臂，
+   记录每个 seed 是否 cascade、第一个重试的 request_id、以及两臂的 p99/max"，**正是
+   `research-bootstrap` 的成功条件**。交接是工作的。
+3. **"两个运行都已结束"** —— 见 C8：我用一次被自己 `head` 截断的 `ps` 判了一个**还在飞**的运行，
+   而 artifact 信号（transcript 正在长）就在同一条消息里。
+
+### 检查器的六处修正
+
+| 缺陷 | 后果 |
+|---|---|
+| `tool_digest` 含 `__pycache__` | 运行工具就会生成它 → 守卫对**每个正常 session** 报"你改了裁判" |
+| `c5` 判"文件变了没" | 收尾写 = 意图写 → **假 PASS**（pi 的写发生在 run 完成之后 3.5 分钟） |
+| `b5` 标签"2-3"而检查只要 ≥1 | 标签与判的东西不一致 → 按指南改成"≥3 条记录且有 ≥1 条 counted" |
+| `--json` 后面跟人读的句子 | 输出无法被程序解析 |
+| `git diff` 看不见未跟踪文件 | 新建的证据记录**完全不报** |
+| `--porcelain` 里删除也算变化 | **删掉** ledger 会读成**追加**了证据 |
+
+### 协议缺口：没有任何地方要求 session 提交
+
+实测：`bootstrap` 那次的 `research/` **整个是未跟踪的**（`?? research/`），只有 builder 一个 commit。
+查协议：`AGENTS.md` 没有、`research-bootstrap` 没有、`research-engineering` 只在 router 里有一行
+"**about to commit** 时去看 git reference" —— 那是"当它要提交时"，不是"它必须提交"。
+
+**后果是实的**：`record` 把 `code_state.commit` 写成当前工作区 commit；session 不提交，那条记录就
+指向 **fixture 的 commit**，#18 的 Git↔Evidence 双向映射**没有东西可映射**。旁证：pi 那次提交了
+（`3090983`），claude 这次没有 —— **两个客户端行为不一致，而协议对两者都没要求**。
+
+**这是协议层的洞，归 V1**，不是案例能修的。
+
+### 开放项
+
+1. **修完分解 bug 之后，M3 还会不会发生？** 修掉缺陷可能也修掉了那次迭代的来源。**下一次运行
+   就是回答这个的实验。**（把已知 bug 留着制造迭代 = "fixture 种答案"的镜像，所以修是必须的。）
+2. **协议缺提交要求**（见上），归 V1。
+3. `capability_map` 仍无形状（架构师的设计决定）。
+4. `recovery` / `evaluator-conflict` 的检查器已写但**从未对真实运行跑过**。
+5. 判据 5 的**形状问题**（run 在 session 活着时完成，判据前提不成立）—— 要的是新判据，不是放松。
+
+### 下一步
+
+1. **单独**跑一次 `bootstrap`（新 fixture，一次一个案例），看 M3 在缺陷修掉之后还立不立得住
+2. 跑 `recovery` / `evaluator-conflict`，让这两个检查器第一次见真实运行
+
+### 动手前必须知道（本轮新增，已同步 `GOTCHAS.md`）
+
+17. **"还没发生"不是"不可能发生"**（B10）—— 从 `runs/` 空推出"M3 不可能"是错的；快照不是判决
+18. **判一个别人正在跑的任务用 PID + artifact**（C8）—— 一次被过滤/截断的 `ps` 连信号都不算；
+    **别用代理信号代替直接测量**（事件时间戳 ≠ 文件 mtime）
+19. **fixture 要断言它自己声称的性质**（本轮的分解决 bug：断言写在 builder 里，变异验证能触发）
+
+---
+
 ## 2026-09-17（第五轮）— V0 收尾：判据 5 的三次运行，与案例集
 
 ### 会话概览
