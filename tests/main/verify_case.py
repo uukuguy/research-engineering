@@ -43,6 +43,34 @@ PASS, FAIL, UNJUDGED = "PASS", "FAIL", "UNJUDGED"
 SOURCE_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
+def tool_digest_at(root: pathlib.Path, commit: str) -> str:
+    """The vendored tool's digest as of a commit — the value g0 actually needs.
+
+    `tool_digest(root)` reads the working tree, so it can only be trusted *before* an agent
+    has run. Comparing it at judgment time against a fixture it was just computed from is
+    vacuous: the check compares the fixture to itself and always passes. Reading the tree
+    out of the build-time commit removes the ordering requirement entirely, which matters
+    because the manual workflow in docs/V0_CASES.md has no way to enforce one.
+    """
+    listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", commit, "--", "tools/researchlog"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split()
+    digest = hashlib.sha256()
+    for rel in sorted(listing):
+        if "__pycache__" in pathlib.PurePosixPath(rel).parts or rel.endswith(".pyc"):
+            continue
+        blob = subprocess.run(
+            ["git", "show", f"{commit}:{rel}"], cwd=root, capture_output=True, check=False
+        ).stdout
+        digest.update(str(pathlib.PurePosixPath(rel).relative_to("tools/researchlog")).encode())
+        digest.update(blob)
+    return digest.hexdigest()
+
+
 def tool_digest(root: pathlib.Path) -> str:
     """A digest of the vendored tool, so "was it modified" is decidable without Git.
 
@@ -654,11 +682,20 @@ def main() -> int:
         metavar="DIR",
         help="print the vendored tool's digest for DIR and exit; run_case.sh uses this",
     )
+    parser.add_argument(
+        "--at",
+        metavar="COMMIT",
+        help="with --tool-hash-of: read the tool out of this commit instead of the working "
+        "tree, which is the only way the value is trustworthy after an agent has run",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     if args.tool_hash_of is not None:
-        print(tool_digest(args.tool_hash_of))
+        if args.at:
+            print(tool_digest_at(args.tool_hash_of, args.at))
+        else:
+            print(tool_digest(args.tool_hash_of))
         return 0
     if not args.case or args.fixture is None:
         parser.error("case and fixture are required")

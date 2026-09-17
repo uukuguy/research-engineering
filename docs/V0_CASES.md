@@ -41,8 +41,15 @@ python3 tests/main/verify_case.py rotation /tmp/x \
 
 ```bash
 B=$(git -C /tmp/x rev-parse HEAD)
-H=$(python3 tests/main/verify_case.py --tool-hash-of /tmp/x)
+H=$(python3 tests/main/verify_case.py --tool-hash-of /tmp/x --at "$B")
 ```
+
+**`--at "$B"` 不是可选的，去掉它这条检查就变成恒真的。** 不带 `--at` 时它算的是 fixture
+**工作树当前**的工具摘要 —— 拿它再传回 `--tool-hash`，就是**自己跟自己比，永远通过**。文档原先
+就是这么写的，是一处会骗人的检查（"检查的东西与它声称的相邻"）。
+
+带 `--at` 时它从**建 fixture 那一刻的 commit** 里读工具，所以**什么时候算都一样**，不依赖你先取
+还是后取。这是选择"从 commit 读"而不是"提醒人注意顺序"的原因：手工流程没有机制能强制顺序。
 
 ### 第 0 行：守卫判据 `g0` —— session 没有改那个判它的工具
 
