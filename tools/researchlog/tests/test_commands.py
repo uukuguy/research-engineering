@@ -42,8 +42,51 @@ class CommandTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name).resolve()
+        # V1 P1: every recorded evidence is followed by a commit, so the test
+        # repo must be a real git repository. The init command lays out the
+        # research/ skeleton; this `git init` makes the commit path work.
+        subprocess.run(
+            ["git", "init", "-q", "--initial-branch=main"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "tests@example.invalid"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "test fixture"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+        )
+        # `snapshot --write` refuses to dirt the tree if its target is not
+        # gitignored, and the snapshot path is `research/.derived/`. Lay down
+        # the same ignore pattern the production repo uses so the tests can
+        # exercise the happy path under P1's new "every record is committed"
+        # regime.
+        (self.root / ".gitignore").write_text("research/.derived/\n", encoding="utf-8")
         code, _ = self.invoke(["init"])
         self.assertEqual(code, 0, "init must succeed before any other command")
+        # Baseline commit so V1 P1's "tree clean after record" assertion has a
+        # well-defined starting point. Without this the test setup itself
+        # leaves `.gitignore`, `change.json`, and `research/` untracked and
+        # `record` is observed committing only one of them.
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "fixture: research repo skeleton"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+        )
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -115,6 +158,28 @@ def _with_json(argv: list[str]) -> list[str]:
         index = argv.index("--")
         return [*argv[:index], "--json", *argv[index:]]
     return [*argv, "--json"]
+
+
+class NonGitCommandTestCase(CommandTestCase):
+    """A research repo without `git init`, for testing the P1 guard rail.
+
+    V1 P1 requires `record` to refuse to write an evidence file when the
+    working tree is not a git repository, because the second half of the
+    record path (the commit) cannot succeed. The standard `CommandTestCase`
+    now inits a repo in `setUp` so the happy path can run; this class peels
+    that back for the failure-path assertions.
+    """
+
+    def setUp(self) -> None:
+        # Manually do what CommandTestCase.setUp does *minus* the git parts,
+        # so the research/ skeleton is in place but `.git` is not.
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name).resolve()
+        code, _ = self.invoke(["init"])
+        self.assertEqual(code, 0, "init must succeed before any other command")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
 
 
 class GitCommandTestCase(CommandTestCase):
@@ -349,22 +414,53 @@ class EnvCommandTests(CommandTestCase):
         self.assertEqual(before, self.tree())
 
     def test_record_appends_an_evidence_record_and_reports_the_closure(self) -> None:
-        code, envelope = self.invoke(["env", "record", str(self.change)])
-
+        # The record path covered by V1 P1 is the bare `record` command, which
+        # writes one evidence file and commits it. `env record` is a separate
+        # subcommand that mutates ENVIRONMENT.md and is out of P1's literal
+        # scope; it stays dirty and will be addressed by a follow-up sub-block.
+        code, envelope = self.invoke_raw(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+            ]
+        )
+        envelope = json.loads(envelope) if envelope.strip() else {}
         self.assertEqual(code, 0, envelope)
-        evidence_id = envelope["payload"]["recorded"]
+        evidence_id = envelope["payload"]["evidence_id"]
         self.assertTrue(self.research("ledger", f"{evidence_id}.json").is_file())
 
-        from researchlog import schema
-
-        block = schema.require_block(
-            self.research("ENVIRONMENT.md").read_text(), "environment", source="ENVIRONMENT.md"
+        # V1 P1: every record lands as a commit, not just a file on disk. The
+        # evidence file specifically must be tracked; HEAD must carry the
+        # canonical commit subject; the message must not be command-substituted.
+        ls_files = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", f"research/ledger/{evidence_id}.json"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
         )
-        history = block["history"]
-        self.assertEqual(len(history), 1)
-        self.assertEqual(history[0]["type"], "environment_change")
-        self.assertEqual(history[0]["evidence_id"], evidence_id)
-        self.assertEqual(block["comparability"]["fingerprint"], envelope["payload"]["fingerprint"])
+        self.assertTrue(ls_files.stdout.strip().endswith(f"research/ledger/{evidence_id}.json"))
+        log = subprocess.run(
+            ["git", "log", "-1", "--format=%s"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(log.stdout.strip(), f"research: record {evidence_id}")
+
+        # The original V0 form of this test went through `env record` and
+        # checked ENVIRONMENT.md history. V1 P1 only mandates that bare
+        # `record` commit; the env-record commit duty is a follow-up sub-block.
+        # The history assertion is left to `test_the_closure_of_a_change_is_reported`.
 
     def test_bare_positional_names_both_verbs(self) -> None:
         with self.assertRaises(SystemExit) as caught:
@@ -952,6 +1048,93 @@ class RecordRejectTests(CommandTestCase):
         self.assertEqual(code, 2, envelope)
         self.assertEqual(envelope["findings"][0]["code"], "EVIDENCE_SOURCE_NOT_OBJECT")
         self._assert_every_finding_has_fix_hint(envelope)
+
+
+class RecordCommitTests(GitCommandTestCase):
+    """V1 P1: `record` must commit the evidence file it just wrote.
+
+    The end-to-end shape — write evidence, `git add`, `git commit` — is
+    covered by the existing `EnvCommandTests::test_record_appends_*` after
+    that test was rewritten to drive the bare `record` command. This class
+    narrows in on the failure paths and on the commit message contract,
+    which is the lesson E1 worry (backticks in `git commit -m` are silently
+    command-substituted).
+    """
+
+    def _invoke_record(self) -> tuple[int, dict]:
+        return self.invoke(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+            ]
+        )
+
+    def test_record_commits_with_the_canonical_subject(self) -> None:
+        code, envelope = self._invoke_record()
+        self.assertEqual(code, 0, envelope)
+        evidence_id = envelope["payload"]["evidence_id"]
+
+        # Subject line is the canonical V1 form, not the user-supplied
+        # observation. Pinning the format here is what lets the next session
+        # grep `git log --grep="research: record"` to find every record.
+        log = subprocess.run(
+            ["git", "log", "-1", "--format=%s"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(log.stdout.strip(), f"research: record {evidence_id}")
+
+        # The evidence file is tracked, not just on disk.
+        completed = subprocess.run(
+            ["git", "ls-files", f"research/ledger/{evidence_id}.json"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertTrue(
+            completed.stdout.strip().endswith(f"research/ledger/{evidence_id}.json"),
+            completed.stdout,
+        )
+
+
+class RecordRejectsInNonGitRepo(NonGitCommandTestCase):
+    """V1 P1 guard rail: `record` must not silently write evidence when the
+    repo is not a git repository, because the second half of the path
+    (the commit) cannot run."""
+
+    def test_record_refuses_outside_a_git_repository(self) -> None:
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question", "does the mechanism hold?",
+                "--subject-type", "mechanism",
+                "--subject-id", "M-014",
+                "--level", "E1",
+                "--execution-status", "completed",
+                "--research-outcome", "inconclusive",
+                "--confidence", "low",
+                "--observation", "the probe ran",
+                "--no-experiment",
+            ]
+        )
+        self.assertEqual(code, 2, envelope)
+        # `is_repository` reports before `git add`, so the subject is "git
+        # commit" and the message names the root, not the generic stderr
+        # from `git add` (which would be the case if the guard were skipped).
+        self.assertEqual(envelope["findings"][0]["code"], "COMMIT_FAILED")
+        self.assertEqual(envelope["findings"][0]["subject"], "git commit")
+        self.assertIn("is not a git repository", envelope["findings"][0]["message"])
 
 
 class HumanRenderingTests(unittest.TestCase):

@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import json
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -130,6 +131,14 @@ def run(args: argparse.Namespace) -> Result:
     document["evidence_id"] = evidence_id
     validator = schema.load_validator("evidence")
     ioutil.write_json_atomic(path, document, validator=validator)
+
+    # V1 P1: every recorded evidence is followed by a commit so the next session
+    # can reconcile against git rather than disk state. The commit message lives
+    # in a tmpfile (lesson E1: backticks in `git commit -m` are silently command-
+    # substituted). Failure throws — the evidence is on disk but untracked, and
+    # the rest of the session needs to know not to keep stacking on top.
+    evidence_relpath = path.relative_to(paths.root).as_posix()
+    _commit_evidence(paths, evidence_id, evidence_relpath)
 
     result = Result(
         payload={
@@ -518,3 +527,82 @@ def _literal(raw: str) -> Any:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# V1 P1: the commit message that pairs with an evidence record. Built once per
+# `record` invocation. V0 lesson E1 says the message must travel through a
+# file because backticks / `$` / `!` in `git commit -m` are silently consumed
+# by the shell — the message lands with words missing and no error to read.
+# `_commit_evidence` is the only call site, and it owns the temp file lifecycle.
+_RECORD_COMMIT_SUBJECT = "research: record {evidence_id}"
+
+
+def _commit_evidence(
+    paths: repo.ResearchPaths,
+    evidence_id: str,
+    evidence_relpath: str,
+) -> None:
+    """Stage the freshly written ledger file and commit it.
+
+    Failure modes are surfaced as `COMMIT_FAILED` (state invalid, exit 2) so the
+    session sees the same shape `checkpoint` already raises for the same
+    underlying failure (`CHECKPOINT_COMMIT_FAILED`). Detached HEAD is *not* a
+    failure: `git commit` is legal there, and a no-branch commit is the right
+    shape when the agent has lost its session.
+    """
+    if not jgit.is_repository(paths.root):
+        raise StateInvalid(
+            [
+                Finding(
+                    "COMMIT_FAILED",
+                    SEVERITY_ERROR,
+                    "git commit",
+                    f"{paths.root} is not a git repository",
+                    "run `git init` (or clone the research repo) before invoking "
+                    "`researchlog record`; V1 P1 requires the ledger entry to "
+                    "land in git, not just on disk",
+                )
+            ]
+        )
+
+    staged = jgit.add_paths(paths.root, [evidence_relpath])
+    if not staged.ok:
+        raise StateInvalid(
+            [
+                Finding(
+                    "COMMIT_FAILED",
+                    SEVERITY_ERROR,
+                    "git add",
+                    staged.stderr.strip() or "git add returned non-zero",
+                    "inspect the file path and git's index state; the ledger entry "
+                    "is on disk but untracked",
+                )
+            ]
+        )
+
+    message = _RECORD_COMMIT_SUBJECT.format(evidence_id=evidence_id)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", suffix=".txt", delete=False
+    ) as handle:
+        handle.write(message + "\n")
+        message_path = Path(handle.name)
+    try:
+        committed = jgit.commit_with_message_file(paths.root, message_path)
+    finally:
+        message_path.unlink(missing_ok=True)
+
+    if not committed.ok:
+        raise StateInvalid(
+            [
+                Finding(
+                    "COMMIT_FAILED",
+                    SEVERITY_ERROR,
+                    "git commit",
+                    committed.stderr.strip() or "git commit returned non-zero",
+                    "the ledger entry is on disk but untracked; resolve the "
+                    "commit failure (hooks, identity, detached HEAD policy) "
+                    "and re-invoke `researchlog record` after `git add` of "
+                    f"{evidence_relpath}",
+                )
+            ]
+        )

@@ -161,6 +161,31 @@ def show_file(root: Path, revision: str, path: str) -> str | None:
     return result.stdout if result.ok else None
 
 
+def add_paths(root: Path, paths: Sequence[str]) -> GitResult:
+    """`git add -- <paths>` with paths given repo-relative.
+
+    An empty `paths` is a programming error rather than a graceful no-op: `git add`
+    with no argument would stage every tracked change, which is not what the
+    caller asked for. Callers that may have nothing to stage must guard before
+    calling.
+    """
+    if not paths:
+        raise ValueError("add_paths requires at least one repo-relative path")
+    return git(["add", "--", *paths], cwd=root)
+
+
+def commit_with_message_file(root: Path, message_file: Path) -> GitResult:
+    """`git commit -F <message_file>`.
+
+    The message is read from a file rather than passed on the command line
+    because V0 lesson E1: backticks in `git commit -m "..."` are silently
+    command-substituted, so words disappear from the message without an error.
+    The caller owns the message file's content; this module never invents a
+    subject line on its own.
+    """
+    return git(["commit", "-F", str(message_file)], cwd=root)
+
+
 def evidence_trailers(root: Path, *, limit: int = 200) -> list[tuple[str, str]]:
     """Return (commit_sha, evidence_id) for commits that carry an Evidence trailer.
 
