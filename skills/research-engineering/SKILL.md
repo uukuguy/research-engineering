@@ -171,8 +171,12 @@ impossible.
 
 ## Router
 
-Load a reference when its trigger state is observed. Trigger conditions are observable
-state predicates, not topics — if the state does not hold, do not load the file.
+Load a reference or invoke a skill when its trigger state is observed. Trigger
+conditions are observable state predicates, not topics — if the state does not hold,
+do not load the file. V1 Block 3 promotes three rows from the V0 router into
+independent skill folders (`evaluation-design`, `experiment-review`, `retrospective`),
+and adds two new skills (`research-search`, `scenario-redteam`); the router below
+reflects both.
 
 | Observed state | Load |
 |---|---|
@@ -181,10 +185,12 @@ state predicates, not topics — if the state does not hold, do not load the fil
 | choosing the next experiment, or a result's evidence level is not obvious | `references/evidence-model.md` |
 | the desired evidence cannot be produced here (`ENV_BLOCKED` / `ENV_UNSUPPORTED` / `RESOURCE_EXCEEDED`) | `references/environment-feasibility.md` |
 | a conclusion would rest on a surrogate, mock, replay, or reduced simulator | `references/surrogate-validity.md` (mandatory) |
-| a run just finished and `>= 2` hypotheses are live | `references/experiment-review.md` |
+| a run just finished and `>= 2` hypotheses are live | **skill** `experiment-review` |
 | a failure has `>= 2` plausible layers, or 3 similar fixes have failed | `references/diagnosis.md` |
-| the last 5 counted iterations all carry `belief_delta: none` | `references/retrospective.md` |
-| no evaluator exists, or a local metric rises while E4/E5 or architect observation falls | `references/evaluation-design.md` |
+| the last 5 counted iterations all carry `belief_delta: none`, or at a phase boundary | **skill** `retrospective` |
+| no evaluator exists, or a local metric rises while E4/E5 or architect observation falls | **skill** `evaluation-design` |
+| no live hypothesis is registered, the dominant failure has moved, or a phase boundary shows the current mechanism family is exhausted | **skill** `research-search` |
+| the most recent record is `promising` / `informative_failure`, or promotion to Integration Mode is imminent | **skill** `scenario-redteam` |
 | a new session, or `ACTIVE.status != idle`, or a manifest is `running` with no result | `references/session-continuity.md` |
 | about to commit, branch, worktree, tag, or promote | `references/git-research-infrastructure.md` |
 | a mutation touches a HARD boundary, a unit/coordinate/schema contract, or an evaluator; or a test is being added | `references/minimum-correctness.md` |
@@ -192,6 +198,11 @@ state predicates, not topics — if the state does not hold, do not load the fil
 
 Loading a reference is not a workflow stage. Most iterations load none. If you find
 yourself loading four of them per iteration, the loop has turned into ceremony.
+
+Loading a **skill** (bold above) is a stronger action: it brings its own
+description, its own loading discipline, and — once V1 Block 3 finishes the
+content move — its own self-contained body. Until then each skill's body still
+lives at the V0 reference path noted inside the skill.
 
 ## Tool surface
 
