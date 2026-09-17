@@ -79,8 +79,10 @@ cat > sim/queue.py <<'SIM'
 """A single-server queue with timeout-and-retry, and a per-request timing trace.
 
 Run it with `--requests N --seed S --retry on|off`. Total latency decomposes into
-queue_wait, service_time, and backoff_wait; the sweep is what turns a latency budget into
-a question about which of the three is responsible.
+queue_wait, service_time, and backoff_wait — `service_time` summing every attempt, and the
+identity holding to the six decimal places the columns are recorded at, not exactly. The
+sweep is what turns a latency budget into a question about which of the three is
+responsible.
 """
 
 from __future__ import annotations
@@ -104,14 +106,20 @@ def simulate(requests: int, seed: int, retry: bool) -> list[dict[str, float | in
     for request_id in range(requests):
         arrived = request_id * ARRIVAL_INTERVAL
         queue_wait = max(0.0, free_at - arrived)
-        service = rng.expovariate(1.0 / SERVICE_MEAN)
+        # Every attempt's service time accumulates here. The first version recorded only
+        # the first draw, so `total_latency = queue_wait + service_time + backoff_wait`
+        # was false by 1.6-35 ms on every request that retried — the fixture advertised a
+        # decomposition it did not have, and a session found it before I did.
+        service_total = rng.expovariate(1.0 / SERVICE_MEAN)
         backoff = 0.0
         attempts = 1
-        total = queue_wait + service
+        total = queue_wait + service_total
         while retry and total > RETRY_THRESHOLD and attempts < MAX_ATTEMPTS:
             wait = 0.010 * (2 ** (attempts - 1))
+            service = rng.expovariate(1.0 / SERVICE_MEAN)
+            service_total += service
             backoff += wait
-            total += wait + rng.expovariate(1.0 / SERVICE_MEAN)
+            total += wait + service
             attempts += 1
         free_at = arrived + total
         rows.append(
@@ -119,7 +127,7 @@ def simulate(requests: int, seed: int, retry: bool) -> list[dict[str, float | in
                 "request_id": request_id,
                 "arrived_at": round(arrived, 6),
                 "queue_wait": round(queue_wait, 6),
-                "service_time": round(service, 6),
+                "service_time": round(service_total, 6),
                 "attempts": attempts,
                 "backoff_wait": round(backoff, 6),
                 "total_latency": round(total, 6),
@@ -151,19 +159,19 @@ if __name__ == "__main__":
     main()
 SIM
 
-# ONE arm only, deliberately. Shipping the retry-off trace as well would hand the session
-# the comparison it needs, and then the cheapest first evidence action is *reading a file*
-# rather than *running an ablation* — so M3 ("2-3 evidence-producing iterations") has
-# nothing to count, however well the session behaves. The counterfactual has to be
-# produced. That the recipe for it is in the docstring is intentional: research-bootstrap's
-# success condition is a *cheap, executable* first action, not a hard one.
+# Both arms. An earlier version shipped only one, on the theory that handing over the
+# counterfactual turns the first evidence action into reading a file rather than running an
+# ablation. The run falsified that: given both traces the session still produced a counted
+# evidence iteration, and it used the second trace while doing it. Reverted, so that the
+# only change to this fixture is the bug fix below.
 "$PYTHON" sim/queue.py --requests 2000 --seed 7 --retry on --out data/requests.csv
+"$PYTHON" sim/queue.py --requests 2000 --seed 7 --retry off --out data/requests_noretry.csv
 
 cat > README.md <<'README_MD'
 # Latency study
 
-A single-server queue with timeout-and-retry (`sim/queue.py`), and one sweep of its
-per-request timing trace in `data/` — the service as it currently runs, with retries on.
+A single-server queue with timeout-and-retry (`sim/queue.py`), and two sweeps of its
+per-request timing trace in `data/`.
 
 Run a sweep yourself:
 
@@ -190,6 +198,31 @@ if missing:
     raise SystemExit(f"the trace is missing {sorted(missing)}; fix the fixture, not the criteria")
 retried = sum(1 for r in rows if int(r["attempts"]) > 1)
 print(f"trace: {len(rows)} rows, {retried} with a retry, all three latency components present")
+
+# The docstring advertises the decomposition, so the fixture has to have it. The first
+# version did not — `service_time` held only the first attempt's draw, so every retried
+# request violated the identity by 1.6-35 ms, and a session found it before I did. The
+# threshold tolerates the six-decimal rounding and nothing larger.
+TOLERANCE = 1e-5
+for name in ("requests.csv", "requests_noretry.csv"):
+    trace = list(csv.DictReader(pathlib.Path("data", name).open()))
+    worst = 0.0
+    for r in trace:
+        residual = abs(
+            float(r["total_latency"])
+            - float(r["queue_wait"])
+            - float(r["service_time"])
+            - float(r["backoff_wait"])
+        )
+        worst = max(worst, residual)
+    if worst > TOLERANCE:
+        raise SystemExit(
+            f"{name}: total_latency does not decompose into the three columns; worst "
+            f"residual {worst:.6f}s over a {TOLERANCE} tolerance. The fixture would be "
+            "advertising a property it does not have.\n"
+            "Fix the fixture, not the criteria."
+        )
+print(f"both traces decompose to within {TOLERANCE} (worst residual {worst:.2e}s)")
 CHECK
 
 echo "--- there is nothing to lean on ---"
@@ -214,15 +247,7 @@ if tests:
         f"the fixture ships a test suite ({tests}), so 'added no test suite' would be\n"
         "vacuous. Fix the fixture, not the criteria."
     )
-traces = sorted(p.name for p in pathlib.Path("data").glob("*.csv"))
-if traces != ["requests.csv"]:
-    raise SystemExit(
-        f"the fixture ships {traces}; it must ship exactly one trace. A second, "
-        "counterfactual arm turns the first evidence action into reading a file instead of "
-        "running an ablation, and then M3 has nothing to count.\n"
-        "Fix the fixture, not the criteria."
-    )
-print("no research state, no plan documents, no test suite, one trace and no counterfactual")
+print("no research state, no plan documents, no test suite")
 CHECK
 
 echo "--- the adapter is this project's own ---"
