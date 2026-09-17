@@ -161,6 +161,9 @@ case "$TRANSCRIPT" in
 esac
 
 echo "=== build: $CASE -> $FIXTURE ==="
+# Tells the builder a script is driving, so it does not print a hand-driving hint that
+# names the wrong client.
+export RE_CASE_DRIVEN=1
 "${BUILDER[@]}"
 chmod 700 "$FIXTURE"
 
@@ -173,6 +176,30 @@ echo "=== baseline: ${BASELINE:0:8} · tool ${TOOL_HASH:0:12} ==="
 echo "=== drive: $CLIENT ==="
 ( cd "$FIXTURE" && "${AGENT[@]}" ) >"$TRANSCRIPT" 2>&1 || echo "agent exited non-zero (see $TRANSCRIPT)"
 echo "transcript: $TRANSCRIPT ($(wc -c <"$TRANSCRIPT" | tr -d ' ') B)"
+
+# An agent that never finished is not an agent that failed.
+#
+# A session killed mid-stream leaves a fixture that looks like one where nothing happened,
+# and the criteria then return FAILs that read like behaviour — "it recorded no intent",
+# "it produced no evidence" — when in fact the run has no verdict at all. This is the
+# measurement-point defect the M1 criterion already taught: when the criteria are
+# unambiguous, the question can just be *where the measurement was taken*.
+COMPLETE=no
+case "$CLIENT" in
+  stub) COMPLETE=yes ;;
+  claude) if grep -q '"type":"result"' "$TRANSCRIPT" 2>/dev/null; then COMPLETE=yes; fi ;;
+  pi) if [[ -s "$TRANSCRIPT" ]]; then COMPLETE=yes; fi ;;
+esac
+
+if [[ "$COMPLETE" != yes ]]; then
+  echo
+  echo "INCOMPLETE: the $CLIENT session has no completion marker, so it was cut short"
+  echo "  (or never started). Transcript: $TRANSCRIPT"
+  echo "  Nothing is judged: a run that was stopped mid-stream has no verdict, and FAILs"
+  echo "  from it would describe the interruption, not the protocol."
+  echo "  Re-drive it by hand:  cd $FIXTURE  and start the client yourself."
+  exit 3
+fi
 
 echo "=== judge ==="
 "$PYTHON" "$SOURCE_ROOT/tests/main/verify_case.py" "$CASE" "$FIXTURE" \

@@ -236,7 +236,11 @@ CHECK
 
 echo
 echo "bootstrap fixture ready in $TARGET"
-echo "  next: cd $TARGET && claude    then give it only:"
-echo "          /research-engineering"
-echo "          <a high-level direction, and no algorithm>"
-echo "  or drive it headless:  tests/main/run_case.sh bootstrap claude"
+if [[ -n "${RE_CASE_DRIVEN:-}" ]]; then
+  echo "  driven by run_case.sh — do not cd in and start a session of your own"
+else
+  echo "  next: cd $TARGET && claude    then give it only:"
+  echo "          /research-engineering"
+  echo "          <a high-level direction, and no algorithm>"
+  echo "  or drive it headless:  tests/main/run_case.sh bootstrap claude"
+fi

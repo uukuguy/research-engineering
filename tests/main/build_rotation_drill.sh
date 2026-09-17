@@ -293,7 +293,13 @@ CHECK
 echo
 echo "rotation drill fixture ready in $TARGET"
 echo "  the run is ALIVE (pid $pid) and will finish on its own in about $SECONDS_TO_RUN s"
-echo "  next: cd $TARGET && claude    then give it only:"
-echo "          /research-engineering"
-echo "          Continue current research."
+# Only when a human is driving. Under `run_case.sh` the agent is started for you, and a
+# hint to `cd` in and start one names the wrong client besides.
+if [[ -n "${RE_CASE_DRIVEN:-}" ]]; then
+  echo "  driven by run_case.sh — do not cd in and start a session of your own"
+else
+  echo "  next: cd $TARGET && claude    then give it only:"
+  echo "          /research-engineering"
+  echo "          Continue current research."
+fi
 echo "  cleanup when you are done with it:  kill $pid"
