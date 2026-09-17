@@ -76,6 +76,55 @@ service 抽样，而 `service_time` 只记第一次 —— 每个重试过的请
 
 **这是协议层的洞，归 V1**，不是案例能修的。
 
+### 后半段：`BOUNDARIES.md` 是我们声称已经修好、而实际漏掉的那一个
+
+架构师自己起了第二次 `bootstrap`（修掉分解决 bug 之后的 fixture）。它 8.5 分钟就产出了第一条
+记录、问的正是案例的方向 —— **但随后卡住了，而卡住的原因是一个不存在的动词。**
+
+它最近 8 个动作全在找一条路：**grep 工具源码里的 `boundaries`（两次）、grep skill 文本、读
+`commands/init.py`、跑 `validate`**。查证结果：
+
+| 环节 | 状态 |
+|---|---|
+| `research-bootstrap/SKILL.md:38` | **"Identify HARD boundaries"** —— 协议明确要求 |
+| `research-engineering/SKILL.md:242` | `BOUNDARIES.md → research:boundaries` |
+| 写入路径 | **不存在**（14 个动词里没有 `boundaries`；只有 `init` 写空骨架） |
+| schema | **`boundaries.schema.json` 不存在** |
+| `AGENTS.md:220` | **"Every canonical file has a verb"** —— 假的 |
+
+**而那句假话的旁边，正是在解释"这曾经不成立，已为 `CURRENT.md` 与 `ENVIRONMENT.md` 的表修好"
+—— 当年修那两处时漏掉了它。** 不能手改（同一份契约禁止），不能命令改，于是无路可走。
+
+**已修（`93104dd`）**：新增 `researchlog boundaries`（读 / `--set` / `--add TIER=FILE`）、
+`boundaries.schema.json`、注册、`validate` 覆盖（含**提交预算用尽报 error** —— 文件自己的散文
+就是这么规定的）。`--add` 用**文件**而非命令行数组，因为**两次运行实际都这么干**：写 `/tmp`
+临时 JSON 再喂给 `env declare`。**entry 的 `id` 之外刻意不约束形状** —— 与 `capability_map`
+同一个判断，那属于设计决定。
+
+**顺带抓到两处**：`--set nonsense=1` 原本**静默接受**（打错字段名就写进 canonical 状态）→
+`additionalProperties: false`；守卫测试先失败、且它是对的（它把 schema 数量写死，docstring 写明
+"应当逼人停下来想新 schema 是否完整"）→ 按它的意图更新。
+
+**`AGENTS.md` 那句话改准了**，并点名唯一的**刻意例外**：`ARCHITECT.md` 的 signal 手写，因为
+signal 是架构师说过的话，`source_text` 就是重点。
+
+### 判据 5 的形状问题：修的是判据（`c9784be`）
+
+见下面"判据 5 的形状问题"一节被替换的部分。新增 **`c6`**：run 完成之后，session 该做的是
+**把 loop 走完**（为它留下一条证据记录 + 把 `execution.status` 移开 `running`）。每条判据在另一种
+形状下报 `UNJUDGED`，所以这一对无论场景落在哪边都覆盖到了。
+
+### 检查器的缺陷总数：**9 处，全部同一形状**
+
+前 6 处在上面那张表里；后半段又 3 处：`c1`（只认字面命令，而判据也收"读 manifest"）、`d2`
+（只读 `next_action`，嘴上拒绝的过不了）、以及写 `c6` 时差点犯的 `changed_since`（**porcelain
+查不到已提交的记录** —— pi 提交了它的证据，工作树干净，**一个走完 loop 的运行会被读成"没记录
+任何证据"**）。
+
+已记成 `GOTCHAS.md` **B11**，附两个本来就能抓到每一例的检查：**把 label 和它下面那几行并排读
+一遍**；**失败消息描述的检查，代码真的做了吗**（`c1` 的消息写着 "or reads the manifest"，
+代码只查了前半句）。
+
 ### 开放项
 
 1. **修完分解 bug 之后，M3 还会不会发生？** 修掉缺陷可能也修掉了那次迭代的来源。**下一次运行
