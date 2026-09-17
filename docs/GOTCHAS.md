@@ -138,6 +138,28 @@ the window"、顺带写了 "I did not adopt a competing reading" 的 session 被
 tests/main/check_negative_control.sh    # 四案例 + stub，6 秒，零模型成本；每案例必须红
 ```
 
+### B15. fixture 提交字节缓存，会让"代码身份"哈希算在字节缓存上
+
+踩过：四个 builder 都**没有 `.gitignore`**，`git add -A` 把 `__pycache__` 提交了（一个 fixture 里
+73 个 `.pyc`）。两面，第二面才是要紧的：
+
+1. 任何一次工具运行都在 session 从未碰过的文件上把树弄脏 —— 没人埋的异常（B8），也正是 B11 里
+   `tool_digest` 那条的原始形态；
+2. `code_state` **刻意排除 `research/`**（否则每条证据身份都唯一、`compare` 永久
+   `ATTRIBUTION_FORBIDDEN`）。排除之后剩下的"脏"就只剩工具重写的字节缓存 —— 于是 `dirty: true`
+   看起来像"运行用的是改过的代码"，而那个哈希算的是 `.pyc` 的抖动，**什么都没说明**。
+
+**清掉噪声才看得见真问题**：去掉之后身份诚实地变成 `dirty: false`，而这暴露出那次在飞的运行 ——
+它命令里的 flag 只存在于**后来才种下**的未提交改动里，于是 manifest 与它自己的 artifact 描述的
+**不是同一棵树**。修法是**把种植移到 run 之前**、并让状态提交排除那处改动。
+
+**两条规则**：
+
+- fixture 的 `.gitignore` 必须在**第一次 `git add` 之前**写，并且 builder 要**断言** `git ls-files`
+  里没有 `__pycache__`。注意：**`.gitignore` 对已经跟踪的文件无效**，那种情况要 `git rm --cached`
+  —— 这一条我自己在手工 prep 时又踩了一次，而报告的自检抓到了它；
+- **凡是要当作身份、指纹、或"变了没有"的依据的哈希，先问它算的是什么。**"非空"不等于"有信息"。
+
 ### B14. 判一个 session，要判**它留下的那个产物**；而两个客户端留下的不是同一种东西
 
 第一个在 pi 上跑的真实案例（`recovery`）回来 **FAILED/r2,r3,r6** —— **三条全是 harness 的错**，
