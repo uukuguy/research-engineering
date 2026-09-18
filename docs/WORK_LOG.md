@@ -4,6 +4,67 @@
 
 ---
 
+## 2026-09-19 — V1-D2 #5 + V1-D3 #2 + #3 fixture-level PASS:3 项真 gap 关闭
+
+承接上一条(commit `5e9caa0`,V0_D4 反向 variant 批量审计)。Architect"同意"。
+本轮关闭上一轮审计剩下的"真 gap"(非 label drift)中的 3 项 fixture 缺口。
+
+### 这一轮交了什么
+
+**`tools/researchlog/tests/test_commands.py::E2E3ReplayTests`**(NEW, 1 测试)— V1-D2 #5:
+E2 record + E3 record,共用 `inputs.replay_suite` 和 `environment.fingerprint`,
+`compare` 报 `attribute_verdict: COMPARABLE`。两个 record 都通过 `--from-json`
+合成(不依赖真 harness);落到 `research/ledger/2026-09/<id>.json`。
+
+**`tools/researchlog/tests/test_commands.py::SessionRotationTests`**(NEW, 2 测试)— 
+V1-D3 #2 + #3:
+
+1. `test_rotate_session_does_not_restart_the_open_block` — `active --set block.id=BL-ROT`
+   → `active --rotate-session` → `active --get block.id` 仍 = `BL-ROT`。rotation 不会
+   重置 block。
+2. `test_reproduction_iteration_does_not_bump_block_budget` — record `--iteration-kind
+   reproduction`(E2 + belief-delta refined)→ `active --close-block --belief-delta
+   refined` → `block.completed_evidence_iterations=0` 且 `block.reproduction_iterations=1`。
+
+**全套 298/298 PASS**(295 → 298,+3),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D2:**5/6 → 6/6 PASS**(#5 E3 path 同 E2,只是缺 fixture)。
+- `docs/V1_CASES.md` §V1-D3:**4/7 → 6/7 PASS**(#2 rotation restart + #3 reproduction
+  budget 关闭,只 #5 default 30s heartbeat 留 DEFER)。
+- `docs/V1_CASES.md` aggregate:**40 → 43 PASS,5 → 2 deferred**,4 ENV_BLOCKED = 49 criteria。
+- `docs/V1_ACCEPTANCE_GUIDE.md` M3 `13/18 → 14/18`,M4 `4/7 → 6/7`;#10 + #16 行 ⏳ → ✅;
+  aggregate 段同步更新。
+
+### 动手前要知道(本轮新增)
+
+76. **block.completed_evidence_iterations 是 close-time derived,不是 incremental**。
+    `record` 不直接更新 ACTIVE.json 的计数;计数只在 `active --close-block` 时
+    由 `commands/active.py:183-185` 写入。**写测试时如果想在 `record` 之后立刻 assert
+    计数变化,会失败**——必须 close 一次才看到。这是 V1-D3 #3 第一版写错的原因
+    (assertion 在 record 之后跑,看到 `reproduction_iterations=0` 而非 `1`)。
+    第二版加 `--close-block --belief-delta refined` 才 PASS。
+77. **`record --iteration-kind reproduction` 不写 `iteration_kind` 进 record 文档**——
+    它在 `_derive_counts` 之前被 stamp 进去(`commands/record.py:441`),所以 ledger 文件
+    里**看得到** `iteration_kind: reproduction`。`count_reproduction_iterations` 直接
+    数它(`constraints.py:209-211`)。这是 P2 实装,与 P1 的 `counts_as_evidence_iteration`
+    derivation 平行但路径不同。
+78. **E2 vs E3 record 的 `compare` 走的是相同 attribution 路径**——`compare` 不看
+    `evidence_level`,只看 `inputs` + `environment` + `code_state`。所以 E3 fixture 测
+    试不需要新实装任何东西,只是补一个之前没写过的 fixture。
+
+### 下一步
+
+- deferred 段只剩 **2 项**(V1-D3 #5 + V1-D6 #4):
+  - **V1-D3 #5**(default 30s heartbeat cadence)— fixture 测不传 `--heartbeat-interval`,
+    验证默认 30s(可借 `test_heartbeat_is_bumped_while_the_child_runs` 的 pattern,
+    但要 pollig 到心跳更新才停——可能 flakiness)。
+  - **V1-D6 #4**(telemetry 跨 session 累计 KPI)— **feature work**,不是 fixture 缺口。
+- 架构师未触发的决策点:A-3 / A-4 / M6-claude-pending。
+
+---
+
 ## 2026-09-19 — V0_D4 gotcha 反向 variant 批量审计:7 项 deferred → PASS(doc-only)
 
 承接上一条(commit `0f199a3`,V1-D4 #3 文档漂移关闭)。Architect"不用等我决策"。

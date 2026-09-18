@@ -101,7 +101,7 @@ to a moving target; mutable-input lineage extends to E3.
 | 5 | E3 attribute stable | compare across E2+E3 pairs | `common` field set |
 | 6 | compare contract surface stable | `python3 tools/researchlog compare --help` | exit 0 |
 
-**Run record (2026-09-19, commit TBD — V1-D2 reverse-variant audit)**:
+**Run record (2026-09-19, commit TBD — V1-D2 #5 fixture-level pass)**:
 
 ```
 #1 PASS  (test_integration.py:298 — ReproductionTests records an E2 + reproduction
@@ -113,19 +113,15 @@ to a moving target; mutable-input lineage extends to E3.
 #4 PASS  (ComparisonIdentityTests.test_a_moved_environment_still_demands_a_rebaseline —
          moved `environment.fingerprint` → REBASELINE_REQUIRED; the lineage contract
          V1-D2 #4 asks about is the same machinery exercised here)
-#5 DEFER (still DEFERRED — no fixture writes an E3 record; E3 path is structurally
-         the same as E2 but the drill calls for an E2+E3 pair. Open fixture gap.)
+#5 PASS  (E2E3ReplayTests.test_e2_and_e3_records_with_same_identity_are_comparable:
+         record E2 + E3 via --from-json with same inputs/environment, compare → COMPARABLE.
+         The E3 record lands at research/ledger/2026-09/<EV-id>.json with the same
+         `compare` attribution machinery as the E2 path.)
 #6 PASS  (CompareCommandTests covers `compare --help` exit 0 + surface)
 ```
 
-**Drill status: 5/6 PASS, 1 deferred (#5 E3 stable — needs an E3 record fixture;
-the E2 path is fully exercised, the E3 path is the only reverse-variant that
-turned out NOT to be a reverse variant.)**
-
-The original "Run record" text claimed V1 has only E0 records; the
-`test_integration.py:298` fixture has been writing E2 records since the
-P1/P2 era. The deferred label was a documentation drift, not a tool
-defect — the E2 record path was always exercisable from a fixture.
+**Drill status: 6/6 PASS** (the E3 path was structurally the same as E2; the
+fixture gap was a missing test, not a missing feature.)
 
 ---
 
@@ -140,8 +136,8 @@ record-after-commit lands EV in git; run 30s heartbeat default; replace-existing
 | # | Criterion | Status today |
 |---|---|---|
 | 1 | 3-8 iter triggers `BLOCK_ITERATION_BUDGET_EXCEEDED` | **PASS** (test_constraints.py:BlockBudgetTests — 3 tests cover exceed/exact/no-limit) |
-| 2 | session rotate 不重启动 | DEFER (no test that proves "rotate does not restart the block"; `_seed_session_epoch` rotates but does not assert "block still has the same id after rotation") |
-| 3 | reproduction 不计 budget | DEFER (no test that exercises `derive_counts_as_evidence_iteration` returning False for `iteration_kind=reproduction`; E2 reproduction fixture at `test_integration.py:298` exists but does not assert the budget exclusion) |
+| 2 | session rotate 不重启动 | **PASS** (SessionRotationTests.test_rotate_session_does_not_restart_the_open_block: open BL-ROT, rotate session, assert `active --get block.id` still returns BL-ROT) |
+| 3 | reproduction 不计 budget | **PASS** (SessionRotationTests.test_reproduction_iteration_does_not_bump_block_budget: record `--iteration-kind reproduction`, close-block with belief-delta, assert `block.completed_evidence_iterations=0` AND `block.reproduction_iterations=1`) |
 | 4 | record-after-commit 落 git | **PASS** (this commit's record + auto-commit trace) |
 | 5 | run 默认 30s heartbeat | DEFER (no test asserts the 30s default cadence — `--heartbeat-interval` tests pass it explicitly) |
 | 6 | `--replace-existing` 被拒 | **PASS** (test_commands.py:350 — `test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`) |
@@ -160,9 +156,8 @@ record-after-commit lands EV in git; run 30s heartbeat default; replace-existing
 #7 PASS  (ReconcileCommandTests covers cross-session reconcile clean)
 ```
 
-**Drill status: 4/7 PASS, 3 deferred (#2 rotation restart test, #3 reproduction
-budget exclusion test, #5 default 30s cadence test — all three are real fixture
-gaps, not reverse variants. The deferred list dropped from 5 to 3.)**
+**Drill status: 6/7 PASS, 1 deferred (#5 default 30s heartbeat cadence test — the
+remaining real fixture gap. Two of the three real gaps closed this commit.)**
 
 The original "5 deferred to live block run" was a documentation drift:
 `BlockBudgetTests` and the in-flight replacement test have been running
@@ -369,24 +364,21 @@ SKILL.md frontmatter so the router self-tests).**
 | Drill | PASS | Deferred | Blocked | Total |
 |---|---|---|---|---|
 | V1-D1 | 6 | 1 | 0 | 7 |
-| V1-D2 | 5 | 1 | 0 | 6 |
-| V1-D3 | 4 | 3 | 0 | 7 |
+| V1-D2 | 6 | 0 | 0 | 6 |
+| V1-D3 | 6 | 1 | 0 | 7 |
 | V1-D4 | 5 | 0 | 0 | 5 |
 | V1-D5 | 5 | 0 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **40** | **5** | **4** | **49** |
+| **Total** | **43** | **2** | **4** | **49** |
 
-The 5 deferred criteria are tool-level PASS structurally but require
-a small fixture write to exercise: V1-D2 #5 (E3 attribute stable),
-V1-D3 #2 (rotation doesn't restart), V1-D3 #3 (reproduction exclusion
-from budget), V1-D3 #5 (default 30s heartbeat cadence), V1-D6 #4
-(cross-session cumulative KPI). None of them is blocked on a tool
-defect or a research activity; all five need either a small fixture
-write or — for V1-D6 #4 — the cross-session cumulative KPI feature
-itself, which is feature work, not label drift.
+The 2 deferred criteria are real fixture or feature gaps. V1-D3 #5
+needs a default-cadence test that runs `run` without
+`--heartbeat-interval`; V1-D6 #4 needs the cross-session cumulative
+KPI feature itself, which is feature work, not label drift. Neither
+is blocked on a research activity.
 
 The 4 blocked are M6/M7 claude-pending under minimax-compat — the
 endpoint policy D-004 makes them ENV_BLOCKED until a native Anthropic

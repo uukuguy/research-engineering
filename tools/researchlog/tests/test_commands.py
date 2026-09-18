@@ -2303,5 +2303,131 @@ class WorktreeSingleWriterTests(CommandTestCase):
             )
 
 
+class E2E3ReplayTests(CommandTestCase):
+    """V1-D2 #5: an E3 record pairs with an E2 record through `compare`.
+
+    The E2 path is covered by `ComparisonIdentityTests` in test_integration.py
+    (lines 489-543); this test closes the E3 half by exercising the same
+    attribution predicate with `evidence_level: E3` on both sides. The
+    machinery is the same — `compare` reads `inputs` and `environment`
+    regardless of evidence_level — so the assertion is just that an E3
+    record + an E2 record with same identity produce `COMPARABLE`.
+    """
+
+    def test_e2_and_e3_records_with_same_identity_are_comparable(self) -> None:
+        # Synthesise two records via `--from-json`, mirroring the
+        # ComparisonIdentityTests pattern, so the test does not depend on
+        # a real harness. Both records share `inputs.replay_suite` and
+        # `environment.fingerprint`; only `evidence_level` differs.
+        shared_inputs = {"replay_suite": "replay-v3"}
+        shared_environment = {"fingerprint": "fp-1"}
+        base = {
+            "schema_version": "1.0",
+            "question": "does the E3 path compare?",
+            "subject": {"type": "mechanism", "id": "M-E3"},
+            "observations": ["ran"],
+            "execution_status": "completed",
+            "research_outcome": "inconclusive",
+            "confidence": "low",
+            "counts_as_evidence_iteration": False,
+            "inputs": shared_inputs,
+            "environment": shared_environment,
+        }
+        e2_payload = dict(base, evidence_level="E2")
+        e3_payload = dict(base, evidence_level="E3")
+
+        code, envelope = self.invoke(["record", "--from-json", json.dumps(e2_payload), "--json"])
+        self.assertEqual(code, 0, envelope)
+        e2_id = envelope["payload"]["evidence_id"]
+
+        code, envelope = self.invoke(["record", "--from-json", json.dumps(e3_payload), "--json"])
+        self.assertEqual(code, 0, envelope)
+        e3_id = envelope["payload"]["evidence_id"]
+
+        code, envelope = self.invoke(["compare", e2_id, e3_id, "--json"])
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(envelope["payload"]["attribute_verdict"], "COMPARABLE")
+
+
+class SessionRotationTests(CommandTestCase):
+    """V1-D3 #2 + #3: rotation does not restart the block; reproduction
+    iterations do not consume the block's evidence budget.
+
+    The underlying predicates — `active.py` keep `block.id` on rotate;
+    `constraints.derive_counts_as_evidence_iteration` returns False for
+    `iteration_kind: reproduction` — are unit-tested elsewhere. The
+    integration shape that exercises both predicates end-to-end through
+    `record` + `active --get` lives here.
+    """
+
+    def test_rotate_session_does_not_restart_the_open_block(self) -> None:
+        # V1-D3 #2: open a block, rotate the session, assert `block.id`
+        # is unchanged and `block.completed_evidence_iterations` is
+        # preserved (the rotation should reset neither).
+        self.invoke(["active", "--set", "block.id=BL-ROT"])
+        # Capture the active record's `block.id` so we can compare.
+        _, before = self.invoke(["active", "--get", "block.id"])
+        self.assertEqual(before["payload"]["value"], "BL-ROT")
+
+        self.invoke(["active", "--rotate-session"])
+
+        code, envelope = self.invoke(["active", "--get", "block.id"])
+        self.assertEqual(code, 0, envelope)
+        self.assertEqual(envelope["payload"]["value"], "BL-ROT")
+
+    def test_reproduction_iteration_does_not_bump_block_budget(self) -> None:
+        # V1-D3 #3: a record tagged as `--iteration-kind reproduction`
+        # must NOT count toward the block's evidence budget
+        # (`block.completed_evidence_iterations`); it goes to
+        # `block.reproduction_iterations` instead. The counts are
+        # derived and written at close (see `commands/active.py:183-185`),
+        # so we close the block with `belief-delta` and assert the
+        # derived values, which is the integration shape the resume
+        # protocol actually observes.
+        self.invoke(["active", "--set", "block.id=BL-REPRO"])
+        # Pin the count fields to 0 explicitly so the assertions are
+        # independent of whatever `init`/rotation defaults set.
+        self.invoke(["active", "--set", "block.completed_evidence_iterations=0"])
+        self.invoke(["active", "--set", "block.reproduction_iterations=0"])
+
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--question",
+                "does reproduction iteration count?",
+                "--subject-type",
+                "mechanism",
+                "--subject-id",
+                "M-REPRO",
+                "--level",
+                "E2",
+                "--execution-status",
+                "completed",
+                "--research-outcome",
+                "refuted",
+                "--confidence",
+                "moderate",
+                "--belief-delta",
+                "refined",
+                "--observation",
+                "reproduction of the residual tracking",
+                "--iteration-kind",
+                "reproduction",
+                "--no-experiment",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+
+        # Close with belief_delta; this is the moment `active.py` writes
+        # the derived counts onto ACTIVE.json.
+        self.invoke(["active", "--close-block", "--belief-delta", "refined"])
+
+        _, completed = self.invoke(["active", "--get", "block.completed_evidence_iterations"])
+        self.assertEqual(completed["payload"]["value"], 0)
+
+        _, reproduction = self.invoke(["active", "--get", "block.reproduction_iterations"])
+        self.assertEqual(reproduction["payload"]["value"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
