@@ -139,7 +139,7 @@ V1 不删 V0 任何资产。**所有 V0 实装的 21 项 §20.2 增加项继续�
 | E2/E3 + mut-input | 11, 25 | V1-D2(6 条判据)|
 | status 完整性 | 7, 8 | V1-D4(扩到 T3)|
 | environment / capability | 16, 17, 26 | V1-D7(6 条判据)|
-| skills 重组后 trigger | 3, 4, 5 | V1-D9(claude × pi 各跑通)|
+| skills 重组后 trigger | 3, 4, 5 | V1-D9(pi 端跑通 ≥3 / claude 端 ENV_BLOCKED 见 M6 拆分)|
 
 ### 3.3 7 条 "新造"
 
@@ -169,8 +169,12 @@ V1 不删 V0 任何资产。**所有 V0 实装的 21 项 §20.2 增加项继续�
 | **M3** | sharded ledger + E2/E3 replay + environment fingerprint 三件套端到端连通 | V1-D1 + V1-D2 + V1-D7 全过 |
 | **M4** | bounded autonomous block 跨 session 跑通:3-8 迭代 + 跨 session 不重启动 + reproduction 不被 budget 卡死 | V1-D3 全过(P1 + P2 + P7 + P9 决断的产物)|
 | **M5** | snapshot integrity + frontier compression + synthesis 联合生效,产出的 `STATUS.md` 与 `reconcile` 一致 | V1-D4 全过(P5 + §14 决断的产物)|
-| **M6** | 五 expert skill 在 router 里**真实**可达(不是"理论上可加载"),claude 与 pi 各跑通 ≥3 case | V1-D9 全过(S1 重组的产物)|
-| **M7** | 与 V0 同形态"两客户端矩阵":claude × pi 在 V1 同一版仪器上 V1 case 全过 | V1-D9 全过(类比 #1 / #22 V1 版)|
+| **M6-pi** | 五 expert skill 在 router 里**真实**可达(不是"理论上可加载"),pi 端跑通 ≥3 case | V1-D9 在 pi 端 ≥3 routed(phrase-list 启发式,S1 重组 + V1-D9 heuristic change 的产物)|
+| **M6-claude-pending** | 同 M6-pi,但跑通方为 claude 端 | ENV_BLOCKED,minimax-compat 端点下不可验收;待切回原生 Anthropic 后重跑 V1-D9 验收 |
+| **M7-pi** | 与 V0 同形态"两客户端矩阵":claude × pi 在 V1 同一版仪器上 V1 case 全过(pi 端) | V1-D9 在 pi 端 ≥3 routed(类比 #1 / #22 V1 版)|
+| **M7-claude-pending** | 同 M7-pi,但跑通方为 claude 端 | ENV_BLOCKED,minimax-compat 端点下不可验收;待切回原生 Anthropic 后重跑 V1-D9 验收 |
+
+> **关于 M6 / M7 拆分**:M6 与 M7 在 minimax-compat 端点下不可闭环——该端点的 model alias 不输出 hyphenated skill name + 会读 `AGENTS.md` 后按真实 `ACTIVE.json` 状态作答,旧启发式 `expected in first_line.lower()` 命中率低(V1-D9 实测 pi 端 3/6 routed 但其中 1/6 是 heuristic 通过而非 router 真实可达的弱信号)。`V1-D9` 启发式改为"phrase-list classifier:首行必须含 expected skill SKILL.md body 的独有 phrase"(phrase 表 29 条,经 `grep -c -iF` 跨 6 skill 唯一性审计,详见 `docs/v1/M6_SPLIT_PROPOSAL.md` §Phrase audit),解决了"注入被测字段"的虚假保证缺陷。M6 / M7 拆为 `*-pi`(在 minimax-compat 下可验收)+ `*-claude-pending`(ENV_BLOCKED 等切回原生 Anthropic)是与 V0_DAY-1 must #1/#22 同形态:同一条验收在某个端点不可达时,分端点报告通过 / 待验证状态。环境政策决定见 `research/ARCHITECT.md` D-004,实测 EV 见 `research/ledger/2026-09/EV-20260918T133714Z-7b6f.json`。**总验收条目数仍是 7 条**:M6 与 M7 各算一条,split 是同一验收的子项标识。
 
 ### 4.2 V1 complete(16 条,以下为拟稿)
 
@@ -312,7 +316,7 @@ V1 不删 V0 任何资产。**所有 V0 实装的 21 项 §20.2 增加项继续�
 | **V1-D6** | Productivity telemetry | 4:`Time-to-first-E1` 可查 / `Time-to-first-E3` 可查 / `Session Recovery Accuracy` 可查 / 跨 session 累计正确 | T5 |
 | **V1-D7** | Research Capability Map + harness 投资判断 | 6:capability_map shape 通过 schema / ≥3 entries 写入 / reuse_counter 字段存在 / `harness declare` 合法 / `env rebaseline` 触发 fingerprint 变 / `changed` 谓词不再永远 `UNRESOLVED` | P4 + T1 + T4 |
 | **V1-D8** | Source-text enforcement + signals 升级 | 4:全部 signal 加 history + scope + expiry / CONSTRAINT 过期 inspect 报 `EXPIRED_ARCHITECT_SIGNAL` / reject message 可读 / `fix_hint` 实际可执行 | P5 + P8 |
-| **V1-D9** | 客户端矩阵(claude × pi)| 沿 V0 #1 / #22 形态,改 V1 case | (无)|
+| **V1-D9** | 客户端矩阵(claude × pi)| 沿 V0 #1 / #22 形态,改 V1 case;**启发式**:phrase-list classifier,首行必须含 expected skill SKILL.md body 的独有 phrase(详见 `docs/v1/M6_SPLIT_PROPOSAL.md` §Phrase audit)| (无)|
 
 每个 drill 自检(B1)+ 钉住裁判(沿 V0 模式)+ 负对照闸门(V1 扩 `check_negative_control.sh`)。
 
