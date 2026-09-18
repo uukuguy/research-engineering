@@ -164,18 +164,18 @@ def invoke_client(
             prompt,
         ]
     elif client == "claude":
-        # The Claude Code CLI on this machine reads `AGENTS.md` /
-        # `CLAUDE.md` natively; the `--skill` flag accepts an absolute
-        # path to a skill directory. If `claude` is not on PATH for
-        # this session (it usually is), fall back to reporting the
-        # command rather than failing the run.
+        # Claude Code CLI (2.1.x) has no `--skill` flag — skills are
+        # auto-discovered from `.claude/skills/<name>/SKILL.md` (and
+        # `~/.claude/skills/`). This repo's skills are installed via
+        # `tools/install_research_skills.py --self`, so a bare
+        # `claude -p "<prompt>"` already routes through every V1 expert
+        # skill the same way `pi --skill` does. The V0-D9 acceptance
+        # template uses this same path (V0 #22 ran clean on it).
         if shutil.which("claude") is None:
             return 127, "claude CLI not on PATH; client matrix run is partial"
         argv = [
             "claude",
-            "--skill",
-            str(skill_path),
-            "--",
+            "-p",
             prompt,
         ]
     else:
