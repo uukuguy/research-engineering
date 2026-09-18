@@ -1,6 +1,6 @@
 ---
 name: evaluation-design
-description: Load when no evaluator exists for the hypothesis, or a local metric rises while E4/E5 or architect observation falls. Owns the question of whether the existing measurement surface is honest, what to build instead, and how to write a calibration contract that survives the next iteration. V1 Block 3 / S1: body lifted from research-engineering's V0 reference and merged in.
+description: 测量表面本身可不可信——"用来评价机制的尺子"准不准。Trigger: 没有 evaluator / local metric 与 E4/E5 或 architect 观察矛盾 / leakage/reward hacking/proxy overfit 风险。不要调我: 单 run 对照假设 → `experiment-review` / 方向反思 → `retrospective` / 换家族 → `research-search` / claim 落地前红队 → `scenario-redteam`。
 ---
 
 # Evaluation Design
@@ -23,6 +23,15 @@ The architect's sentence "the answers always seem to over-rely on the first docu
 one of these triggers. The response is to build a citation-coverage or context-attention
 probe, not to start editing prompts. Without the probe there is no way to tell whether a
 prompt change helped, and no way to tell when the problem is fixed.
+
+## Not this skill
+
+- 一个 run 跑完要对照假设做 OBSERVATION/COMPARISON/INTERPRETATION/DECISION 四层判定 → 调 `experiment-review` 而不是我。
+- 当前机制家族内一系列实验的方向是否对（5+ counted iterations belief_delta: none / phase boundary） → 调 `retrospective` 而不是我。
+- 决定要不要换机制家族（no live hypothesis / dominant failure 已移 / phase boundary 8-15） → 调 `research-search` 而不是我。
+- 一个候选 claim 要落地为架构锚点之前做 6 项红队 → 调 `scenario-redteam` 而不是我。
+
+我的边界是**测量层**（尺子本身可信吗），不评判 run / 方向 / 家族 / claim。
 
 ## Method
 

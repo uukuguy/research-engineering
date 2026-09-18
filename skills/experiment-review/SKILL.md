@@ -1,6 +1,6 @@
 ---
 name: experiment-review
-description: Load when a run just finished and ≥ 2 hypotheses are live. Walks what the run actually said against the registered hypotheses, decides which one(s) it differentiated, and what belief change to record. V1 Block 3 / S1: body lifted from research-engineering's V0 reference and merged in.
+description: 一个 run 跑完后，对照假设做 OBSERVATION/COMPARISON/INTERPRETATION/DECISION 四层判定。Trigger: run 完 + ≥2 hypotheses live。不要调我: 测量表面可信度 → `evaluation-design` / 方向反思 → `retrospective` / 换家族 → `research-search` / claim 落地前红队 → `scenario-redteam`。
 ---
 
 # Experiment Review
@@ -104,23 +104,14 @@ H-039  recovery state ownership is split incorrectly   predicted: release delay 
 → discriminating run: hold the release condition fixed, vary only ownership
 ```
 
-## After a promising result
+## Not this skill
 
-A mechanism that looks good is the moment to look for its counterexamples, not the moment
-to declare it solved. Run these before promoting anything:
+- 测量表面可信度本身有问题（local metric 与 E4/E5 或 architect 观察矛盾 / leakage / proxy overfit） → 调 `evaluation-design` 而不是我。
+- 当前机制家族内一系列实验的方向是否对（5+ counted iterations belief_delta: none / phase boundary） → 调 `retrospective` 而不是我。
+- 决定要不要换机制家族（no live hypothesis / dominant failure 已移 / phase boundary 8-15） → 调 `research-search` 而不是我。
+- 一个候选 claim 要落地为架构锚点之前做 6 项红队（surrogate leak / dataset drift / hidden confounder / single-anchor evidence / code-state drift / architect signal） → 调 `scenario-redteam` 而不是我。
 
-- extreme timing, and timing at the boundary of the designed range;
-- slow drift and abrupt fault;
-- intermittent behaviour, freeze, and delay;
-- composition of several perturbations at once;
-- an attack or disturbance during the recovery phase;
-- hard benign negatives — clean cases that look like the failure;
-- distribution shift;
-- an attack with no obvious cross-modal disagreement.
-
-Keep the clean controls in the same run. And generated adversarial scenarios must not
-quietly become a training set: tuning against cases you generated to break the system is
-how a red-team suite turns into an overfit surface. Hold them out, or regenerate.
+我的边界是**单 run × 假设对照**。promising 之后的对抗场景与落地前的红队清单已统一归到 `scenario-redteam`。
 
 ## Recording
 

@@ -1,6 +1,6 @@
 ---
 name: retrospective
-description: Load when the last 5 counted iterations all carry belief_delta: none, or at a phase boundary. The slow loop: asks whether the experiments being run are the right ones at all. V1 Block 3 / S1: body lifted from research-engineering's V0 reference and merged in.
+description: 当前机制家族内一系列实验的方向是否对——慢循环里"家族内"那一半。Trigger: 5+ counted iterations belief_delta: none / phase boundary 8-15 / local metric vs 物理/仿真观察分歧。不要调我: 测量表面 → `evaluation-design` / 单 run 对照假设 → `experiment-review` / 换家族 → `research-search` / claim 落地前 → `scenario-redteam`。
 ---
 
 # Retrospective
@@ -140,3 +140,12 @@ and its own record as usual.
 If a retrospective concludes that a belief was wrong, the record of that belief's
 original evidence does not change. Raw evidence is append-only; what changed is the belief
 drawn from it, and that lives in `FINDINGS.md`.
+
+## Not this skill
+
+- 测量表面可信度本身有问题 → 调 `evaluation-design` 而不是我。
+- 一个 run 跑完要做 OBSERVATION/COMPARISON/INTERPRETATION/DECISION 四层判定 → 调 `experiment-review` 而不是我。
+- **跨机制家族**：决定要不要换家族（no live hypothesis / dominant failure 已移） → 调 `research-search` 而不是我。我的触发是**当前家族内**：反思这一族机制里玩的方向对不对，research-search 是"换一族玩"。
+- 一个候选 claim 要落地为架构锚点之前做 6 项红队 → 调 `scenario-redteam` 而不是我。
+
+**与 `research-search` 的分界**：我在家族之内，research-search 在家族之间。怀疑"换家族"前先在当前家族里再确认一次。
