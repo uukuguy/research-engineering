@@ -162,9 +162,25 @@ def invoke_client_capture(
     whatever the child emitted before the script killed it.
     """
     if client == "pi":
+        # `pi 0.85.1`'s `--provider` defaults to `google` in `--help`,
+        # not to whatever `~/.pi/agent/settings.json` claims — V1-D9
+        # produced 6/6 `401 authentication_error` on a machine where
+        # `settings.json` did NOT carry a `defaultProvider` (or did but
+        # the wrapper had set `$ANTHROPIC_MODEL=deepseek-flash[1m]` so
+        # `pi` could not resolve a model under the minimax provider and
+        # fell back to `google`, whose OAuth token the minimax-compat
+        # endpoint rejects). Pinning `--provider minimax --model
+        # MiniMax-M3` makes the matrix deterministic across machines
+        # regardless of `~/.pi/agent/settings.json` or wrapper env
+        # (the minimax-compat endpoint accepts `MiniMax-M3` directly,
+        # see `tools/v1_d9_report.json` `research-search` rows).
         argv = [
             "pi",
             "--no-extensions",
+            "--provider",
+            "minimax",
+            "--model",
+            "MiniMax-M3",
             "--skill",
             str(skill_path),
             "--",
