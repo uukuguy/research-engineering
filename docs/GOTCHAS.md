@@ -430,3 +430,30 @@ python3 tools/check_workflow_block.py    # exit 1 点名每个未覆盖的交付
 ### E2. 跑全量测试前必须先问架构师
 
 哪怕改动落在共享底座上。先跑覆盖改动模块的定向测试并报告。
+
+### E3. `researchlog record` 触发自动单 EV commit 后再合并 commit → EV 在 git 历史里出现两次
+
+P1 record-after-commit 决断让 `record` 立即 commit 单 EV；之后任何把 EV 文件再 `git add` 进多文件
+commit 的动作会让 EV 在 git history 里出现两次 commit(一次 record-auto，一次合并 batch)。
+
+**trade-off**:record-auto-commit 是为避免 EV 落 git 之前 working tree 与 state 不一致(见 WORK_LOG §P1);
+要 trade 它才能避免双 commit。
+
+**当前接受双 commit**(EV 内容只在第一次 commit 时定型,后续 commit 是 batch 合并载体,EV 文件
+metadata 不变,raw evidence append-only invariant 未违反)。下次同类场景:先全部 code 改动 commit,
+再最后才 `record` 触发单 EV commit;或显式 `git reset HEAD research/ledger/...EV-*.json` 在合并
+batch 之前 unstage。
+
+### E4. character-class heuristic(`expected in first_line`)有"注入被测字段"风险
+
+如果 prompt 直接让 agent 输出 expected skill 名,任何读了 prompt 的模型都通过 heuristic——heuristic
+证明的是"prompt 问了问题",不是"router 真把 skill 路由对了"。
+
+**当前解**:`tools/verify_v1_d9.py` 改 phrase-list classifier——phrase 从 expected skill 的 SKILL.md
+body 抽出,**跨 6 skill 唯一**(29 phrase,`grep -c -iF` 跨 skill 审计 0 unsafe)。模型必须 quote body
+内容才算 routed_correctly=true。详见 `docs/v1/M6_SPLIT_PROPOSAL.md` §Phrase audit。
+
+**风险**:phrase-list 在 minimax-compat 端点下 false-negative 高于旧 heuristic(模型 paraphrase
+而非 verbatim quote),但 false-positive 为 0(没有"注入"风险)。字面"≥3 routed_correctly"在
+minimax 下仍未达标,故 M6 拆为 M6-pi(M6 内)+ M6-claude-pending(ENV_BLOCKED)。
+

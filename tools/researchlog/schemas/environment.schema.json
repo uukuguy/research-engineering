@@ -49,7 +49,52 @@
     },
     "capability_map": {
       "type": "array",
-      "description": "Declared in the skeleton and never given a shape: no entry example exists anywhere, nothing writes it and nothing reads it. Left unconstrained rather than invented — a shape guessed here would be enforced as though it had been decided."
+      "description": "Research capabilities the lab tracks for investment judgement (V1 §3.1 #17, Block 1.5 / P4). Each entry carries the strongest evidence level it has been used at and a reuse_counter that records how often it has been cited. Written by `env declare capability_map <file>`; see docs/design/CAPABILITY_MAP_SHAPE_PROPOSAL.md for the full rationale and dropped alternatives.",
+      "items": {
+        "type": "object",
+        "required": ["id", "capability", "status", "reuse_counter"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CAP-[a-z0-9-]+-[0-9]{3}$",
+            "description": "Stable id in CAP-<short-slug>-<NNN> form."
+          },
+          "capability": {
+            "type": "string",
+            "description": "What this entry is about, in one short line."
+          },
+          "status": {
+            "enum": ["AVAILABLE", "LIMITED", "UNSUPPORTED"],
+            "description": "AVAILABLE — capability is real and the lab can use it. LIMITED — capability is real but degraded or partial. UNSUPPORTED — capability does not exist here (mirrors the harness/limitation dichotomy). For UNSUPPORTED entries, a parallel limitations[] entry should exist."
+          },
+          "supports_evidence": {
+            "type": ["string", "null"],
+            "enum": ["E0", "E1", "E2", "E3", "E4", "E5", null],
+            "description": "Strongest evidence level this capability has been used at. Optional until first use. The original proposal (§2 of CAPABILITY_MAP_SHAPE_PROPOSAL.md) restricted this to E2|E3|null on the grounds that capability_map is a post-surrogate investment judgement; in practice E0 / E1 entries also exist (a capability can be visible from an env_blocked receipt before any surrogate runs), so the enum follows the full evidence-level scale."
+          },
+          "reuse_counter": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many evidence records cite this capability. Zero is allowed (declared speculatively, never reused)."
+          },
+          "first_used_at": {
+            "type": ["string", "null"],
+            "description": "ISO 8601 UTC timestamp of the first cite. Null until then. No format-level constraint — the validator does not implement `format` and a permissive pattern would enforce nothing."
+          },
+          "last_used_at": {
+            "type": ["string", "null"],
+            "description": "ISO 8601 UTC timestamp of the most recent cite. Null until first use."
+          },
+          "last_used_by_evidence_id": {
+            "type": ["string", "null"],
+            "description": "The evidence_id of the record that bumped reuse_counter most recently."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-form short prose. Absent-by-default; the validator treats missing and null as equivalent."
+          }
+        }
+      }
     },
     "comparability": { "type": "object" },
     "history": { "type": "array" }

@@ -65,6 +65,10 @@ DEFAULT_ENVIRONMENT_ID = "ENV-unspecified"
 DECLARABLE: dict[str, tuple[str, ...]] = {
     "limitations": ("id", "capability", "status", "impact"),
     "harnesses": ("id", "capability", "supports_evidence"),
+    # V1 Block 1.5 / P4 (docs/design/CAPABILITY_MAP_SHAPE_PROPOSAL.md):
+    # capability_map tracks which capabilities are worth investing in next,
+    # via a reuse_counter that V1-D7 tests against.
+    "capability_map": ("id", "capability", "status", "reuse_counter"),
 }
 AVAILABLE_NAMESPACES: tuple[str, ...] = ("compute", "simulator", "data", "external_services")
 
@@ -85,7 +89,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "table",
         choices=(*DECLARABLE, "available"),
         metavar="TABLE",
-        help="limitations | harnesses | available",
+        help="limitations | harnesses | capability_map | available",
     )
     declare.add_argument("file", metavar="FILE", help="the entry document")
 
@@ -184,7 +188,10 @@ def _declare(
         changed = f"available.{namespace}"
     else:
         required = DECLARABLE[table]
-        missing = [key for key in required if not entry.get(key)]
+        # Use `is None` not truthiness: `reuse_counter: 0` and `supports_evidence: ""`
+        # are legitimate required values, and treating 0/falsy-string as "missing"
+        # would refuse every fresh declaration of a never-reused capability.
+        missing = [key for key in required if entry.get(key) is None]
         if missing:
             raise StateInvalid(
                 [

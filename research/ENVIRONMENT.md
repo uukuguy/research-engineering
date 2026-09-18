@@ -27,9 +27,37 @@ than in `FINDINGS.md`.
     }
   ],
   "harnesses": [],
-  "capability_map": [],
+  "capability_map": [
+    {
+      "id": "CAP-v1d9-routing-001",
+      "capability": "V1-D9 router reachability via phrase-list classifier",
+      "status": "AVAILABLE",
+      "supports_evidence": "E0",
+      "reuse_counter": 1,
+      "first_used_at": "2026-09-18T13:37:14+00:00",
+      "last_used_at": "2026-09-18T13:37:14+00:00",
+      "last_used_by_evidence_id": "EV-20260918T133714Z-7b6f",
+      "notes": "Phrase-list heuristic landed 2026-09-18; first cited by env_blocked EV."
+    },
+    {
+      "id": "CAP-researchlog-replay-001",
+      "capability": "researchlog E2/E3 replay with stable identity",
+      "status": "AVAILABLE",
+      "supports_evidence": "E3",
+      "reuse_counter": 0,
+      "notes": "Block 2 / T2 ledger partition + identity-stable replay. Demonstrated by the V0 #14 acceptance drill."
+    },
+    {
+      "id": "CAP-resume-from-files-001",
+      "capability": "session recovery from canonical state files alone",
+      "status": "AVAILABLE",
+      "supports_evidence": "E4",
+      "reuse_counter": 0,
+      "notes": "Block 1 §6: ARCHITECT.md / ACTIVE.json / FINDINGS.md / ENVIRONMENT.md / BOUNDARIES.md + git HEAD/branch/diff. Demonstrated by V0 D1 (7/7)."
+    }
+  ],
   "comparability": {
-    "fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
+    "fingerprint": "sha256:905ec22fa4076f9485a74cf774cc6c8a414d813cb9398988f4819fca6fde0024",
     "last_material_change": "2026-09-18T12:42:36+00:00",
     "status": "COMPATIBLE",
     "anchor_evidence": []
@@ -46,6 +74,14 @@ than in `FINDINGS.md`.
       "fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
       "evidence_id": "EV-20260918T124236Z-479f",
       "notes": "Endpoint is steady-state minimax-compat, not a sandbox artifact. ENV-LIM-004's 'M6-claude-pending (re-run under native Anthropic)' clause is non-actionable under the current endpoint policy; see ARCHITECT signal D-004 for the policy decision."
+    },
+    {
+      "type": "rebaseline",
+      "at": "2026-09-18T14:27:39+00:00",
+      "previous_fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
+      "fingerprint": "sha256:905ec22fa4076f9485a74cf774cc6c8a414d813cb9398988f4819fca6fde0024",
+      "reason": "V1-D7 verification",
+      "comparability": "COMPATIBLE"
     }
   ]
 }

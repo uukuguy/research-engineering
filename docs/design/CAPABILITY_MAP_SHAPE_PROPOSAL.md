@@ -166,3 +166,29 @@ and the empty-array case validates under both shapes.
   map. The surrogate contract is per-record; the map is per-lab. They
   share the `capability` vocabulary but a record need not write the
   map to cite a capability — T1 will, but that is separate.
+
+## 8. Architect decision (signed off 2026-09-18)
+
+Architect sign-off was delegated to the research-engineering session
+during a "finish V1" turn ("自定就好,尽快整体完成可用"). The decision
+applied each of the three line items in §6:
+
+1. **Field set**: the nine-field set in §2 is accepted as proposed.
+   `reuse_counter` (required integer ≥ 0) + the `id` / `capability` /
+   `status` minimum is the contract; the optional fields are optional.
+2. **Status vocabulary**: `AVAILABLE | LIMITED | UNSUPPORTED` is
+   accepted as proposed. The proposal's reasoning — that the
+   three-way split mirrors the existing harness / limitation dichotomy
+   and avoids "always present, always null" finer splits — is the
+   load-bearing rationale. If a fourth status is needed later, a
+   follow-up proposal is the right place.
+3. **Optional vs required**: the proposal's `required-only-where-
+   the-data-is-always-known` rule is accepted. Concretely:
+   `id` / `capability` / `status` / `reuse_counter` are required;
+   the rest are optional with `null` until first use. Missing
+   optional fields and explicit `null` are equivalent for validation
+   (the schema's `["string", "null"]` form treats them the same).
+
+The schema and the `env declare capability_map` path landed in the
+same commit that carries this proposal to closure; see the matching
+commit message for the version recorded against `research/ENVIRONMENT.md`.
