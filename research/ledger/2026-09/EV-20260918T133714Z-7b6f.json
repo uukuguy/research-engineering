@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "question": "Can V1-D9 reach the 6 expert skills under minimax-compat?",
+  "subject": {
+    "type": "environment",
+    "id": "ENV-minimax-compat"
+  },
+  "evidence_level": "E0",
+  "execution_status": "env_blocked",
+  "research_outcome": "none",
+  "confidence": "certain",
+  "observations": [
+    "V1-D9 drill on minimax-compat (sandbox, commit d77b7b2): 3/6 routed correctly",
+    "V1-D9 drill: 3/6 timeout-empty under minimax-compat",
+    "V1-D9 drill: 0/6 partial-not-nominal",
+    "Endpoint policy: minimax-compat is steady-state (ARCHITECT signal D-004)"
+  ],
+  "measurements": {
+    "routed": 3,
+    "timeout_empty": 3,
+    "partial_not_nominal": 0
+  },
+  "invalidated_if": [
+    "env.endpoint != minimax-compat"
+  ],
+  "iteration_kind": "evidence",
+  "created_at": "2026-09-18T13:37:14+00:00",
+  "code_state": {
+    "branch": "main",
+    "commit": "d77b7b27541c70008aa007c3f538d7993e7171f3",
+    "base_commit": "d77b7b27541c70008aa007c3f538d7993e7171f3",
+    "dirty": true,
+    "diff_sha256": "sha256:eb559d24480c9a397d18952cf59fa9f6ca8ed3fc37e8d585803c349e0a0b7f21"
+  },
+  "block_id": null,
+  "environment": {
+    "id": null,
+    "comparability": "COMPATIBLE",
+    "fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
+    "endpoint": "minimax-compat"
+  },
+  "counts_as_evidence_iteration": false,
+  "evidence_id": "EV-20260918T133714Z-7b6f"
+}
