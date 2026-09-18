@@ -30,6 +30,8 @@ from pathlib import Path
 from researchlog import cli
 from researchlog.errors import (
     EXIT_FINDINGS_PRESENT,
+    EXIT_OK,
+    EXIT_PRECONDITION_MISSING,
     EXIT_STATE_INVALID,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
@@ -702,6 +704,121 @@ class StatusCommandTests(CommandTestCase):
         self.assertIn(code, (0, 3), envelope)
         codes = [f["code"] for f in envelope["findings"]]
         self.assertIn("STATUS_NOT_IGNORED", codes)
+
+
+class SynthesizeCommandTests(CommandTestCase):
+    """V1 §14: `researchlog synthesize --block BLOCK_ID`.
+
+    The block-close verb produces 1-2 pages of structured synthesis for the
+    Architect. Each branch (no-block, missing-belief_delta, happy path, path
+    refusal) is exercised as a separate test, because the V1-D4 #4 PASS
+    signal ("exit 0; output is 1-2 pages") only fires on the integrated
+    sequence the Architect runs end-to-end.
+    """
+
+    def test_synthesize_without_block_emits_precondition_missing(self) -> None:
+        # Fresh fixture: `ACTIVE.block.id` is null and no `--block` is given.
+        before = self.tree()
+        code, envelope = self.invoke(["synthesize"])
+        self.assertEqual(code, EXIT_PRECONDITION_MISSING, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("SYNTHESIS_BLOCK_NOT_FOUND", codes)
+        self.assertIsNone(envelope["payload"].get("block_id"))
+        # No write was requested, so the working tree must not have moved.
+        self.assertEqual(self.tree(), before)
+
+    def test_synthesize_with_explicit_block_warns_on_zero_records_and_missing_belief_delta(
+        self,
+    ) -> None:
+        # Open a block, but record no evidence against it and do not close.
+        self.invoke(["active", "--set", "block.id=BL-1"])
+        code, envelope = self.invoke(["synthesize", "--block", "BL-1"])
+        self.assertEqual(code, EXIT_FINDINGS_PRESENT, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("SYNTHESIS_ZERO_RECORDS", codes)
+        self.assertIn("SYNTHESIS_BELIEF_DELTA_MISSING", codes)
+        self.assertEqual(envelope["payload"]["block_id"], "BL-1")
+        # Recommendation explicitly cites the P1-8 violation.
+        self.assertIn("P1-8", envelope["payload"]["recommendation"])
+
+    def test_synthesize_writes_to_research_dot_derived_when_no_path_component(
+        self,
+    ) -> None:
+        # Open a block, close it with `belief_delta=none` so the happy path
+        # is reached. record_evidence writes an E1 record whose block_id is
+        # inherited from ACTIVE at the time of recording.
+        self.invoke(["active", "--set", "block.id=BL-2"])
+        # record stamps `block_id` from ACTIVE automatically; the helper
+        # below does not need an explicit `--block-id` flag.
+        self.invoke(
+            [
+                "record",
+                "--question",
+                "is the block-close synthesis wired?",
+                "--subject-type",
+                "mechanism",
+                "--subject-id",
+                "M-SYN",
+                "--level",
+                "E0",
+                "--execution-status",
+                "completed",
+                "--research-outcome",
+                "inconclusive",
+                "--confidence",
+                "low",
+                "--observation",
+                "fixture",
+                "--no-experiment",
+            ]
+        )
+        self.invoke(["active", "--close-block", "--belief-delta", "none"])
+
+        code, envelope = self.invoke(
+            ["synthesize", "--block", "BL-2", "--write", "BL-2.md"]
+        )
+        self.assertEqual(code, EXIT_OK, envelope)
+        self.assertIsNotNone(envelope["payload"].get("wrote"))
+        written_path = self.root / "research" / ".derived" / "BL-2.md"
+        self.assertTrue(written_path.is_file())
+        body = written_path.read_text(encoding="utf-8")
+        # §0..§6 must all appear (sanity check the section layout).
+        for marker in (
+            "# Block synthesis: BL-2",
+            "## §0 Header",
+            "## §1 Block identity",
+            "## §2 Evidence summary",
+            "## §3 Belief change",
+            "## §4 Frontier & uncertainty",
+            "## §5 Open issues",
+            "## §6 Next action / closure recommendation",
+        ):
+            self.assertIn(marker, body, f"missing section marker: {marker}")
+        # 1-2 pages ≈ 30-60 lines, allowing some headroom.
+        line_count = body.count("\n") + 1
+        self.assertGreater(line_count, 20)
+        self.assertLess(line_count, 200)
+
+    def test_synthesize_refuses_paths_above_repo_root(self) -> None:
+        # No block needed — the path guard fires before any state read.
+        code, envelope = self.invoke(["synthesize", "--write", "/tmp/escape.md"])
+        self.assertEqual(code, 4, envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("SYNTHESIS_PATH_OUTSIDE_ROOT", codes)
+
+    def test_synthesize_explicit_block_id_overrides_active(self) -> None:
+        # Active block is BL-live, but the explicit `--block` is BL-history.
+        # `payload["human"]` is not populated under `--json` (only `payload` and
+        # `findings` are emitted), so the body is captured via `--write` instead.
+        self.invoke(["active", "--set", "block.id=BL-live"])
+        code, envelope = self.invoke(
+            ["synthesize", "--block", "BL-history", "--write", "BL-history.md"]
+        )
+        self.assertEqual(code, EXIT_FINDINGS_PRESENT, envelope)
+        self.assertEqual(envelope["payload"]["block_id"], "BL-history")
+        written = self.root / "research" / ".derived" / "BL-history.md"
+        self.assertTrue(written.is_file())
+        self.assertIn("# Block synthesis: BL-history", written.read_text(encoding="utf-8"))
 
 
 class LedgerPartitionTests(GitCommandTestCase):

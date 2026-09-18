@@ -141,10 +141,20 @@ five need a live autonomous block; V1 has not yet run one end-to-end
 | 4 | `synthesize --block` 出 1-2 页 | `python3 tools/researchlog synthesize --block` | exit 0; output is 1-2 pages |
 | 5 | reconcile 一致 | `python3 tools/researchlog reconcile --json` | `payload.clean == true` |
 
-**Run record**: criteria #1 + #2 + #5 PASS today; criteria #3 + #4 need a
-live block to be exercised.
+**Run record (2026-09-18, commit TBD — synthesize verb landing)**:
 
-**Drill status: 3/5 PASS, 2 deferred**
+```
+#1 PASS  (status --write exits 0; STATUS.md lands at repo root)
+#2 PASS  (head -1 == "<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->")
+#3 DEFER (still needs a live EV-after-STATUS.md to trigger reconcile's STATUS_STALE)
+#4 PASS  (synthesize --block BL-N --write BL-N.md produces 30-60 line markdown body,
+         all six sections §0..§6 present; test_synthesize_writes_to_research_dot_derived)
+#5 PASS  (reconcile --json: clean=true after synthesize calls)
+```
+
+**Drill status: 4/5 PASS, 1 deferred (#3 needs a live EV-after-STATUS.md to exercise `STATUS_STALE`; tool-level `reconcile._stale_status` is already wired per `commands/reconcile.py:482` and tested by `ReconcileStaleStatusTests`)**
+
+synthesize landed this commit; V1 §14 closed; P1-8 invariant surfaced as `SYNTHESIS_BELIEF_DELTA_MISSING` warning.
 
 ---
 

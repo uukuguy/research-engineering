@@ -4,6 +4,114 @@
 
 ---
 
+## 2026-09-18 — §14 synthesize --block 落地 + V1-CASES §V1-D4 #4 PASS
+
+承接上一条(commit `3fcf277`,V1 工具层闭环)。架构师授权"补 §14(实现 synthesize --block)" +
+"不跑研究,只收 PDF + push ahead"。本轮三件事。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/synthesize.py`**(NEW,~350 LOC)— V1 §14 verb。
+
+- Family A read-only 形态: 默认不写, `--write PATH` 显式 opt-in; bare filename → `research/.derived/`,
+  其它 → repo root; `..` escape 拒绝(`SYNTHESIS_PATH_OUTSIDE_ROOT` → exit 4)。
+- Block identity 解析顺序:`args.block or ACTIVE.block.id`; 都为 None → `SYNTHESIS_BLOCK_NOT_FOUND`
+  → exit 5。`--write` 在 block 检查**之前**解析,escape 尝试无论 block 状态都失败。
+- 输出 6 段 markdown(§0..§6,~30-60 行 ≈ 1-2 页):
+  - §0 Header(generated_at + ledger 总数 / block 成员数)
+  - §1 Block identity(objective、belief_delta、stop_conditions、max_* 三项)
+  - §2 Evidence summary(iteration counts、evidence level breakdown via Counter、
+    block count agreement)
+  - §3 Belief change(截断到 5 条 findings,完整列表在 payload)
+  - §4 Frontier & uncertainty(from CURRENT.md `research:current`)
+  - §5 Open issues(一行指向 `reconcile --json`)
+  - §6 Next action(recommendation ∈ 4 种:`ready to close` / `more iterations possible` /
+    `reconcile disagrees` / `P1-8 violated`)
+- opener 用 markdown blockquote(`> Derived summary...`),**不**复用 STATUS.md 的
+  `<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->` HTML comment 头 — 那条字符串是
+  `reconcile._stale_status` 的机器锚点(`commands/reconcile.py:520`),不能占用。
+
+**Finding codes**
+
+| Code | Severity | Exit | 触发 |
+|---|---|---|---|
+| `SYNTHESIS_BLOCK_NOT_FOUND` | error | 5 | args.block=None 且 ACTIVE.block.id=None |
+| `SYNTHESIS_ZERO_RECORDS` | warning | 3 | block 有,ledger 没成员 |
+| `SYNTHESIS_BELIEF_DELTA_MISSING` | warning | 3 | block.belief_delta=None (P1-8 invariant) |
+| `SYNTHESIS_PATH_OUTSIDE_ROOT` | error | 4 | --write escape repo root |
+| `SYNTHESIS_NOT_IGNORED` | warning | 3 | --write 落点不在 .gitignore (镜像 STATUS_NOT_IGNORED) |
+
+**`tools/researchlog/commands/__init__.py`** — MODULES 元组在 `status` 与 `telemetry` 之间
+插入 `synthesize`,保持 `read-mostly reporters` 分组。
+
+**`tools/researchlog/tests/test_commands.py::SynthesizeCommandTests`**(NEW, 5 测试)— mirror
+`StatusCommandTests` 风格:
+
+1. `test_synthesize_without_block_emits_precondition_missing` — 干净 fixture,exit 5 +
+   SYNTHESIS_BLOCK_NOT_FOUND;assert working tree 不动。
+2. `test_synthesize_with_explicit_block_warns_on_zero_records_and_missing_belief_delta`
+   — 显式 `--block BL-1`,exit 3 + 两 warning 都出现,recommendation 含 "P1-8"。
+3. `test_synthesize_writes_to_research_dot_derived_when_no_path_component` —
+   active set BL-2 → record E0 → close-block belief_delta=none → synthesize --write BL-2.md
+   → 落 `research/.derived/BL-2.md`,exit 0;assert §0..§6 全在;1-2 页(20 < lines < 200)。
+4. `test_synthesize_refuses_paths_above_repo_root` — `--write /tmp/escape.md` →
+   exit 4 + SYNTHESIS_PATH_OUTSIDE_ROOT。
+5. `test_synthesize_explicit_block_id_overrides_active` — ACTIVE 是 BL-live 但
+   `--block BL-history`,assert payload 与写入文件都含显式 id。
+
+**全套测试 286/286 PASS**(新增 5 + 旧 281),无回归。`validate` clean,`reconcile` clean。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D4 drill:从 **3/5 PASS, 2 deferred** 改为 **4/5 PASS, 1 deferred**
+  (#4 synthesize PASS,#3 stale-detection 仍需 live EV-after-STATUS.md)。
+- `docs/V1_ACCEPTANCE_GUIDE.md` M5 / #4 / 处表 三处行更新;aggregate counter:
+  **26 PASS + 18 deferred + 4 ENV_BLOCKED**(48 criteria,V1 §14 闭环)。
+
+### 动手前要知道(本轮新增)
+
+55. **`synthesize.py` 的 `--write` target 解析在 block 检查之前**。原顺序是 `_target` 在 `run()`
+    末尾、只在 `args.write is not None` 时调用;这意味着 path escape 必须先 resolve,否则
+    没 block 时 `--write /tmp/escape.md` 会先被 SYNTHESIS_BLOCK_NOT_FOUND 吃掉、退到
+    exit 5,而不是 SYNTHESIS_PATH_OUTSIDE_ROOT 的 exit 4。**exit code 是 contract,
+    不能让 path-refusal 误报为 precondition-missing**。重构时把 `_target(paths, args.write)`
+    提到 `run()` 第二行,path 错误立即抛出 `RefusedByPolicy`,被 CLI 转 exit 4。
+56. **`record` 命令不会接受 `--block-id` flag**(原本以为需要显式传)。`record` 自动从
+    `ACTIVE.block.id` 抓(见 `commands/record.py:250-254`),测试时不要传 `--block-id` —
+    会被 argparse 拒绝。架构上是对的:record 时的 ACTIVE 是权威 source of truth。
+57. **Pyright 对 `Record.get(...)` 报 optional-member-access**,因为 `Record` 不是 `dict`。
+    解法是 `block_section_dict: dict[str, Any] = {}` 然后显式 `if isinstance(section, dict):`
+    拷贝,而不是直接 `block_section = active.get("block") if active else None` 让类型
+    推断为 `dict | None`。
+58. **`research/.derived/` 不是 `init` 创建的**(只创建 ledger + runs)。`synthesize --write`
+    第一次调用前需要 `mkdir(parents=True, exist_ok=True)`,镜像 `ioutil.write_json_atomic`
+    line 74。`status.py` / `snapshot.py` 没事是因为它们写到 repo root 或 snapshot 路径
+    预先存在。这条之前没人发现是因为没人真用 `--write` 落 `.derived/`。
+59. **`payload["human"]` 在 `--json` 模式下不存**。`Result.to_dict()`(`errors.py:84-93`)
+    只序列 `exit_code / payload / findings`;`human` 在非 `--json` 下走 stdout。所以测试
+    body 内容要么 redirect stdout(`invoke_raw`)、要么 `--write` 后读盘。最初写测试时
+    误以为 `payload["human"]` 存在,失败后改成 `--write + read_file` 才正确。
+60. **V1-D4 #3 (stale-detection)** 我没顺手 PASS。`#3` 是"record 一条 EV 后 STATUS.md
+    `last_evidence_modified:` 落后 → reconcile 报 STATUS_STALE",这要 live EV-after-STATUS
+    才触发。本轮 synthesize 落地了 #4 但 #3 仍 deferred,V1_CASES.md 已诚实标注
+    "DEFER #3" 不冒充 PASS。
+
+### 下一步
+
+- **未跑研究**(Architect 选择)。本轮**没**触发 live block / E2-E3 harness / 跨 session
+  数据。deferred 段 18 项中,5 项(V1-D1 #6 + V1-D2 #1-#5 + V1-D3 #1-#5 + V1-D4 #3 +
+  V1-D5 #2-#4 + V1-D6 #4 + V1-D8 #2)是"工具就绪、缺数据"——任一项真研究活动都能
+  转 deferred → PASS。
+- **架构师 A-3 / A-4 仍未触发**(上次留下):
+  - A-3:phrase-list 是否折进 SKILL.md frontmatter
+  - A-4:D-004 forward path(单 EV 闭环 vs per-session 重跑记新 EV)
+- **M6-claude-pending**:等切回原生 Anthropic 端点(`unset ANTHROPIC_BASE_URL`)跑
+  `python3 tools/verify_v1_d9.py --clients claude --timeout-seconds 90`。
+- **未决 dirty**:`docs/research-engineering-complete-design-v1.5.pdf`(2 MB,untracked)
+  —— 本轮归档。
+
+---
+
 ## 2026-09-18 — V1 工具层闭环:P4 + Block 3 / S2 + Block 4-6 + Gate-3 文档
 
 承接上一条(commit `5a7ce88` 完整收口 V1 工具层)。架构师授权"自定就好,尽快整体完成可用",

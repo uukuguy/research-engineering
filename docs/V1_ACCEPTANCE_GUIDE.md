@@ -45,7 +45,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | **#1** | Research Capability Map 真实可写、real entries ≥3 | V1-D7 | ✅ V1-D7 #2 (3 entries seeded) |
 | **#2** | 高复用 harness 投资判断:reuse_counter 字段存在 + ≥3 | V1-D7 | ✅ V1-D7 #3 (3 entries with reuse_counter) |
 | **#3** | productivity telemetry 全表可查 (§21 KPI) | V1-D6 | ⏳ V1-D6 3/4 |
-| **#4** | `STATUS.md` milestone cache 可写 + stale-detection 自动告警 | V1-D4 | ⏳ V1-D4 3/5 |
+| **#4** | `STATUS.md` milestone cache 可写 + stale-detection 自动告警 | V1-D4 | ⏳ V1-D4 4/5 (synthesize 落地 §14;stale-detection 待 live EV) |
 | **#5** | GitHub remote 可选集成 (`--gh-status` 不报错) | V1-D9 (工具层) | ✅ checkpoint --gh-status flag landed |
 | **#6** | manual Gate-3 verifier 文档完整,可走通一个完整流程 | V1-D9 (文档层) | ✅ docs/verification/gate-3.md landed |
 | **#7** | worktree single-writer enforcement | V1-D5 | ⏳ V1-D5 2/5 |
@@ -70,7 +70,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 |---|---|---|---|
 | M3 | 三件套端到端连通 | ⏳ 7/18 | V1-D7 6/6 + V1-D1 5/7 + V1-D2 1/6 |
 | M4 | bounded block | ⏳ 2/7 | V1-D3 第 #4 + #7 工具层 PASS |
-| M5 | snapshot + synthesis | ⏳ 3/5 | V1-D4 #1+#2+#5 工具层 PASS |
+| M5 | snapshot + synthesis | ⏳ 4/5 | V1-D4 #1+#2+#4+#5 工具层 PASS;#3 stale-detection 仍需 live EV-after-STATUS.md;synthesize --block (§14) 落地,P1-8 触发 SYNTHESIS_BELIEF_DELTA_MISSING |
 | M6-pi | pi 端 ≥3 routed | ❌ 1/6 | 详见 `docs/V1_CASES.md` §V1-D9 + `EV-20260918T133714Z-7b6f` |
 | M6-claude-pending | claude 端 ≥3 routed | ⛔ ENV_BLOCKED | D-004 + ENV-LIM-004 |
 | M7-pi | V1 两客户端矩阵 (pi 端) | ❌ | 同 M6-pi |
@@ -78,7 +78,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #1 | capability_map shape + ≥3 entries | ✅ | commit `30d0b89` + V1-D7 #1+#2 |
 | #2 | reuse_counter 字段存在 | ✅ | schema + 3 entries |
 | #3 | productivity telemetry | ⏳ 3/4 | V1-D6 |
-| #4 | STATUS.md cache + stale | ⏳ 3/5 | V1-D4 |
+| #4 | STATUS.md cache + stale | ⏳ 4/5 | V1-D4 #1+#2+#4+#5 工具层 PASS;#3 stale-detection 仍需 live EV-after-STATUS.md |
 | #5 | `--gh-status` 不报错 | ✅ | checkpoint 命令行 + flag |
 | #6 | Gate-3 verifier 文档 | ✅ | docs/verification/gate-3.md |
 | #7 | worktree single-writer | ⏳ 2/5 | V1-D5 |
@@ -112,10 +112,12 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 19 deferred criteria across V1-D1/D2/D3/D4/D5/D6/D8 are tool-layer PASS structurally;
+The 18 deferred criteria across V1-D1/D2/D3/D4/D5/D6/D8 are tool-layer PASS structurally;
 they need a live autonomous block / E2-E3 harness run / expired CONSTRAINT / multi-session
-data to fully exercise. None of them is blocked on a tool defect; all are blocked on missing
-research activity, which is the right shape for a protocol at the end of its tool layer.
+data to fully exercise. V1-D4 #4 (`synthesize --block` 1-2 pages) is no longer deferred
+— it landed in this commit, along with the P1-8 invariant surfaced as
+`SYNTHESIS_BELIEF_DELTA_MISSING`. Aggregate: 26 PASS + 18 deferred + 4 ENV_BLOCKED
+(48 criteria, V1-CASES §V1-D4 drill row updated).
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。
