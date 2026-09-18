@@ -4,6 +4,80 @@
 
 ---
 
+## 2026-09-19 — Handoff:本 session 收工,状态写回磁盘
+
+Architect "handoff" — 当前 session 不再继续,把控制权交给下一 session / 下一 Architect 决策。
+
+### 写回磁盘的状态
+
+1. **`research/ACTIVE.json`** — `status: idle`; `session_epoch` 重 mint 为
+   `SE-20260918T183934Z-22a9`(下一 session 拿到的 epoch); `next_action` 写明
+   V1 tool-layer 已闭环、待 Architect 决策的悬空项(A-3 / A-4 / M6-claude-pending
+   / V1-D6 #4)。
+2. **`research/CURRENT.md`** 的 `research:current` block — `next_empirical_action`
+   同步写明 session handoff 协议:下一 session resume 路径(reconcile → 确认 8/9 drill
+   仍绿 → 看 Architect 是否触发新 hypothesis)。
+3. **Git commit + push** — 落盘后,下一 session / Architect 任何机器 clone 后
+   `git pull` 即可拿到最新状态。
+
+### 这次 session 的全部交付(14 commits,全部 push 至 origin/main)
+
+| Commit | 内容 |
+|---|---|
+| `3584f78` | docs: PDF 归档(与同名 .docx 配对) |
+| `42cd346` | feat(synthesize): V1 §14 synthesize --block verb(5 测试,drill row 翻 PASS) |
+| `fdf6d82` | test(ledger): V1-D1 #6+#7 fixture-level PASS(cross-partition --from-orphan + compare) |
+| `3937ecd` | test(signals): V1-D8 #2 fixture-level PASS(EXPIRED_ARCHITECT_SIGNAL + 两条 carve-out) |
+| `70d546a` | test(worktree): V1-D5 #1-#4 fixture-level PASS(P9 single-writer enforcement) |
+| `0f199a3` | docs(drill): V1-D4 #3 status-label close(doc-only reverse variant) |
+| `5e9caa0` | docs(drill): reverse-variant audit closes 7 deferred(doc-only) |
+| `0645ac9` | test(fixtures): V1-D2 #5 + V1-D3 #2+#3 fixture-level PASS(E2/E3 compare + rotation + reproduction) |
+| `149e6ea` | test(heartbeat): V1-D3 #5 fixture-level PASS(default 30s heartbeat cadence) |
+| `2314544` | feat(telemetry): cumulative_evidence_iterations + sessions.jsonl(V1-D6 #4) |
+| `613157f` | docs: sync README + AGENTS.md with V1 closure |
+| `15b319d` | docs: rewrite README + LICENSE for an open-source-project standard |
+| `27fa25b` | docs(zh-CN): rewrite README.zh-CN.md for natural Chinese |
+| (this handoff commit) | session → next session handoff |
+
+### 仍然悬空、Architect 才能决定的 4 项
+
+| ID | 内容 | 触发条件 |
+|---|---|---|
+| **A-3** | phrase-list → SKILL.md frontmatter(让 router self-test) | M6-pi 字面 ≥3 routed 仍 1/6,改 acceptance contract |
+| **A-4** | D-004 forward path(单 EV 闭环 vs per-session 重跑记新 EV) | 当前单 EV 已闭环,看 Architect 是否要改 |
+| **M6-claude-pending** | claude 端 ≥3 routed(原生 Anthropic endpoint) | 需要原生 Anthropic 订阅,sandbox 不可触发 |
+| **V1-D6 #4 telemetry feature work** | 不存在,§14 KPI 完全实装后已闭环 | 已 ✅ 实装,本 commit 关闭 |
+
+注意:V1-D6 #4 在 2026-09-19 当天(本 commit 之前一条 `2314544`)已经实装
+——上面"Architect 才能决定"的 4 项里这一条**不再悬空**。当前真正悬空的是
+A-3 / A-4 / M6-claude-pending 这三项,加上"启动新的 live research activity"
+这件事本身。
+
+### 下一 session 接手时的具体动作(写在 ACTIVE.next_action)
+
+```bash
+# 1. Resume 路径
+PYTHONPATH=tools python3 tools/researchlog reconcile  # 确认状态干净
+PYTHONPATH=tools python3 -m unittest discover -t tools -s tools/researchlog/tests  # 304 测试仍绿
+
+# 2. 看 Architect 是否触发新 hypothesis(读 ARCHITECT.md 是否有新 research:signal block)
+
+# 3. 若无新 hypothesis:停在 idle。V1 tool-layer 闭环 + deferred 段全清空,
+#    没有 live research activity 就不应该伪造研究活动。
+
+# 4. 若有:开 ACTIVE block,record E0 → E2 链条,跨 session 累计 KPI
+#    (cumulative_evidence_iterations) 自动报告。
+```
+
+### 不在本 handoff 范围内
+
+- **V2 协议层**(长跑自治、与外部 AI 编程基准集成)— Architect 的 §Objective
+  提了但没排期。本 handoff 只做 V1 tool-layer 闭环的 handoff,V2 是另一段工作。
+- **更多 release tagging / changelog** — 都是 housekeeping,可在下一 session
+  按需做。
+
+---
+
 ## 2026-09-19 — V1-D6 #4 落地:`cumulative_evidence_iterations` + `sessions.jsonl` 基础设施
 
 承接上一条(commit `149e6ea`,V1-D3 全过)。Architect"你定"。本轮实装跨 session
