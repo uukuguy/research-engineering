@@ -4,6 +4,98 @@
 
 ---
 
+## 2026-09-18 — V1 工具层闭环:P4 + Block 3 / S2 + Block 4-6 + Gate-3 文档
+
+承接上一条(commit `5a7ce88` 完整收口 V1 工具层)。架构师授权"自定就好,尽快整体完成可用",
+本轮把 §3.1 #5 / #6 + Block 3 / S2 + Block 4-6 一并交付。
+
+### 这一轮交了什么
+
+**Block 1.5 / P4 — capability_map shape**
+
+`docs/design/CAPABILITY_MAP_SHAPE_PROPOSAL.md` 收口:9 字段集 + 三状态(`AVAILABLE | LIMITED |
+UNSUPPORTED`)+ required-only-where-always-known。Schema 实装到 `environment.schema.json`,
+加 enum 实际遇到 `supports_evidence: E0` 的真数据后扩到 `E0..E5 | null`(原 proposal 限
+E2|E3|null,实战过严;修改记在 schema description 里)。
+
+**Block 2 / T1 — capability_map declare path**
+
+`tools/researchlog/commands/env.py::DECLARABLE` 加 `capability_map` table + argparse choice。
+实装过程暴露两个 V0 隐藏 bug:
+
+1. `declare` completeness check 用 `not entry.get(key)`,把 `reuse_counter: 0`(合法)当成
+   missing。改为 `is None` —— 不影响 limitations/harnesses 的现有 entry,因为它们的 required
+   字段都是 truthy 字符串(E0 状态字符串、capability 名等)。
+2. schema validator 不实现 `format` keyword。删 `format: date-time`(留 description
+   + free-form string)。
+
+3 个 capability_map entry seeded(满足 V1-D7 #2 ≥3 entries),其中 `CAP-v1d9-routing-001`
+   直接引用 `EV-20260918T133714Z-7b6f` 做 reuse_counter=1。
+
+**Block 2 / T4 — V1-D7 6/6 全过**
+
+实测 V1-D7 六条判据:capability_map shape ✅,≥3 entries ✅,reuse_counter ✅,harness
+declare ✅,rebaseline 触发 fingerprint 变(1733fb3f... → 905ec22f...)✅,`changed` 谓词
+不再永远 UNRESOLVED(env query with EV's invalidated_if:`invalidated: 1, unresolved: 0`)✅。
+
+**Block 3 / S2 — Gate-3 verifier**
+
+`docs/verification/gate-3.md`(NEW)— V0 风格的执行指南文档,描述:
+- Gate-3 在 research branch 与 architect approval 之间的边界
+- 手工 Gate-3 步骤(克隆 → 切 commit → validate/reconcile/dry-run/rebaseline → 记 receipt)
+- 自动化 Gate-3 via `workflow_dispatch`(GitHub Actions on-demand)
+- Gate-3 失败 surface(read-only,失败 = upstream 修)
+
+`tools/researchlog/commands/checkpoint.py` 加 `--baseline-tag NAME` + `--gh-status URL`:
+- `--baseline-tag` 创建 annotated tag,message 携带 `--gh-status` URL(若提供)
+- `--gh-status` 单独给不报错(V1 #5 acceptance);但若没 `--baseline-tag` 就 silently drop URL
+- tag 失败不阻断 commit(沿用 `_tag` 既有 contract)
+
+**Block 4 — V1 drill suite**
+
+`docs/V1_CASES.md`(NEW)— 9 drill × 48 criteria,每条带可执行 command + PASS 信号。
+差异于 V0_CASES.md:V1 工具级 drill 用 `researchlog` 直接验证,不需要 fixture + session harness;
+只有 V1-D3/D6/D9 真需要 harness(本轮 deferred)。
+
+Aggregate: 25 PASS + 19 deferred + 4 ENV_BLOCKED。Deferred 不是工具缺陷,是缺研究活动
+(live autonomous block / E2-E3 harness / expired CONSTRAINT / cross-session data)。
+
+**Block 5 + 6 — V1 acceptance guide**
+
+`docs/V1_ACCEPTANCE_GUIDE.md`(NEW)— V0_ACCEPTANCE_GUIDE 风格的 Day-N must / V1 complete
+分组 + 状态表。23 条验收条目全列出 + 当前状态(9 PASS 结构 + 14 deferred + 4 ENV_BLOCKED)。
+**这张表本身是这一轮的主要产物**:它解决了"V1 完成没有"在仓库里**无法回答**的问题(每条
+状态散落在 V1_IMPLEMENTATION_PLAN §4 + WORK_LOG + V1_CASES 各段,grep + 上下文成本高)。
+
+### 动手前要知道(本轮新增)
+
+51. **Pyright 在 `tools/researchlog/commands/checkpoint.py:324` 报 "paths unused"** —
+    `_warn_unmatched(paths, ...)` 函数体未用 `paths`,这是 V0 既有的 linter 警告
+    (非本轮引入)。`_warn_unmatched` 没活干时只跑 explicit-vs-files 比对,`paths` 参数
+    是历史遗留。下次统一 cleanup 时处理。
+52. **P4 proposal 实装时扩 supports_evidence enum** 是 Architect 委托范围内的合理决策
+    (原限 E2|E3|null,实战 E0 ENV_BLOCKED EV 引用就过不去 schema)。修改记入 schema
+    description 而非原 proposal §2,因为修改理由直接来自"实际数据填不进去"。**若 Architect
+    不同意扩展,可在此基础上 revert enum 到 E2|E3|null 并把 demo entry 改成 E2**。
+53. **`--gh-status` 单用不报错** 是 V1 #5 acceptance 合约;架构师"自定就好"委托下
+    我选了"silently drop URL"而非"warn 提醒",因为 #5 字面是"不报错",warn 是
+    informational output 不是 error 但仍是 noise。**若 Architect 倾向 warn,我可在下一轮加
+    `result.add(Finding(CHECKPOINT_GH_STATUS_DROPPED, INFO, ...))`**。
+54. **V1_CASES.md "deferred" 段要诚实标注**:tool-layer PASS structurally ≠ 实测 PASS。
+    aggregate 表的 19 个 deferred 都是"工具就绪,缺研究活动",不是"工具失败"。下一轮
+    session 跑 V1-D3 live block 时,本表是直接复用的索引。
+
+### 下一步
+
+- **架构师 A-3 未触发**:SKILL.md frontmatter 是否折入"Open with one short quoted line"指令
+  让 router self-test。M6-pi 字面 ≥3 routed 仍 1/6,要不要靠 A-3 解决是 Architect 决定。
+- **架构师 A-4 未触发**:D-004 forward path——单 EV 闭环 vs per-session 重跑记新 EV。
+- **真正的研究活动** — V1 工具层完整,deferred 全部是"等研究跑"。这是正确状态:protocol 完
+  成,research 来 exercise 它。
+- **未决 dirty**:`docs/research-engineering-complete-design-v1.5.pdf` 仍未处置。
+
+---
+
 ## 2026-09-18 — V1-D9 heuristic 改 + M6/M7 拆分落 V1_IMPLEMENTATION_PLAN.md
 
 承接上一条(commit `10643d5` 之后)。架构师明确"改 V1-D9 prompt shape"方向后,
