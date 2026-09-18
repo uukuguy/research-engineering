@@ -98,7 +98,7 @@ def run(args: argparse.Namespace) -> Result:
             members = constraints.block_members(
                 record.get("block.id"), list(state.load_ledger(paths).records.values())
             )
-        changed = _apply(record, args, members=members)
+        changed = _apply(paths, record, args, members=members)
         record.set("updated_at", _now())
         ioutil.write_json_atomic(
             paths.active, record.raw, validator=schema.load_validator("active")
@@ -125,6 +125,7 @@ def _is_writing(args: argparse.Namespace) -> bool:
 
 
 def _apply(
+    paths: repo.ResearchPaths,
     record: Record,
     args: argparse.Namespace,
     *,
@@ -189,8 +190,21 @@ def _apply(
     if args.accept_recovery:
         changed.extend(_accept_recovery(record, now))
     if args.rotate_session:
-        record.set("session_epoch", ids.mint("session"))
+        new_epoch = ids.mint("session")
+        record.set("session_epoch", new_epoch)
         changed.append("session_epoch")
+        # V1 Block 2 / T5: append a "rotated" line to the session-event
+        # log so the cumulative telemetry KPI has a record. The import
+        # is local because the package's __init__.py imports this
+        # module; see init.py for the same dance.
+        import importlib
+        sessions_module = importlib.import_module("researchlog.commands.sessions")
+        sessions_module.append_event(
+            paths=paths,
+            epoch=new_epoch,
+            kind="rotated",
+            block_id=record.get("block.id"),
+        )
     return changed
 
 

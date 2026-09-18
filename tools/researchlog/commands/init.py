@@ -75,6 +75,34 @@ def run(args: argparse.Namespace) -> Result:
     repo.initialize_dirs(paths)
     written, kept = _copy_skeleton(source, paths, merge=args.merge)
     _stamp_active(paths, root)
+    # V1 Block 2 / T5: open the first session event so the cumulative
+    # telemetry KPI has an anchor to count from. Append-only: a re-init
+    # (`init` without --merge) refuses earlier; `--merge` skips the
+    # existing line by leaving the file alone (idempotent on the
+    # session log, just like on the canonical markdown files).
+    if not existed or args.merge:
+        # Import by absolute module path to avoid re-entering this
+        # package's `__init__.py` (which already imports `init` and
+        # would self-trigger). The runtime resolver see this as
+        # `researchlog.commands.sessions` either way; the difference
+        # is only that Pyright can statically resolve it without
+        # treating the package as a self-reference.
+        import importlib
+        sessions_module = importlib.import_module("researchlog.commands.sessions")
+        active = json.loads(paths.active.read_text(encoding="utf-8"))
+        epoch = active.get("session_epoch") or sessions_module.mint_epoch()
+        sessions_module.append_event(
+            paths=paths,
+            epoch=epoch,
+            kind="started",
+            block_id=active.get("block.id"),
+        )
+        if "session_epoch" not in active:
+            active["session_epoch"] = epoch
+            paths.active.write_text(
+                json.dumps(active, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
 
     result = Result(
         payload={

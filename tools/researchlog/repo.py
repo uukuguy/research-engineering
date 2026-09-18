@@ -26,6 +26,7 @@ CANONICAL_MARKDOWN: tuple[str, ...] = (
     "ENVIRONMENT.md",
     "FINDINGS.md",
 )
+SESSIONS_LOG = "sessions.jsonl"
 
 
 # V1 Block 2 / T2: `evidence_id` carries a `YYYYMMDDTHHMMSSZ` stamp from
@@ -64,6 +65,7 @@ class ResearchPaths:
     runs: Path
     status: Path
     derived: Path
+    sessions: Path
 
     def manifest(self, experiment_id: str) -> Path:
         return self.runs / experiment_id / "manifest.json"
@@ -122,6 +124,7 @@ def build(root: Path) -> ResearchPaths:
         runs=research / RUNS_DIR,
         status=research / "STATUS.md",
         derived=research / DERIVED_DIR,
+        sessions=research / SESSIONS_LOG,
     )
 
 

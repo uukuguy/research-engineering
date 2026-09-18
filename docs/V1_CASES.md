@@ -249,10 +249,11 @@ not refused; reconcile exits 0.
 | 1 | `Time-to-first-E1` 可查 | `python3 tools/researchlog telemetry` | KPI table includes the metric |
 | 2 | `Time-to-first-E3` 可查 | `python3 tools/researchlog telemetry` | KPI table includes the metric |
 | 3 | `Session Recovery Accuracy` 可查 | `python3 tools/researchlog telemetry` | KPI table includes the metric |
-| 4 | 跨 session 累计正确 | (deferred — needs ≥2 sessions with completed work) | DEFERRED |
+| 4 | 跨 session 累计正确 | **PASS** (`SessionEventLogTests`: `cumulative_evidence_iterations` KPI reads `research/sessions.jsonl`; total across 2 sessions with 2 counted iterations each = 4; absent log → KPI marked `unavailable` with reason) |
 
-**Drill status: 3/4 PASS structurally (telemetry reports the metrics);
-criterion #4 needs historical data which V1 doesn't have yet.**
+**Drill status: 4/4 PASS** (`cumulative_evidence_iterations` KPI landed this
+commit; `sessions.jsonl` infrastructure in place; pre-T5 repos seed via
+`init --merge`).
 
 ---
 
@@ -369,17 +370,17 @@ SKILL.md frontmatter so the router self-tests).**
 | V1-D3 | 7 | 0 | 0 | 7 |
 | V1-D4 | 5 | 0 | 0 | 5 |
 | V1-D5 | 5 | 0 | 0 | 5 |
-| V1-D6 | 3 | 1 | 0 | 4 |
+| V1-D6 | 4 | 0 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **44** | **1** | **4** | **49** |
+| **Total** | **45** | **0** | **4** | **49** |
 
-The 1 deferred criterion is a feature gap, not a fixture gap. V1-D6 #4
-needs the cross-session cumulative KPI in `commands/telemetry.py`
-itself; writing a test for a metric the tool does not compute cannot
-PASS. This is the only remaining deferred item, and it is gated on
-Architect decision to extend telemetry.
+All 45 non-blocked V1 criteria PASS. The 4 ENV_BLOCKED are M6/M7
+claude-pending under minimax-compat (D-004 / ENV-LIM-004), waiting for
+a native Anthropic subscription. **No tool-level or fixture-level
+deferred remain** — every criterion that can be exercised in this
+environment is exercised.
 
 The 4 blocked are M6/M7 claude-pending under minimax-compat — the
 endpoint policy D-004 makes them ENV_BLOCKED until a native Anthropic

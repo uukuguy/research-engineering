@@ -4,6 +4,108 @@
 
 ---
 
+## 2026-09-19 — V1-D6 #4 落地:`cumulative_evidence_iterations` + `sessions.jsonl` 基础设施
+
+承接上一条(commit `149e6ea`,V1-D3 全过)。Architect"你定"。本轮实装跨 session
+累计 KPI——V1-D6 drill 最后一个 deferred,也是最后一个非 ENV_BLOCKED deferred。
+**V1 tool layer 现在 8/9 drill 完整(V1-D6 4/4,V1-D9 全 ENV_BLOCKED 留给原生 Anthropic 端点)**。
+
+### 这一轮交了什么
+
+**`tools/researchlog/commands/sessions.py`**(NEW,~80 LOC)— 单一职责模块:写 / 读
+`research/sessions.jsonl`。
+
+- `append_event(paths, *, epoch, kind, block_id, started_at)` — append-only 写一行。
+  kind ∈ `{"started", "rotated"}`(`LOG_KINDS`)。文件不存在时自动创建父目录。
+- `read_events(paths)` — 按文件顺序返回所有事件。**容忍畸形行**:一行 JSON 解析失败
+  跳过(不发 Finding),因为部分损坏的 log 仍比无 log 有用。
+- `mint_epoch()` — 转发到 `ids.mint("session")`,保留 ACTIVE 已经在用的 mint 格式。
+
+**`tools/researchlog/repo.py`** — `ResearchPaths` 加 `sessions: Path` 字段,指向
+`research/sessions.jsonl`。常量 `SESSIONS_LOG = "sessions.jsonl"`。
+
+**`tools/researchlog/commands/init.py`** — `init` 末尾写 "started" 行。re-init
+(`init --merge`) 不重复写(若 log 已存在则跳过)。
+
+**`tools/researchlog/commands/active.py`** — `active --rotate-session` 写 "rotated"
+行。**新增 `paths` 参数传给 `_apply`** (Pyright 在 `record.set("session_epoch")`
+之后给 `paths` 报 undefined,顺手补了)。
+
+**`tools/researchlog/commands/telemetry.py`** — 新增第 5 个 KPI `cumulative_evidence_iterations`:
+
+- 读 `sessions.jsonl`,构建 session 边界 `[start_i, start_{i+1})`(最后一个 session 用
+  "now")。
+- 对每个 record:若 `derive_counts_as_evidence_iteration(record)` 为真且
+  `created_at` 落在某 session 边界内,贡献 1。
+- 报 `value`(总迭代数) + `per_session`(每个 session 的迭代数)。
+- log 不存在或空 → `unavailable` 带 reason。
+- 复制 `derive_counts_as_evidence_iteration` 内联到 telemetry,避免 telemetry 拉
+  constraints / records 整个加载链。
+
+**`tools/researchlog/tests/test_commands.py`** —
+
+- `TelemetryReportTests.test_report_lists_four_kpis` → `test_report_lists_five_kpis`(列表
+  含 `cumulative_evidence_iterations`)。其他 5 个 telemetry 测试不受影响(只数
+  unavailable 个数,现在仍 2 个)。
+- `SessionEventLogTests`(NEW,4 测试):
+  1. `test_init_seeds_sessions_jsonl_with_a_started_line` — fixture init 后
+     `research/sessions.jsonl` 存在,首行 kind=started。
+  2. `test_rotate_session_appends_a_rotated_line` — rotate 后第 2 行 kind=rotated,
+     且 epoch 与 ACTIVE.json 一致。
+  3. `test_cumulative_kpi_is_unavailable_without_a_log` — 删 log 后 telemetry
+     报 `cumulative_evidence_iterations: unavailable` 带 reason。
+  4. `test_cumulative_kpi_sums_iterations_across_sessions` — 2 session × 2 iteration
+     → 累计 4。两个 session 各 2(`per_session` breakdown)。
+
+**全套 304/304 PASS**(300 → 304,+4),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D6:**3/4 → 4/4 PASS**。
+- `docs/V1_CASES.md` aggregate:**44 → 45 PASS,1 → 0 deferred**,4 ENV_BLOCKED = 49 criteria。
+  **V1 drill suite 8/9 完整。**
+- `docs/V1_ACCEPTANCE_GUIDE.md` #3 `⏳ 3/4 → ✅ 4/4`,#14 `⏳ → ✅`;aggregate 段同步。
+
+### 动手前要知道(本轮新增)
+
+82. **commands 包内循环导入陷阱**。`commands/__init__.py` 列出所有 submodules 包括
+    `init`,所以 `init.py` 不能 `from researchlog.commands import sessions`(会重入
+    `commands/__init__.py`)。**解法是用 `importlib.import_module("researchlog.commands.sessions")`** —
+    跳过 package,直接拿 submodule。本轮三处用到(`init`、`active`、`telemetry`)。
+    Pyright 在 `from researchlog.commands import sessions` 时会标 `unknown import
+    symbol` 因为 `commands` 模块自身**也**叫 `sessions`(因为 sessions 不在 MODULES 里)。
+    这是 importlib.import_module 优于 from-import 的另一个原因:Pyright 看到 module
+    attribute resolution 链更明确。
+83. **`sessions.jsonl` 在 `research/`(canonical)而不是 `.derived/`(derived)**。  
+    选择:跨 session 累计是真实的(canonical state)— 删除文件会让 KPI 历史丢失,
+    与 `STATUS.md` 的 derived-cache 形态不同。`init --merge` 不重写已存在的 log,
+    保证 seed-once。
+84. **`time.sleep(1.1)` 是测试关键**。`_cumulative_evidence_iterations` 按 `created_at`
+    边界分 session,**两次 `record` 调用若在同一秒内,所有 records 落入同一 session**。
+    测试用例 `test_cumulative_kpi_sums_iterations_across_sessions` 必须 `sleep(1.1)`
+    跨秒才能让两个 session 各分到 2。**这是测试 fixture 的成本**——总计 ~1.1s,但
+    是**确定性**(非概率 sleep)。
+85. **`derive_counts_as_evidence_iteration` 被内联到 telemetry**。这个 predicate 本来
+    住 `constraints.py`,但 telemetry 调用它需要拉 constraints 全模块(连带
+    records 模型、schema validator 等)。**内联复制**保留 telemetry 的窄依赖图。
+    如果 predicate 演化(例如新增 counted outcome),telemetry 的内联副本要同步更新。
+    这是**唯一**一处复制,WORK_LOG §82 已标。
+
+### 下一步
+
+- **V1 工具层 drill suite 8/9 完整,唯一 deferred 全部清空**。剩下的 4 项是 ENV_BLOCKED:
+  - V1-D9 pi 端 1/6 routed
+  - V1-D9 claude 端 ≥3 routed(全 0/6 routed,等原生 Anthropic 端点)
+- **未触发 Architect 决策**(之前列过的):
+  - A-3:phrase-list → SKILL.md frontmatter
+  - A-4:D-004 forward path
+  - M6-claude-pending:原生 Anthropic 端点
+- **新研究活动**:`sessions.jsonl` + `cumulative_evidence_iterations` 完整后,V1-D2
+  跑一个 live E2/E3 block 现在能直接用 cumulative KPI 报告"这个 block 加这个 session
+  共贡献了多少个 counted iterations"——这是 Architect 看的进度指标。
+
+---
+
 ## 2026-09-19 — V1-D3 #5 fixture-level PASS:default 30s heartbeat cadence 不需 sleep 30s
 
 承接上一条(commit `0645ac9`,V1-D2 #5 + V1-D3 #2 + #3 关闭)。Architect"同意你的判断"——

@@ -51,4 +51,10 @@ MODULES: tuple[ModuleType, ...] = (
     boundaries,
 )
 
+# `sessions` is NOT in MODULES — it is a helper module that other commands
+# (`init`, `active`) call into, not a top-level CLI verb. Exposing it as a
+# subcommand would require NAME/HELP/configure/run exports; it has none.
+
+__all__ = ["MODULES"]
+
 __all__ = ["MODULES"]

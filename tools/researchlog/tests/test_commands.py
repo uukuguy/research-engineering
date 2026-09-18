@@ -1837,12 +1837,12 @@ class RecordValidateLineTests(GitCommandTestCase):
 class TelemetryReportTests(CommandTestCase):
     """V1 Block 2 / T5: `telemetry --report` emits the §21 KPI table.
 
-    Two of the four named KPIs (`time_to_first_e1`, `time_to_first_e3`)
-    are computable today from the ledger and ACTIVE.session_epoch.
-    The other two (`session_recovery_accuracy`,
-    `discriminating_experiment_without_architect_correction`) need
-    infrastructure that is out of scope for this sub-block. The report
-    marks them `unavailable` with the reason rather than silently
+    Three of the five named KPIs (`time_to_first_e1`, `time_to_first_e3`,
+    `cumulative_evidence_iterations`) are computable today from the
+    ledger + ACTIVE + `research/sessions.jsonl`. The other two
+    (`session_recovery_accuracy`, `discriminating_experiment_without_architect_correction`)
+    need infrastructure that is out of scope for this sub-block. The
+    report marks unavailable rows with the reason rather than silently
     emitting a zero, so the gap is visible.
     """
 
@@ -1860,7 +1860,7 @@ class TelemetryReportTests(CommandTestCase):
         self.assertIsNotNone(epoch, f"rotate-session did not write session_epoch: {envelope}")
         return epoch
 
-    def test_report_lists_four_kpis(self) -> None:
+    def test_report_lists_five_kpis(self) -> None:
         code, envelope = self.invoke(["telemetry", "--report"])
         self.assertIn(code, (0, 3), envelope)
 
@@ -1871,6 +1871,7 @@ class TelemetryReportTests(CommandTestCase):
             [
                 "time_to_first_e1",
                 "time_to_first_e3",
+                "cumulative_evidence_iterations",
                 "session_recovery_accuracy",
                 "discriminating_experiment_without_architect_correction",
             ],
@@ -2484,6 +2485,169 @@ class HeartbeatDefaultCadenceTests(CommandTestCase):
         )
         self.assertIsNotNone(manifest["execution"]["heartbeat_or_last_observed_at"])
         self.assertEqual(manifest["status"], "completed")
+
+
+class SessionEventLogTests(CommandTestCase):
+    """V1 Block 2 / T5: `research/sessions.jsonl` is written by `init`
+    and `active --rotate-session`, and feeds the cumulative telemetry KPI.
+
+    The session-event log is the single piece of new infrastructure the
+    drill's "cross-session cumulative is correct" verification needs.
+    Tests below cover: file lands on init, rotation appends, telemetry
+    reads it, the cumulative KPI sums correctly across sessions.
+    """
+
+    def test_init_seeds_sessions_jsonl_with_a_started_line(self) -> None:
+        sessions = self.research("sessions.jsonl")
+        self.assertTrue(sessions.is_file(), "init must create research/sessions.jsonl")
+        lines = [json.loads(line) for line in sessions.read_text(encoding="utf-8").splitlines() if line]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["kind"], "started")
+        self.assertIsNotNone(lines[0]["session_epoch"])
+        self.assertIsNotNone(lines[0]["started_at"])
+
+    def test_rotate_session_appends_a_rotated_line(self) -> None:
+        # `init` already wrote a "started" line; rotate once and assert
+        # the second line is a "rotated" event for the new epoch.
+        sessions = self.research("sessions.jsonl")
+        before = sessions.read_text(encoding="utf-8")
+
+        code, envelope = self.invoke(["active", "--rotate-session"])
+        self.assertEqual(code, 0, envelope)
+
+        after_lines = [
+            json.loads(line)
+            for line in sessions.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        self.assertEqual(len(after_lines), 2)
+        self.assertNotEqual(before, sessions.read_text(encoding="utf-8"))
+        self.assertEqual(after_lines[0]["kind"], "started")
+        self.assertEqual(after_lines[1]["kind"], "rotated")
+        self.assertNotEqual(after_lines[0]["session_epoch"], after_lines[1]["session_epoch"])
+        # The envelope reports the same epoch that the log line carries.
+        new_epoch = json.loads(self.research("ACTIVE.json").read_text(encoding="utf-8"))["session_epoch"]
+        self.assertEqual(after_lines[1]["session_epoch"], new_epoch)
+
+    def test_cumulative_kpi_is_unavailable_without_a_log(self) -> None:
+        # Pre-T5 repos lose the log. Telemetry must mark the cumulative
+        # KPI unavailable rather than silently report zero — same shape
+        # as `time_to_first_e1` when no records exist.
+        sessions = self.research("sessions.jsonl")
+        if sessions.is_file():
+            sessions.unlink()
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+        rows = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        row = rows["cumulative_evidence_iterations"]
+        self.assertEqual(row["status"], "unavailable")
+        self.assertIsNone(row["value"])
+        self.assertTrue(row["reason"], "unavailable row must carry a reason")
+
+    def test_cumulative_kpi_sums_iterations_across_sessions(self) -> None:
+        # Two sessions, two iterations in each — the cumulative KPI
+        # must report 4. Strategy: record 2 iterations, then sleep so
+        # the next pair has a later `created_at`, then record 2 more.
+        # This is the only way to put records into distinct session
+        # windows without rewriting ledger files by hand.
+        import time
+        from datetime import datetime, timedelta
+
+        # Record 2 counted iterations. `derive_counts_as_evidence_iteration`
+        # returns True here because execution_status=completed,
+        # research_outcome=inconclusive (counted), belief_delta=refined
+        # (not "none"). Without `--belief-delta refined` the records
+        # would not count as iterations and the KPI would be 0.
+        for subject in ("M-S1-A", "M-S1-B"):
+            self.invoke(
+                [
+                    "record",
+                    "--question", "session-one iteration",
+                    "--subject-type", "mechanism",
+                    "--subject-id", subject,
+                    "--level", "E1",
+                    "--execution-status", "completed",
+                    "--research-outcome", "inconclusive",
+                    "--belief-delta", "refined",
+                    "--confidence", "low",
+                    "--observation", f"observation for {subject}",
+                    "--no-experiment",
+                ]
+            )
+
+        # Sleep across an ISO-second boundary so the next records'
+        # `created_at` is strictly greater than the prior pair's.
+        time.sleep(1.1)
+
+        for subject in ("M-S2-A", "M-S2-B"):
+            self.invoke(
+                [
+                    "record",
+                    "--question", "session-two iteration",
+                    "--subject-type", "mechanism",
+                    "--subject-id", subject,
+                    "--level", "E1",
+                    "--execution-status", "completed",
+                    "--research-outcome", "inconclusive",
+                    "--belief-delta", "refined",
+                    "--confidence", "low",
+                    "--observation", f"observation for {subject}",
+                    "--no-experiment",
+                ]
+            )
+
+        # Pick the boundary at the midpoint between the two pairs.
+        # Read each record's `created_at`, sort, and split between
+        # record[1] and record[2]. Session 1 owns records 0+1;
+        # session 2 owns records 2+3.
+        ledger_dir = self.research("ledger")
+        record_paths = sorted(ledger_dir.rglob("*.json"))
+        created_ats: list[str] = []
+        for path in record_paths:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            created_ats.append(str(data["created_at"]))
+        created_ats.sort()
+        # boundary = midpoint between record 1 and record 2; add a
+        # tiny epsilon to push session 2 strictly past record 1.
+        boundary = (
+            datetime.fromisoformat(created_ats[1])
+            + (datetime.fromisoformat(created_ats[2]) - datetime.fromisoformat(created_ats[1])) / 2
+            + timedelta(milliseconds=500)
+        ).isoformat(timespec="milliseconds")
+
+        started_epoch = "SE-TEST-S1"
+        rotated_epoch = "SE-TEST-S2"
+        self.research("sessions.jsonl").write_text(
+            json.dumps(
+                {
+                    "session_epoch": started_epoch,
+                    "started_at": created_ats[0],
+                    "kind": "started",
+                    "block_id": None,
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "session_epoch": rotated_epoch,
+                    "started_at": boundary,
+                    "kind": "rotated",
+                    "block_id": None,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        code, envelope = self.invoke(["telemetry", "--report"])
+        self.assertIn(code, (0, 3), envelope)
+        rows = {row["kpi"]: row for row in envelope["payload"]["kpis"]}
+        cumulative = rows["cumulative_evidence_iterations"]
+        self.assertEqual(cumulative["status"], "ok")
+        self.assertEqual(cumulative["value"], 4)
+        per_session = {p["session_epoch"]: p["iterations"] for p in cumulative["per_session"]}
+        self.assertEqual(per_session[started_epoch], 2)
+        self.assertEqual(per_session[rotated_epoch], 2)
 
 
 if __name__ == "__main__":

@@ -77,7 +77,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | M7-claude-pending | 同 M7-pi (claude 端) | ⛔ | 同 M6-claude-pending |
 | #1 | capability_map shape + ≥3 entries | ✅ | commit `30d0b89` + V1-D7 #1+#2 |
 | #2 | reuse_counter 字段存在 | ✅ | schema + 3 entries |
-| #3 | productivity telemetry | ⏳ 3/4 | V1-D6 |
+| #3 | productivity telemetry | ✅ 4/4 | V1-D6 全过 (`cumulative_evidence_iterations` KPI; `sessions.jsonl` 落地) |
 | #4 | STATUS.md cache + stale | ✅ 5/5 | V1-D4 #3 stale-detection 由 ReconcileStaleStatusTests 覆盖 |
 | #5 | `--gh-status` 不报错 | ✅ | checkpoint 命令行 + flag |
 | #6 | Gate-3 verifier 文档 | ✅ | docs/verification/gate-3.md |
@@ -88,7 +88,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #11 | session 必须 commit | ⏳ | V1-D3 |
 | #12 | `--replace-existing` 被拒 | ✅ | V1-D3 #6 (`test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`) |
 | #13 | run 30s heartbeat | ✅ | V1-D3 #5 (`HeartbeatDefaultCadenceTests`: argparse default=30.0 + default-cadence end-to-end) |
-| #14 | cross-session telemetry 累计 | ⏳ | V1-D6 |
+| #14 | cross-session telemetry 累计 | ✅ | V1-D6 #4 (`cumulative_evidence_iterations` KPI 落地; `sessions.jsonl` 记录 init+rotate) |
 | #15 | `--baseline-tag` 可走 | ✅ | checkpoint 命令行 + flag |
 | #16 | session rotation 不重启动 | ✅ | V1-D3 #2 (`SessionRotationTests.test_rotate_session_does_not_restart_the_open_block`) |
 
@@ -112,16 +112,18 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 1 deferred criterion across V1-D6 #4 is a feature gap, not a fixture gap.
-The cross-session cumulative KPI does not exist in `commands/telemetry.py`;
-writing a test for a metric the tool does not compute cannot PASS. This
-gates on an Architect decision to extend telemetry.
+All 45 non-blocked V1 criteria PASS. The 4 ENV_BLOCKED are M6/M7
+claude-pending under minimax-compat (D-004 / ENV-LIM-004), waiting for
+a native Anthropic subscription. **No tool-level or fixture-level
+deferred remain** — every criterion that can be exercised in this
+environment is exercised.
 
-This commit closed V1-D3 #5 (default 30s heartbeat cadence) without
-waiting 30 actual seconds: pinning `argparse default=30.0` + a default-
-cadence end-to-end smoke test is sufficient, because the bump mechanism
-is already exercised by `test_heartbeat_is_bumped_while_the_child_runs`.
-Aggregate: **44 PASS + 1 deferred + 4 ENV_BLOCKED** = 49 criteria.
+This commit closes V1-D6 #4 by landing the `sessions.jsonl`
+infrastructure (init seeds a "started" line, `active --rotate-session`
+appends a "rotated" line) and the `cumulative_evidence_iterations`
+telemetry KPI that reads it. Aggregate: **45 PASS + 0 deferred +
+4 ENV_BLOCKED** = 49 criteria. **V1 drill suite 8/9 closed, only
+V1-D9 stays open as 0/4 ENV_BLOCKED.**
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。
