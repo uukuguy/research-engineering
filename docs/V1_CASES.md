@@ -101,13 +101,31 @@ to a moving target; mutable-input lineage extends to E3.
 | 5 | E3 attribute stable | compare across E2+E3 pairs | `common` field set |
 | 6 | compare contract surface stable | `python3 tools/researchlog compare --help` | exit 0 |
 
-**Run record**: deferred to the next E2/E3 record event (V1 has only E0
-records today; the E2/E3 path needs at least one real harness run, which
-requires a real hypothesis under test). Criteria #6 PASS today (compare
-subcommand present and documented); criteria #1–#5 depend on a future
-research activity, not on a tool defect.
+**Run record (2026-09-19, commit TBD — V1-D2 reverse-variant audit)**:
 
-**Drill status: 1/6 PASS, 5 deferred to next E2/E3 record**
+```
+#1 PASS  (test_integration.py:298 — ReproductionTests records an E2 + reproduction
+         iteration_kind record; E2 path is exercised without a real harness)
+#2 PASS  (ComparisonIdentityTests.test_two_records_of_the_same_identity_are_comparable —
+         two E2 records with same `inputs.replay_suite` → COMPARABLE)
+#3 PASS  (ComparisonIdentityTests.test_a_moved_key_input_still_forbids_attribution —
+         E2 records with different `replay_suite` → ATTRIBUTION_FORBIDDEN)
+#4 PASS  (ComparisonIdentityTests.test_a_moved_environment_still_demands_a_rebaseline —
+         moved `environment.fingerprint` → REBASELINE_REQUIRED; the lineage contract
+         V1-D2 #4 asks about is the same machinery exercised here)
+#5 DEFER (still DEFERRED — no fixture writes an E3 record; E3 path is structurally
+         the same as E2 but the drill calls for an E2+E3 pair. Open fixture gap.)
+#6 PASS  (CompareCommandTests covers `compare --help` exit 0 + surface)
+```
+
+**Drill status: 5/6 PASS, 1 deferred (#5 E3 stable — needs an E3 record fixture;
+the E2 path is fully exercised, the E3 path is the only reverse-variant that
+turned out NOT to be a reverse variant.)**
+
+The original "Run record" text claimed V1 has only E0 records; the
+`test_integration.py:298` fixture has been writing E2 records since the
+P1/P2 era. The deferred label was a documentation drift, not a tool
+defect — the E2 record path was always exercisable from a fixture.
 
 ---
 
@@ -121,19 +139,36 @@ record-after-commit lands EV in git; run 30s heartbeat default; replace-existing
 
 | # | Criterion | Status today |
 |---|---|---|
-| 1 | 3-8 iter triggers `BLOCK_ITERATION_BUDGET_EXCEEDED` | DEFERRED (no live block in V1) |
-| 2 | session rotate 不重启动 | DEFERRED |
-| 3 | reproduction 不计 budget | DEFERRED |
+| 1 | 3-8 iter triggers `BLOCK_ITERATION_BUDGET_EXCEEDED` | **PASS** (test_constraints.py:BlockBudgetTests — 3 tests cover exceed/exact/no-limit) |
+| 2 | session rotate 不重启动 | DEFER (no test that proves "rotate does not restart the block"; `_seed_session_epoch` rotates but does not assert "block still has the same id after rotation") |
+| 3 | reproduction 不计 budget | DEFER (no test that exercises `derive_counts_as_evidence_iteration` returning False for `iteration_kind=reproduction`; E2 reproduction fixture at `test_integration.py:298` exists but does not assert the budget exclusion) |
 | 4 | record-after-commit 落 git | **PASS** (this commit's record + auto-commit trace) |
-| 5 | run 默认 30s heartbeat | DEFERRED |
-| 6 | `--replace-existing` 被拒 | DEFERRED (no test) |
+| 5 | run 默认 30s heartbeat | DEFER (no test asserts the 30s default cadence — `--heartbeat-interval` tests pass it explicitly) |
+| 6 | `--replace-existing` 被拒 | **PASS** (test_commands.py:350 — `test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`) |
 | 7 | 跨 session `reconcile` exit 0 | **PASS** (this session: `reconcile --json` clean) |
 
-**Run record**: criterion #4 + #7 are tool-verifiable today. The remaining
-five need a live autonomous block; V1 has not yet run one end-to-end
-(the protocol supports it; a future session will exercise it).
+**Run record (2026-09-19, commit TBD — V1-D3 reverse-variant audit)**:
 
-**Drill status: 2/7 PASS, 5 deferred to live block run**
+```
+#1 PASS  (BlockBudgetTests.test_exceeding_the_budget_is_reported_while_the_block_is_open +
+         test_spending_the_budget_exactly_is_not_exceeding_it +
+         test_a_block_with_no_limit_is_not_bounded — all 3 cover the predicate)
+#4 PASS  (RecordCommitTests covers record-after-commit)
+#6 PASS  (test_replace_existing_flag_is_removed_and_in_flight_is_always_refused — V1 P6
+         removed the flag, argparse rejects it with exit 2, the manifest guard for
+         an in-flight run is exercised in the same test)
+#7 PASS  (ReconcileCommandTests covers cross-session reconcile clean)
+```
+
+**Drill status: 4/7 PASS, 3 deferred (#2 rotation restart test, #3 reproduction
+budget exclusion test, #5 default 30s cadence test — all three are real fixture
+gaps, not reverse variants. The deferred list dropped from 5 to 3.)**
+
+The original "5 deferred to live block run" was a documentation drift:
+`BlockBudgetTests` and the in-flight replacement test have been running
+since P1/P2, and they exercise the predicates V1-D3 #1 + #6 ask about
+without needing a live autonomous block. The remaining 3 items really
+do need fixture work, not a status-label flip.
 
 ---
 
@@ -334,21 +369,24 @@ SKILL.md frontmatter so the router self-tests).**
 | Drill | PASS | Deferred | Blocked | Total |
 |---|---|---|---|---|
 | V1-D1 | 6 | 1 | 0 | 7 |
-| V1-D2 | 1 | 5 | 0 | 6 |
-| V1-D3 | 2 | 5 | 0 | 7 |
+| V1-D2 | 5 | 1 | 0 | 6 |
+| V1-D3 | 4 | 3 | 0 | 7 |
 | V1-D4 | 5 | 0 | 0 | 5 |
 | V1-D5 | 5 | 0 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **33** | **12** | **4** | **49** |
+| **Total** | **40** | **5** | **4** | **49** |
 
-The 12 deferred criteria are tool-level PASS structurally but require a
-live autonomous block / E2-E3 harness run / cross-session data to fully
-exercise. None of them is blocked on a tool defect; all are blocked on
-missing research activity, which is the right shape for a protocol at
-the end of its tool layer.
+The 5 deferred criteria are tool-level PASS structurally but require
+a small fixture write to exercise: V1-D2 #5 (E3 attribute stable),
+V1-D3 #2 (rotation doesn't restart), V1-D3 #3 (reproduction exclusion
+from budget), V1-D3 #5 (default 30s heartbeat cadence), V1-D6 #4
+(cross-session cumulative KPI). None of them is blocked on a tool
+defect or a research activity; all five need either a small fixture
+write or — for V1-D6 #4 — the cross-session cumulative KPI feature
+itself, which is feature work, not label drift.
 
 The 4 blocked are M6/M7 claude-pending under minimax-compat — the
 endpoint policy D-004 makes them ENV_BLOCKED until a native Anthropic

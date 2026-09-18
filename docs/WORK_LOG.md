@@ -4,6 +4,80 @@
 
 ---
 
+## 2026-09-19 — V0_D4 gotcha 反向 variant 批量审计:7 项 deferred → PASS(doc-only)
+
+承接上一条(commit `0f199a3`,V1-D4 #3 文档漂移关闭)。Architect"不用等我决策"。
+本轮做一次全面扫描,找所有 "test 在 PASS 但 drill row 还说 DEFERRED" 的反向 variant。
+
+### 这一轮做了什么
+
+**只改文档,不动代码 / 测试**。审计方法是:
+
+1. grep `V1_CASES.md` 所有 "DEFER" / "deferred" 字符串;
+2. 对每个标 DEFER 的 criterion,找对应 test class 实际 PASS 状态;
+3. 真有测试 → 翻 PASS(反向 variant);真没测试 → 留 DEFER(真 gap)。
+
+**反向 variant 7 项**(本 commit 关闭):
+
+| Drill | # | 覆盖测试位置 |
+|---|---|---|
+| V1-D2 #1 | record E2 + replay end-to-end | `test_integration.py:298` ReproductionTests |
+| V1-D2 #2 | identity stable across replay | `test_integration.py:517` `ComparisonIdentityTests.test_two_records_of_the_same_identity_are_comparable` |
+| V1-D2 #3 | compare ATTRIBUTION_FORBIDDEN | `test_integration.py:526` `test_a_moved_key_input_still_forbids_attribution` |
+| V1-D2 #4 | mutable-input lineage | `test_integration.py:535` `test_a_moved_environment_still_demands_a_rebaseline` |
+| V1-D2 #6 | compare contract surface stable | `CompareCommandTests`(`test_commands.py` 上层) |
+| V1-D3 #1 | BLOCK_ITERATION_BUDGET_EXCEEDED | `test_constraints.py:334` BlockBudgetTests(3 测试) |
+| V1-D3 #6 | `--replace-existing` 被拒 | `test_commands.py:350` `test_replace_existing_flag_is_removed_and_in_flight_is_always_refused` |
+
+**真 gap 5 项**(留 DEFER):
+
+| Drill | # | 真 gap 性质 |
+|---|---|---|
+| V1-D2 #5 | E3 attribute stable | 无 E3 record fixture(可加 fixture,但不是 label drift) |
+| V1-D3 #2 | session rotate 不重启动 | 现有 `_seed_session_epoch` 旋转了但不 assert "block id 旋转后不变" |
+| V1-D3 #3 | reproduction 不计 budget | E2 reproduction fixture 存在但未 assert 预算不计 |
+| V1-D3 #5 | run 默认 30s heartbeat | heartbeat 测试都显式传 `--heartbeat-interval`,无默认 cadence 验证 |
+| V1-D6 #4 | 跨 session 累计正确 | **feature work** —— telemetry 当前不计算跨 session 累计 KPI |
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D2:**1/6 → 5/6 PASS**(5 项翻 PASS,1 项 E3 stable 留 DEFER)
+- `docs/V1_CASES.md` §V1-D3:**2/7 → 4/7 PASS**(2 项翻 PASS,3 项留 DEFER)
+- `docs/V1_CASES.md` aggregate:**33 → 40 PASS,12 → 5 deferred,4 ENV_BLOCKED** = 49 criteria
+- `docs/V1_ACCEPTANCE_GUIDE.md` M3 行 `9/18 → 13/18`,M4 行 `2/7 → 4/7`,#12 行 ⏳ → ✅;aggregate 段同步更新
+
+**测试总数不变**(295),全 295 仍 PASS。
+
+### 动手前要知道(本轮新增)
+
+73. **V0_D4 gotcha 反向 variant 共 7 项**(本 commit 关闭)。剩余 5 项 deferred 中,
+    4 项是 fixture 补写(V1-D2 #5 + V1-D3 #2 + #3 + #5),1 项是 feature work
+    (V1-D6 #4 telemetry 跨 session 累计 KPI)。**反向 variant 的诊断命令**:
+    ```
+    grep -n "DEFER\|deferred" docs/V1_CASES.md
+    ```
+    然后对每条 grep 找对应 test class 实际 PASS 状态。**不能复用旧 commit 字符串**——
+    WORK_LOG §70 沉淀的 invariant。
+74. **V1-D6 #4 不是反向 variant 而是 feature gap**。telemetry 当前 KPI 实现
+    (`commands/telemetry.py`)只有 `time_to_first_e1/e3` 用了 `session_epoch`,
+    没有跨 session 累计 KPI 的代码。**这个不是"测试在但 label 说 DEFERRED",
+    而是"feature 不存在"**。把它当 fixture gap 写测试不会 PASS,只能等 feature 实装。
+    这一点本轮在 V1_CASES.md aggregate 段明确标了。
+75. **audit 流程要写进 `re-dev-gotchas.md` 候选 list**。这一轮纯 doc-only(无代码无
+    测试改动),但**审计方法**(grep DEFER → 对照 test class)是新的反向 variant
+    通用工具。下次新 session 接续时若发现又有 reverse variant,可以套同一套
+    grep + 交叉验证流程。
+
+### 下一步
+
+- **仍未跑研究**(Architect 不需要等,但本 session 仍没动 research/ 状态)。
+- deferred 段 5 项:
+  - V1-D2 #5 / V1-D3 #2+#3+#5 — fixture 补写(可能下轮 session 跑)
+  - V1-D6 #4 — feature work(等 Architect 触发)
+- 架构师未触发的决策点:A-3 / A-4 / M6-claude-pending。
+
+---
+
 ## 2026-09-19 — V1-D4 #3 doc-drift close:STATUS_STALE 测试在 P1 era 就已存在
 
 承接上一条(commit `70d546a`,V1-D5 全过)。架构师"继续"走 V1-D4 #3。
