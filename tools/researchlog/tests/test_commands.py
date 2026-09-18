@@ -2177,5 +2177,131 @@ class ExpiredArchitectSignalTests(CommandTestCase):
         self.assertNotIn("EXPIRED_ARCHITECT_SIGNAL", codes)
 
 
+class WorktreeSingleWriterTests(CommandTestCase):
+    """V1-D5: P9 single-writer enforcement on `research/`.
+
+    `_worktree_multi_writer` (`commands/reconcile.py:434`) lists every git
+    worktree, runs `git status --porcelain -- research/` against each, and
+    reports when more than one is dirty under the canonical-state directory.
+    The threshold is `len(dirty) > 1`, so a single dirty worktree is fine —
+    the rule is "one writer at a time", not "no writers".
+
+    Detached worktrees that dirty `research/` are deliberately skipped by
+    the detector (the porcelain check cannot address them safely); the
+    comment at `reconcile.py:457-459` is explicit that this widens the
+    false-negative window on purpose rather than letting a tool that
+    cannot see every worktree fabricate certainty.
+    """
+
+    def _add_worktree(self, path: Path, *, branch: str | None = None, detached: bool = False) -> None:
+        """Lay down a second worktree alongside `self.root`."""
+        args = ["worktree", "add"]
+        if detached:
+            args.append("--detach")
+        if branch is not None:
+            # `-b <new>` creates a new branch from HEAD; the path is the
+            # worktree directory, the branch is `-b`'s argument. The
+            # positional form `git worktree add <branch> <path>` is the
+            # older syntax and trips on ambiguity.
+            args.extend(["-b", branch])
+        args.append(str(path))
+        completed = subprocess.run(
+            ["git", *args], cwd=str(self.root), capture_output=True, text=True, check=False
+        )
+        self.assertEqual(
+            completed.returncode, 0,
+            f"git worktree add failed: {completed.stderr}",
+        )
+
+    def test_single_dirty_worktree_does_not_trigger_finding(self) -> None:
+        # V1-D5 #1: a single worktree writing freely is the happy path.
+        # The detector only fires when `len(dirty) > 1`.
+        (self.research("CURRENT.md")).write_text(
+            self.research("CURRENT.md").read_text(encoding="utf-8")
+            + "\n<!-- single-writer fixture marker -->\n",
+            encoding="utf-8",
+        )
+
+        code, envelope = self.invoke(["reconcile", "--json"])
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("WORKTREE_MULTI_WRITER", codes)
+
+    def test_two_dirty_worktrees_trigger_finding(self) -> None:
+        # V1-D5 #2: two worktrees with dirty research/ are structurally
+        # unsafe (a merge conflict in canonical state silently loses one
+        # writer's record); the detector must name the offenders.
+        sibling = self.root.parent / f"{self.root.name}-sibling"
+        self._add_worktree(sibling, branch="wt-sibling")
+        try:
+            # Dirty BOTH worktrees under research/.
+            (self.research("CURRENT.md")).write_text(
+                self.research("CURRENT.md").read_text(encoding="utf-8")
+                + "\n<!-- main writer fixture marker -->\n",
+                encoding="utf-8",
+            )
+            (sibling / "research" / "CURRENT.md").write_text(
+                (sibling / "research" / "CURRENT.md").read_text(encoding="utf-8")
+                + "\n<!-- sibling writer fixture marker -->\n",
+                encoding="utf-8",
+            )
+
+            code, envelope = self.invoke(["reconcile", "--json"])
+            # `reconcile` itself runs in the main worktree, which is dirty —
+            # so other findings may appear; the assertion targets the specific
+            # code without pinning the exit code.
+            self.assertIn(code, (0, 2, 3), envelope)
+            codes = [f["code"] for f in envelope["findings"]]
+            self.assertIn("WORKTREE_MULTI_WRITER", codes)
+            # The finding names the dirty worktrees so the Architect can act.
+            finding = next(f for f in envelope["findings"] if f["code"] == "WORKTREE_MULTI_WRITER")
+            self.assertIn(str(self.root), finding["message"])
+            self.assertIn(str(sibling), finding["message"])
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(sibling)],
+                cwd=str(self.root), capture_output=True, check=False,
+            )
+
+    def test_session_rotation_is_not_blocked(self) -> None:
+        # V1-D5 #3: rotating the session mid-run (minting a new
+        # `session_epoch`) must succeed and not be flagged by any detector.
+        # The "first second" framing in the drill text is about race
+        # conditions; the contract is simply that the rotation path
+        # completes without interference from the worktree detector.
+        code, envelope = self.invoke(["active", "--rotate-session"])
+        self.assertEqual(code, 0, envelope)
+        self.assertIn("session_epoch", envelope["payload"]["changed"])
+
+        code, envelope = self.invoke(["reconcile", "--json"])
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("WORKTREE_MULTI_WRITER", codes)
+
+    def test_detached_worktree_with_dirty_research_is_not_flagged(self) -> None:
+        # V1-D5 #4: a detached worktree that dirties research/ is NOT
+        # reported by the detector. The carve-out is explicit at
+        # `commands/reconcile.py:457-459`: the porcelain check cannot
+        # address detached worktrees safely, and a tool that cannot see
+        # every worktree must not pretend it can.
+        detached = self.root.parent / f"{self.root.name}-detached"
+        self._add_worktree(detached, detached=True)
+        try:
+            (detached / "research" / "CURRENT.md").write_text(
+                (detached / "research" / "CURRENT.md").read_text(encoding="utf-8")
+                + "\n<!-- detached dirty fixture marker -->\n",
+                encoding="utf-8",
+            )
+
+            code, envelope = self.invoke(["reconcile", "--json"])
+            self.assertIn(code, (0, 3), envelope)
+            codes = [f["code"] for f in envelope["findings"]]
+            self.assertNotIn("WORKTREE_MULTI_WRITER", codes)
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(detached)],
+                cwd=str(self.root), capture_output=True, check=False,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

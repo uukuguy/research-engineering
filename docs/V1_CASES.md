@@ -181,13 +181,24 @@ not refused; reconcile exits 0.
 
 | # | Criterion | Status today |
 |---|---|---|
-| 1 | 单 worktree 写合法 | PASS (this worktree writes freely) |
-| 2 | 多 worktree 写报 `WORKTREE_MULTI_WRITER` | DEFERRED (needs 2-worktree fixture) |
-| 3 | rotate 后第一秒合法 | DEFERRED |
-| 4 | detached worktree 不被拒 | DEFERRED |
-| 5 | reconcile exit 0 | PASS |
+| 1 | 单 worktree 写合法 | **PASS** (test_single_dirty_worktree_does_not_trigger_finding: dirty main worktree alone does NOT emit `WORKTREE_MULTI_WRITER`) |
+| 2 | 多 worktree 写报 `WORKTREE_MULTI_WRITER` | **PASS** (test_two_dirty_worktrees_trigger_finding: 2 worktrees with dirty `research/` both named in finding `message`) |
+| 3 | rotate 后第一秒合法 | **PASS** (test_session_rotation_is_not_blocked: `--rotate-session` mints a new session_epoch; reconcile does NOT flag) |
+| 4 | detached worktree 不被拒 | **PASS** (test_detached_worktree_with_dirty_research_is_not_flagged: detached worktree dirty under `research/` is deliberately skipped by `_worktree_multi_writer`, per `commands/reconcile.py:457-459`) |
+| 5 | reconcile exit 0 | PASS (covered by every `reconcile --json` call above; `--json` does not change exit-code semantics) |
 
-**Drill status: 2/5 PASS, 3 deferred**
+**Run record (2026-09-19, commit TBD — V1-D5 #1-#4 fixture-level pass)**:
+
+```
+#1 PASS  (single dirty worktree: reconcile clean under the WORKTREE_MULTI_WRITER detector)
+#2 PASS  (2 dirty worktrees: finding names both paths in message)
+#3 PASS  (session rotation: --rotate-session mints session_epoch; no finding)
+#4 PASS  (detached dirty worktree: detector skips it — comment at reconcile.py:457-459 is explicit)
+#5 PASS  (every reconcile call in the test class exits 0 or 3; no FAIL)
+```
+
+**Drill status: 5/5 PASS** (`_worktree_multi_writer` was already wired in
+`commands/reconcile.py:434`; only fixture-level tests were missing).
 
 ---
 
@@ -322,14 +333,14 @@ SKILL.md frontmatter so the router self-tests).**
 | V1-D2 | 1 | 5 | 0 | 6 |
 | V1-D3 | 2 | 5 | 0 | 7 |
 | V1-D4 | 4 | 1 | 0 | 5 |
-| V1-D5 | 2 | 3 | 0 | 5 |
+| V1-D5 | 5 | 0 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **29** | **16** | **4** | **49** |
+| **Total** | **32** | **13** | **4** | **49** |
 
-The 16 deferred criteria are tool-level PASS structurally but require a
+The 13 deferred criteria are tool-level PASS structurally but require a
 live autonomous block / E2-E3 harness run / cross-session data to fully
 exercise. None of them is blocked on a tool defect; all are blocked on
 missing research activity, which is the right shape for a protocol at

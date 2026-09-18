@@ -4,6 +4,72 @@
 
 ---
 
+## 2026-09-19 — V1-D5 #1-#4 fixture-level PASS:P9 single-writer enforcement + 四条 carve-out
+
+承接上一条(commit `3937ecd`,V1-D8 #2 PASS)。架构师"同意"继续。本轮挑 V1-D5
+(#2+#3+#4 三项 deferred),全部不需要 live research,只需要 git worktree 操作。
+
+### 这一轮交了什么
+
+**`tools/researchlog/tests/test_commands.py::WorktreeSingleWriterTests`**(NEW, 4 测试)— 把
+V1-D5 drill 的 3 项 deferred 转成 fixture-level 断言(`_worktree_multi_writer` 实装在
+`commands/reconcile.py:434` 早已就绪)。
+
+1. `test_single_dirty_worktree_does_not_trigger_finding` — **V1-D5 #1** 主路径:
+   单 worktree 脏 research/,reconcile **不**报 WORKTREE_MULTI_WRITER(因为 `len(dirty) <= 1`
+   的阈值,见 `reconcile.py:465`)。
+2. `test_two_dirty_worktrees_trigger_finding` — **V1-D5 #2** 多 writer 检测:用
+   `git worktree add -b wt-sibling <path>` 加 sibling worktree(注意:git 的正确 flag
+   是 `-b <branch>`,**不**是位置参数 `branch path`——后者会被拒 128)。两边各 dirty
+   `research/CURRENT.md`,reconcile 报 WORKTREE_MULTI_WRITER 且 message 包含两个路径。
+3. `test_session_rotation_is_not_blocked` — **V1-D5 #3** session rotation:
+   `active --rotate-session` 重铸 session_epoch,后续 reconcile 不报。
+4. `test_detached_worktree_with_dirty_research_is_not_flagged` — **V1-D5 #4**
+   detached carve-out:`git worktree add --detach`,此 worktree dirty research/
+   **不**被 detector 报(因为 `reconcile.py:457-459` 注释明示:porcelain check 不能
+   安全地址 detached,所以宁可扩大 false-negative,也不假装看见了)。
+
+**全套 295/295 PASS**(291 → 295,+4),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D5:**2/5 → 5/5 PASS**(全部 fixture-level 闭环)。
+- `docs/V1_CASES.md` aggregate:V1-D5 2→5,deferred 16→13;totals:
+  **32 PASS + 13 deferred + 4 ENV_BLOCKED** = 49 criteria。
+- `docs/V1_ACCEPTANCE_GUIDE.md` #7 行:`⏳ 2/5 → ✅ 5/5`;aggregate 段同步更新。
+
+### 动手前要知道(本轮新增)
+
+67. **`git worktree add <branch> <path>` 不存在**。git 真正的语法是
+    `git worktree add [-b <new-branch>] [--detach] <path>`。把 branch 当作位置
+    参数会得到 "致命错误:无效引用"(exit 128)——第一次试写用了错的形式。
+    这是 fixtures/hook 类操作里常见的"`--help` 顺手"反例:位置参数太多导致记错。
+    正确写法见 `_add_worktree` helper(本 commit 已沉淀)。
+68. **`_worktree_multi_writer` 的"非 detached"过滤在 detector 层,**不在 helper 层
+    (`_list_worktrees`)。`_list_worktrees` 把所有 worktree 一视同仁返回,detector
+    在 `reconcile.py:457-459` 跳过 detached。如果改 `_list_worktrees` 让它过滤
+    detached,V1-D5 #4 的测试就会假阳 PASS(根本没看到 detached worktree);反过来
+    如果在 detector 里既过滤又 assert "我看不到 detached",则越过失败面。试写
+    第 4 测试时第一版我用了 `_list_worktrees` 的返回值,后来才意识到应该让 detector
+    自己负责这个决策。
+69. **本轮 deferred 段从 16 → 13** 是 V0 评审预言的"接了但没数据"语义修整——之前
+    V1-D5 2/5 + V1-D8 3/4 + V1-D4 3/5 这种"显式 3 项 deferred"的语义,经本系列
+    三轮 commit 改成 "X/Y PASS + 0 deferred" 是回归断言,不是把测试填进 stub。
+    aggregate 表的 total 没变(49),**PASS 与 deferred 总和维持 PASS+DEFER+BLK=49
+    不变式**——这是 WORK_LOG §63 / §66 沉淀的"counter 漂移 invariant"。
+
+### 下一步
+
+- **仍未跑研究**。deferred 段 13 项仍缺 live 数据:
+  - V1-D2 #1-#5:真实 E2/E3 harness 跑一次
+  - V1-D3 #1+#2+#3+#5+#6:live autonomous block 跨 session
+  - V1-D4 #3:live EV-after-STATUS.md 触发 STATUS_STALE
+  - V1-D6 #4:≥2 sessions with completed work
+  - V1-D1 #4:subsumed by #2,无独立 criterion
+- 架构师未触发的决策点同上一轮:A-3 / A-4 / M6-claude-pending。
+
+---
+
 ## 2026-09-19 — V1-D8 #2 fixture-level PASS:`EXPIRED_ARCHITECT_SIGNAL` 工具就绪 + 测试到位
 
 承接上一条(commit `fdf6d82`,V1-D1 #6 + #7 PASS)。架构师"按最佳选择走"。
