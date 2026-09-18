@@ -4,6 +4,82 @@
 
 ---
 
+## 2026-09-18 — V1-D9 heuristic 改 + M6/M7 拆分落 V1_IMPLEMENTATION_PLAN.md
+
+承接上一条(commit `10643d5` 之后)。架构师明确"改 V1-D9 prompt shape"方向后,
+实测发现 minimax-compat 失败根因在三层:① 模型 alias 不输出 hyphenated skill 名 +
+② 模型读 AGENTS.md 后按真实 idle 状态作答 + ③ heuristic `expected in first_line` 命中
+的不是 router 真实行为。本轮四件事。
+
+### 这一轮交了什么
+
+**`tools/verify_v1_d9.py`** — heuristic 从"first_line 含 kebab 名"改为"phrase-list 6-way
+classifier":每个 expected skill 配置一组 phrase,从其 SKILL.md body 抽出,**跨 6 skill 唯一**
+(29 个 phrase,`grep -c -iF` 跨 skill 审计 0 unsafe)。`grade()` 输出新增 `matched_phrases`
++ `expected_phrases` 字段,从 JSON 即可判读 cross-routing(不是 router 错而是 heuristic 错
+不再是"注入被测字段"的虚假保证)。
+
+**`research/ledger/2026-09/EV-20260918T133714Z-7b6f.json`** — ENV_BLOCKED 类 EV。execution_status=
+env_blocked + research_outcome=none 自动派生 `counts_as_evidence_iteration=false`(见
+`tools/researchlog/constraints.py:97-98`)。3 routed / 3 timeout / 0 partial 状态入账。
+
+**`docs/v1/M6_SPLIT_PROPOSAL.md`**(NEW)— Architect proposal:把 M6 / M7 拆为 `M6-pi +
+M6-claude-pending` 与 `M7-pi + M7-claude-pending`(`-pi` 在 minimax-compat 下可验收,
+`-claude-pending` ENV_BLOCKED 等切回原生 Anthropic)。Phrase 唯一性审计表入附录。
+
+**`docs/design/V1_IMPLEMENTATION_PLAN.md` §4.1** — Architect 同意后落实拆分。M6/M7 各从
+1 行变 2 行(*-pi / *-claude-pending),共 4 行 + 1 个脚注说明拆分理由。**总条目数仍是 7 条**
+(M6 与 M7 各算 1 条,*-pi / *-claude-pending 是同一验收的子项标识,与 V0 M4 合并 #6+#17 同形态)。
+§3.2 line 142 + §7 V1-D9 行同步更新指向拆分状态。
+
+### 实测对照(sandbox, `d77b7b2`)
+
+| Client | 旧 heuristic | 新 heuristic |
+|---|---|---|
+| pi | 3/6 routed | 1/6 routed(5 个 false-negative:模型 paraphrase 而非 verbatim quote) |
+| claude | 1/6 routed | 0/6 routed(3 timeout + 3 captured) |
+
+新 heuristic **没有"解决" minimax routing**(与 plan §Risks #2 预期一致),但把 heuristic 从
+"注入被测字段风险"改为"router reachability 真实 proxy"——phrase 必须从 body verbatim 出现,
+paraphrase 不算 routed_correctly。M6-pi 字面"≥3 routed"在 minimax 下仍未达标,**这就是拆分
+的实际理由**:M6-pi 的"通过"判据需重新定义为"router 真实可达的证据 + ≥N routed",而不是"≥3
+heuristic 通过"。
+
+### 动手前要知道(本轮新增)
+
+47. **`researchlog record` 后会立即 commit 单 EV**(P1 record-after-commit 决断)。
+    本轮 `record` 触发自动 commit `bd7f0e3`,而我后续 plan commit `ffc646c` 又把同一 EV
+    文件与 heuristic + proposal 一起合并 commit。结果 EV 在 git 历史里出现两次 commit,
+    EV 内容只在第一次 commit 时定型(后续 commit 是 heuristic/proposal 的合并载体,
+    EV 文件本身 metadata 不变)。**未违反 invariant**(raw evidence append-only, EV 内容稳定),
+    但 commit history 不优雅。下次类似场景:先全部 code 改动 commit,再最后才 `record`
+    触发单 EV commit;或者接受"EV 出现两次 commit"的 trace。**trade-off**:record-after-commit
+    是为避免 EV 落 git 之前 working tree 与 state 不一致(见 WORK_LOG §P1);要 trade 它才能
+    避免双 commit。
+48. **phrase-list heuristic 在 minimax-compat 下 false-negative 率高于旧 heuristic**(1/6 vs 3/6),
+    但 false-positive 率为 0(没有"注入被测字段"风险)。这是工程上的净改善,但**字面"≥3 routed"
+    在 minimax 下仍是 architect 决策点**:M6-pi 通过判据不能简单沿用旧的"≥3 routed_correctly"
+    字面阈值,需重新定义。
+49. **`execution_status: env_blocked` 配合 `research_outcome: none` 自动派生
+    `counts_as_evidence_iteration=false`**,不需要手设。**`environment.comparability` 字段
+    是"环境之间的可比性",不是"当前 EV 是否被 block"——plan 初稿误判为 INCOMPARABLE,实测
+    EV 正确为 COMPATIBLE(minimax-compat 端点本身稳定)。
+50. **V1_IMPLEMENTATION_PLAN.md 拆分脚注保留总条数 = 7 的承诺**(与 V0 M4 #6+#17 合并同手法),
+    避免后续"还有几条"的口径漂移。
+
+### 下一步
+
+- **架构师 A-3 / A-4 未触发**(本轮仅落实 A-1/A-2):
+  - A-3:phrase-list 引用是否折进 SKILL.md `description:` 让 router self-test
+  - A-4:D-004 forward path——单 EV 闭环 vs per-session 重跑记新 EV
+- 仍未动:**P4(`CAPABILITY_MAP_SHAPE_PROPOSAL.md` 架构师未回)+ Block 3 / S2(Gate-3 文档
+  + `--gh-status` flag)+ Block 4 / 5 / 6**。
+- **未决 dirty**:`docs/research-engineering-complete-design-v1.5.pdf`(unstaged, 2MB)——上轮
+  session 为读 docx 而生成的中间产物,git add 后未 commit。本轮已 `git reset HEAD` unstage
+  (per AGENTS.md "不 silently discard"),文件仍在 disk。等架构师判定:commit / 移走 / 删。
+
+---
+
 ## 2026-09-18 — 收口 minimax 常态:ARCHITECT D-004 + env record E0,不动 ENV-LIM-004
 
 承接上一条(commit `7db8d61`,ENV-LIM-004 落地)。架构师明确"没有原生 Anthropic 订阅,
