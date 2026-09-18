@@ -1,172 +1,226 @@
-# Research Engineering（研究工程协议）
+# research-engineering（研究工程协议）
 
-一份**协议**和一套小工具，让 **AI 编程 agent** 做**应用 AI 研究**——而不只是写代码。
-整个设计围绕一个论点：**当你还不确定能不能跑起来时，唯一值得保留的东西是你做过的尝试留下的证据（evidence）**。
+> 一套面向 AI agent 做**应用 AI 研究**的开源协议与工具集 —— 系统还不存在、
+> 评估器可能错、"完成"是信念更新而非 CI 全绿。
 
-> English version: [README.md](README.md)
+[![status](https://img.shields.io/badge/V1%20tool%20layer-已收口-green)](#状态)
+[![tests](https://img.shields.io/badge/测试-304%20全过-brightgreen)](#状态)
+[![drill](https://img.shields.io/badge/drill%20套件-8%2F9-blue)](#状态)
+[![python](https://img.shields.io/badge/python-3.12%2B-blue)](#状态)
+[![license](https://img.shields.io/badge/license-MIT-blue)](#协议)
 
-## 这个项目解决什么问题
+[English](README.md) · [中文](README.zh-CN.md)
 
-大多数 AI 编程 agent（Claude Code、Codex、`pi` 等等）的设计目标是**软件交付**。它们的工作流默认：
+---
 
-- 系统已经能跑。
-- 测试能抓回归。
-- 「Done」= 测试通过。
+## 这是什么
 
-应用 AI 研究正相反：
+大多数 AI 编程 agent（Claude Code、Codex、pi 等）的设计目标是**交付软件**。
+它们默认系统能跑、测试能抓回归、"完成"= build 全绿。
 
-- 系统可能还不存在，或者数据还没拿到，或者评估器不可信。
-- 「先拿最便宜的证据」比「全套测试覆盖」重要。
-- 「Done」是一次**信念更新**——一个能经受证据检验的 finding——而不是绿灯的 CI。
+应用 AI 研究把以上每条假设都打破：系统可能还不存在；评估器可能是错的；
+数据可能还没拿到。"先拿最便宜的证据"压倒"全套测试覆盖"；"完成"是**经得起
+证据检验的 finding**，不是绿灯的 CI。
 
-如果你把一个面向交付的 agent 扔到一个研究问题上，它要么花几个小时搭脚手架、根本没验证机制到底有没有；要么悄悄优化错指标，因为评估器看起来在工作。**Research Engineering** 就是那层让 agent 留在**研究**模式而不是交付模式的薄壳。
+`research-engineering` 是那层让 AI agent 留在**研究**而非**交付**模式上的薄壳。
+它给 agent 一份持久状态协议、一个确定性记账工具、和一组小巧的 skill——
+足够把"试了什么、学会了什么、下一步做什么"跨 session 边界地记下来。
 
-## 它到底是什么
+它**不**替 agent 选 hypothesis、不替 agent 决定保留还是回退、不调用模型、
+不擅自修复状态。这些都需要科学判断——一个会凭空发明这些内容的工具，
+就是在发明证据。
 
-三件事，规模都不大：
+---
 
-| 组件 | 干什么 | 在哪 |
-|---|---|---|
-| **Skills** | agent 上下文里的指令：bootstrap 一个研究仓库、跑主循环、为架构师写状态汇报。 | `skills/`（canonical）— 通过 installer 复制到 `.claude/skills/` 和 `.agents/skills/` |
-| **记账工具** | `researchlog` — 一个零依赖的 CLI，维护 `research/ACTIVE.json`（执行指针）、证据 ledger、和持久状态三者同步。 | `tools/researchlog/` |
-| **Canonical 状态文件** | `research/ACTIVE.json`、`CURRENT.md`、`ARCHITECT.md`、`BOUNDARIES.md`、`ENVIRONMENT.md`、`FINDINGS.md`。每次 session 开始 agent 都读这些；它们就是一个项目的持久记忆。 | `research/` |
+## 为什么存在
 
-agent 本身选 hypothesis、跑实验、解读结果。工具**永远不**选 hypothesis、永远不决定保留还是回退、永远不调模型、永远不擅自修复状态——这些都需要科学判断，一个会凭空「发明」这些内容的工具就是在发明证据。
+把面向交付的 agent 扔到研究问题上，反复出现三种失败模式：
 
-## 两种模式，一个边界
+1. **脚手架陷阱**。Agent 搭出干净的仓库骨架、把所有类型填齐、build 全绿——
+   根本没去验证机制到底有没有成立，因为没人信任评估器、也没记录任何证据。
+2. **指标博弈**。评估器看起来在工作，agent 就去优化它。数字往上走。
+   没人去查下面的因果声明是不是还成立。
+3. **信念失忆**。每个新 session 都从空白聊天开始。Agent 重新推导上周学到了
+   什么、推翻上一个 hypothesis、把已经做过的工作再做一遍。
+
+`research-engineering` 的存在理由是：这三种全是**状态问题**。修法是
+**持久的、只追加的证据**——能跨 session 边界活下来——加上一个
+**研究 / 集成模式区分**，让 agent 不会把没验证过的 hypothesis 当成已交付功能。
+
+---
+
+## 快速开始
+
+```bash
+# 1. clone（或把 tools/ 和 skills/ 拷到你自己的仓库里）
+git clone https://github.com/uukuguy/research-engineering
+cd research-engineering
+
+# 2. 把 skill 装到你 agent 的发现目录
+python3 tools/install_research_skills.py --target /path/to/your-project
+
+# 3. 初始化一个研究仓库（创建 research/ACTIVE.json + 骨架）
+cd /path/to/your-project
+python3 /path/to/research-engineering/tools/researchlog init
+
+# 4. 跑一次自检（验证 schema、状态、git 一致性）
+python3 tools/researchlog reconcile
+
+# 5. 记第一条证据
+python3 tools/researchlog record \
+    --question "机制成立吗？" \
+    --subject-type mechanism --subject-id M-001 \
+    --level E1 --execution-status completed \
+    --research-outcome inconclusive --belief-delta none \
+    --confidence low \
+    --observation "第一次观察" --no-experiment
+```
+
+完事。仓库里现在有第一条证据，ACTIVE.json 已更新，下一个 session
+能从持久状态接续——不需要聊天上下文。
+
+---
+
+## 它怎么工作
+
+### 研究 vs. 集成模式
 
 整个设计围绕一个区分：
 
-| | Research Mode（默认） | Integration Mode（promotion 之后） |
-|---|---|---|
-| 目标 | 信息增益，验证过的行为 | 稳定、可复现的基线 |
-| 代码 | 一次性，最小正确性 | 长期维护 |
-| 测试 | 只测保护实验有效性的 | 选择性回归 |
-| 全量回归 | 不跑 | promotion 时必须跑 |
+|                    | **研究模式**（默认）                | **集成模式**（promotion 之后）        |
+| ------------------ | ------------------------------------- | -------------------------------------- |
+| 目标               | 信息增益、验证过的行为               | 稳定、可复现的基线                     |
+| 代码               | 一次性，最小正确性                    | 长期维护，stable 接口                   |
+| 测试               | 只测保护实验有效性的                  | 选择性回归                              |
+| 全量回归           | 不跑                                  | promotion 时必跑                        |
+| Promotion 判据     | 一个 finding 经得起证据检验           | 架构师 review                            |
 
-模式是「阶段」不是项目属性。同一个仓库在 promotion 边界可以切换模式；agent 在被架构师 promote 之前一直待在 Research Mode。**知道自己在哪个模式里，是整个游戏的全部**。
+模式是**阶段**，不是项目属性。同一个仓库在 promotion 边界切换模式；
+agent 在被架构师 promote 之前一直待在研究模式。**知道自己在哪个模式里，
+是整个游戏的全部**。
 
-## 协议一张图
-
-```
-研究问题 / 技术不确定性
-        ↓
-研究 Subject   idea / mechanism / component / slice / system
-        ↓
-证据获取   reasoning / probe / replay / spike / simulator / judge
-        ↓
-观察 → 信念更新 → 下一次干预
-```
-
-核心论点：**证据是稳定抽象**，不是「候选+评估器」。一个项目可能只有一段问题描述、一个 SDK、一点数据就开始了。系统必须能撑住这个起点。
-
-## Layout
+### 协议
 
 ```
-README.md / README.zh-CN.md   本文件（英文 + 中文镜像）
-AGENTS.md                     AI agent 的 always-loaded contract
-CLAUDE.md                    AGENTS.md 的一行 import（Claude Code 用）
-skills/                       canonical skill 源（8 个 skill）
-  research-bootstrap/         零状态初始化
-  research-engineering/        主循环；持有 references/ 的路由表
-  research-status/            给架构师读的 Project Working Model
-  evaluation-design/          V1 专家 skill：评估器不可信时
-  experiment-review/           V1 专家 skill：拿一次 run 对照活 hypothesis 复盘
-  research-search/            V1 专家 skill：重新打开搜索空间
-  retrospective/              V1 专家 skill：慢循环
-  scenario-redteam/           V1 专家 skill：红队一个候选声明
-tools/
-  install_research_skills.py   把 skills/ 复制到 .claude/skills 和 .agents/skills
-  check_workflow_block.py      任何交付工作流 skill 未被覆盖时退出码 1
-  researchlog/                 零依赖记账工具（20 个子命令）
-research/                     本仓库自己的活研究状态
-templates/research/            `researchlog init` 复制到新项目的骨架
-docs/
-  WORK_LOG.md                  工具开发的日志（按日期追加，新会话从这里读起）
-  GOTCHAS.md                   当前活跃的陷阱——作为**状态**而非日志保留
-  V0_ACCEPTANCE_GUIDE.md       V0 验收条目 + 实测结果
-  V1_ACCEPTANCE_GUIDE.md       V1 验收条目 + 实测结果
-  V1_CASES.md                  V1 drill 套件：可执行命令 + PASS 信号
-  RESEARCH_ENGINEERING_V1.5_REVIEW.html   设计评审与修订日志
+   研究问题 / 技术不确定性
+                   │
+                   ▼
+           研究 Subject
+   (idea / mechanism / component / slice / system)
+                   │
+                   ▼
+           证据获取
+   (reasoning / probe / replay / spike / simulator / judge)
+                   │
+                   ▼
+       观察 → 信念更新 → 下一次干预
 ```
 
-## 在另一个仓库里用
+核心不变量：**证据是稳定抽象**，不是「候选+评估器」。一个项目可能只有
+一段问题描述、一个 SDK、一点数据就开始了——系统必须能撑住这个起点。
+
+### 架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Agent loop (Claude Code · Codex · pi)                       │
+│  每次 session 开始读 AGENTS.md                                │
+└─────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+   ┌─────────┐         ┌─────────┐         ┌──────────────┐
+   │ Skills  │         │  tools/ │         │   research/  │
+   │  (8)    │         │research │         │ ACTIVE.json  │
+   │         │         │   log   │         │ CURRENT.md   │
+   │  路由表  │         │         │         │ ARCHITECT.md │
+   │         │         │ 20 个子 │         │ FINDINGS.md  │
+   │         │         │ 命令    │         │ ledger/      │
+   │         │         │         │         │ runs/        │
+   └─────────┘         └─────────┘         └──────────────┘
+```
+
+**Skills**（8 个）住在 `skills/`，由 installer 复制到 `.claude/skills/`
+和 `.agents/skills/`。主路由根据观察决定加载哪个 skill——不是 agent
+自己偏好决定。
+
+**`tools/researchlog`** 是一个零依赖的 Python CLI。每个子命令返回
+JSON envelope——agent 看 `exit_code` 分支，读 `findings`，永不解析散文。
+同样输入同样输出，答案不含 wall-clock 漂移。
+
+**`research/`** 承载持久状态。Agent 在每次 session 开始读它，把它当成
+唯一的 source of truth——按设计，聊天上下文是一次性的。
+
+---
+
+## 命令
+
+最常用的 `researchlog` 子命令：
 
 ```bash
-git clone https://github.com/uukuguy/research-engineering
-python3 tools/install_research_skills.py --target /path/to/project
-cd /path/to/project && python3 tools/researchlog init
+researchlog init            # 建研究状态骨架
+researchlog validate        # schema + 不变量检查
+researchlog reconcile       # ACTIVE ↔ Git ↔ runs ↔ evidence
+researchlog record          # 追加一条证据记录
+researchlog run             # 跑一次实验并捕获 provenance
+researchlog compare         # 两条 EV 之间的共有测量 + attribution
+researchlog findings        # 持久信念（Established / Provisional / Refuted / ...）
+researchlog synthesize      # block 收尾时 1-2 页综合（给架构师看）
+researchlog telemetry       # §21 productivity KPI 表
 ```
 
-`install_research_skills.py --check` 比对 canonical skills 与已安装副本，发现 drift 时退出码非零。`git pull` 之后跑一下，捕获 skill 屏蔽漂移。
+完整 20 个子命令的参考在 `docs/V1_ACCEPTANCE_GUIDE.md` 和工具的 `--help`。
 
-## `researchlog` 的能力
+---
 
-```bash
-python3 tools/researchlog init          # 建研究状态骨架
-python3 tools/researchlog validate      # schema + 不变量检查
-python3 tools/researchlog reconcile     # ACTIVE ↔ Git ↔ runs ↔ evidence
-python3 tools/researchlog record        # 追加一条证据记录
-python3 tools/researchlog run           # 跑一次实验并捕获 provenance
-python3 tools/researchlog compare       # 两条 EV 之间的共有测量 + attribution
-python3 tools/researchlog env           # 记录 / 查询环境变更
-python3 tools/researchlog findings      # 持久信念（Established / Provisional / ...）
-python3 tools/researchlog synthesize     # block 收尾时 1-2 页综合（给架构师看）
-python3 tools/researchlog telemetry      # §21 productivity KPI 表
-python3 tools/researchlog checkpoint     # 可恢复的 Git checkpoint
-python3 tools/researchlog current        # 读 / 改 research:current block
-python3 tools/researchlog boundaries     # 读 / 改 research:boundaries block
-python3 tools/researchlog active         # rotate session、开关 block、设状态
-```
+## 文档
 
-每个子命令都返回 JSON envelope（`exit_code`、`findings`、`payload`），agent 看数字分支，永不解析散文。输出确定性——同样输入同样输出，答案不含 wall-clock 漂移。
+| 文档 | 内容 |
+| --- | --- |
+| [`docs/WORK_LOG.md`](docs/WORK_LOG.md) | 工具开发的日志（按日期追加）。想跟进工作的话**先读这个**。 |
+| [`docs/V1_ACCEPTANCE_GUIDE.md`](docs/V1_ACCEPTANCE_GUIDE.md) | V1 验收条目、drill 协议、实测结果。 |
+| [`docs/V1_CASES.md`](docs/V1_CASES.md) | V1 drill 套件——每个 drill 有可执行命令 + PASS 信号。 |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | 当前活跃的陷阱。**作为状态**而非日志保留：修好的删掉。 |
+| [`docs/RESEARCH_ENGINEERING_V1.5_REVIEW.html`](docs/RESEARCH_ENGINEERING_V1.5_REVIEW.html) | 设计评审与修订日志。 |
 
-## 核心不变量（它**不**做的事）
+AI agent 的 canonical contract 是 [`AGENTS.md`](AGENTS.md)——always-loaded。
+详细协议住在 skills 里，按需加载。
 
-1. **证据是稳定抽象**，不是「候选+评估器」。别假设系统能跑、评估器可信。
-2. **环境不可行 ≠ 假说被否**。`INFRA_FAILED`、`ENV_BLOCKED`、`ENV_UNSUPPORTED`、
-   `RESOURCE_EXCEEDED` 跟 `research_outcome` 分开；只有 `SCIENTIFIC_NEGATIVE` 才能
-   削弱 hypothesis。
-3. **用 surrogate 前先验证它**。因果特征缺失 = `EVIDENCE_INVALID`，不是更弱的结论。
-4. **原始证据只追加**。信念和当前状态可以重建；聊天上下文不是 source of truth。
-5. **session 上下文是一次性的**。跟决策相关的所有东西都住在仓库里。
+---
 
-## 状态
+## 如何贡献
 
-**V1 工具层已于 2026-09-19 收口**。drill 套件 8/9 完成；剩 1/9（V1-D9、M6/M7 claude-pending）
-在本沙箱使用的 minimax-compat endpoint 下是 `ENV_BLOCKED`——要等原生 Anthropic 订阅
-上线才能解决。汇总：**45 PASS + 0 deferred + 4 ENV_BLOCKED**，共 49 个 criterion。
-`tools/researchlog/tests/` 下 304 个测试全部通过。
+这是个活跃的研究项目。「如何贡献」的诚实形态是：
 
-三个文件承载工作的真实状态：
+1. 先读 [`docs/WORK_LOG.md`](docs/WORK_LOG.md)，看什么在飞、什么刚收口。
+2. 改任何东西之前先读 [`docs/GOTCHAS.md`](docs/GOTCHAS.md)——陷阱是状态，
+   不是日志。
+3. 协议改动：先在 `docs/WORK_LOG.md` 写一条；`AGENTS.md` 里的「核心不变量」
+   段是合同。
+4. 新 skill：加到 `skills/`（canonical），再跑
+   `tools/install_research_skills.py --target <your test repo>`。
+5. 测试在 `tools/researchlog/tests/`——运行：
+   `PYTHONPATH=tools python3 -m unittest discover -t tools -s tools/researchlog/tests`。
 
-- **`docs/WORK_LOG.md`** — 先读这个。按日期追加的工具开发日志：做了什么、未完成、
-  下一步做什么。
-- `docs/V1_ACCEPTANCE_GUIDE.md` — V1 验收条目、drill 协议、实测结果。
-- `docs/V1_CASES.md` — V1 drill 套件：可执行命令 + PASS 信号。
-- `docs/GOTCHAS.md` — 当前活跃的陷阱，作为**状态**而非日志保留：修好的删掉，
-  不留注释。
-
-本仓库自己的 `research/ACTIVE.json` 是 **idle**——V1 工具层收口是**已交付**的东西，
-不是正在跑的研究。新研究活动要等架构师的决策：扩 telemetry、切原生 Anthropic
-端点、或给一个新 hypothesis。
-
-## 兼容性
-
-- **Python 3.12+**（见 `.python-version`）。
-- **Claude Code**（默认）、**Codex**、**`pi`** — 协议不绑定某个 agent。installer 把
-  skills 复制到 `.claude/skills/` 和 `.agents/skills/`；`pi` 原生读本文件。
-- **单进程、单机**。无调度器、无服务端、无多租户状态。一个研究仓库、一个 agent
-  循环、一份磁盘上的持久状态。
-
-## 测试
-
-```bash
-PYTHONPATH=tools python3 -m unittest discover -t tools -s tools/researchlog/tests -v
-```
-
-304 个测试，无网络、无模型调用。运行时间约 30 秒。
+---
 
 ## License
 
-内部研究项目。设计谱系见 `docs/`。
+MIT。 见 [LICENSE](LICENSE)。
+
+---
+
+## 状态
+
+<a name="状态"></a>
+
+- **V1 工具层已于 2026-09-19 收口**。drill 套件 **8/9** 完成。
+- **45 PASS + 0 deferred + 4 ENV_BLOCKED**，共 49 个验收 criterion。
+- **304 个测试**在 `tools/researchlog/tests/` 下全过。
+- 剩下的 4 项 ENV_BLOCKED 是 M6/M7 claude-pending，本沙箱用的 minimax-compat
+  endpoint 触发的——原生 Anthropic 订阅上线后会消解。
+- 本仓库自己的 `research/ACTIVE.json` 是 **idle**——V1 收口是**已交付**
+  的产物，不是正在跑的研究。
+
+**不在本项目 scope 内**：项目自身的活研究活动。新研究要等架构师的
+决策（扩 telemetry、切端点、或给一个新 hypothesis）。
