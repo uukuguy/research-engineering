@@ -69,7 +69,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | 条 | 验收 | 状态 | 证据 |
 |---|---|---|---|
 | M3 | 三件套端到端连通 | ⏳ 14/18 | V1-D7 6/6 + V1-D1 6/7 + V1-D2 6/6 (this commit: V1-D2 #5 E3 fixture) |
-| M4 | bounded block | ⏳ 6/7 | V1-D3 6/7 (this commit: #2 rotation restart + #3 reproduction budget) |
+| M4 | bounded block | ✅ 7/7 | V1-D3 全过 (this commit: #5 default 30s heartbeat cadence; earlier commits: #1+#6 reverse variants + #2+#3 fixture) |
 | M5 | snapshot + synthesis | ✅ 5/5 | V1-D4 全过;stale-detection 已由 `ReconcileStaleStatusTests.test_reconcile_flags_when_ledger_advances_past_cache` 覆盖(P1 era 测试,本 commit 修文档漂移) |
 | M6-pi | pi 端 ≥3 routed | ❌ 1/6 | 详见 `docs/V1_CASES.md` §V1-D9 + `EV-20260918T133714Z-7b6f` |
 | M6-claude-pending | claude 端 ≥3 routed | ⛔ ENV_BLOCKED | D-004 + ENV-LIM-004 |
@@ -87,7 +87,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #10 | reproduction 分桶 | ✅ | V1-D3 #3 (`SessionRotationTests.test_reproduction_iteration_does_not_bump_block_budget`) |
 | #11 | session 必须 commit | ⏳ | V1-D3 |
 | #12 | `--replace-existing` 被拒 | ✅ | V1-D3 #6 (`test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`) |
-| #13 | run 30s heartbeat | ⏳ | V1-D3 |
+| #13 | run 30s heartbeat | ✅ | V1-D3 #5 (`HeartbeatDefaultCadenceTests`: argparse default=30.0 + default-cadence end-to-end) |
 | #14 | cross-session telemetry 累计 | ⏳ | V1-D6 |
 | #15 | `--baseline-tag` 可走 | ✅ | checkpoint 命令行 + flag |
 | #16 | session rotation 不重启动 | ✅ | V1-D3 #2 (`SessionRotationTests.test_rotate_session_does_not_restart_the_open_block`) |
@@ -112,19 +112,16 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 2 deferred criteria across V1-D3 #5 + V1-D6 #4 are real fixture or feature
-gaps. V1-D3 #5 needs a default-cadence test that runs `run` without
-`--heartbeat-interval`; V1-D6 #4 needs the cross-session cumulative KPI
-feature itself, which is feature work, not label drift. Neither is blocked
-on a research activity.
+The 1 deferred criterion across V1-D6 #4 is a feature gap, not a fixture gap.
+The cross-session cumulative KPI does not exist in `commands/telemetry.py`;
+writing a test for a metric the tool does not compute cannot PASS. This
+gates on an Architect decision to extend telemetry.
 
-This commit closed 3 fixture gaps as code + doc changes:
-V1-D2 #5 (E2 + E3 record pair → COMPARABLE),
-V1-D3 #2 (rotation preserves `block.id`),
-V1-D3 #3 (reproduction iteration bumps `reproduction_iterations`, NOT
-`completed_evidence_iterations`). Together with the previous commit's 7
-reverse-variant closures, aggregate is **43 PASS + 2 deferred + 4
-ENV_BLOCKED** = 49 criteria.
+This commit closed V1-D3 #5 (default 30s heartbeat cadence) without
+waiting 30 actual seconds: pinning `argparse default=30.0` + a default-
+cadence end-to-end smoke test is sufficient, because the bump mechanism
+is already exercised by `test_heartbeat_is_bumped_while_the_child_runs`.
+Aggregate: **44 PASS + 1 deferred + 4 ENV_BLOCKED** = 49 criteria.
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。

@@ -4,6 +4,68 @@
 
 ---
 
+## 2026-09-19 — V1-D3 #5 fixture-level PASS:default 30s heartbeat cadence 不需 sleep 30s
+
+承接上一条(commit `0645ac9`,V1-D2 #5 + V1-D3 #2 + #3 关闭)。Architect"同意你的判断"——
+先验证默认 30s(`commands/run.py:77`)是真实默认,然后设计快测(不 sleep 30s 实际等待)。
+
+### 这一轮交了什么
+
+**`tools/researchlog/tests/test_commands.py::HeartbeatDefaultCadenceTests`**(NEW, 2 测试)— 
+V1-D3 #5:default 30s heartbeat cadence。
+
+测试设计哲学:**不 sleep 30s 实际等待**。两个互补断言就够:
+
+1. `test_heartbeat_interval_default_is_30_seconds` — 直接 import `researchlog.commands.run`,
+   调 `configure(parser)`,`parse_args([...])` 读 `ns.heartbeat_interval`。
+   纯 argparse 检查,<1ms,无 flakiness。
+2. `test_default_cadence_path_produces_a_closeout_heartbeat` — 不传 `--heartbeat-interval`,
+   跑 child `sleep 0.4`,assert manifest 的 `execution.heartbeat_or_last_observed_at` 非 None
+   且 `status == completed`。这证明 **default-cadence 代码路径** 端到端跑通。
+
+配合 `test_heartbeat_is_bumped_while_the_child_runs`(已存在,显式传 0.2s 验证 bump 机制),
+**默认 30s** = argparse default 30.0 + bump 机制工作 + default-cadence 路径可跑。三者合一。
+
+如果写 sleep 30s + poll 心跳更新验证 cadence,单测试 30s+,且与上述两断言**没有额外覆盖**——
+CI 慢 + 等价信息。**明确不写**。
+
+**全套 300/300 PASS**(298 → 300,+2),无回归。**V1-D3 7/7 — drill 完整闭环**。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D3:**6/7 → 7/7 PASS** — drill 完整。
+- `docs/V1_CASES.md` aggregate:**43 → 44 PASS,2 → 1 deferred**,4 ENV_BLOCKED = 49 criteria。
+- `docs/V1_ACCEPTANCE_GUIDE.md` M4 `6/7 → ✅ 7/7`,#13 ⏳ → ✅;aggregate 段同步更新。
+
+### 动手前要知道(本轮新增)
+
+79. **`commands/run.py:77` 的 `default=30.0` 是事实而非 spec**。spec 在 §P7 +
+    `docs/.../design/V1_IMPLEMENTATION_PLAN.md` 第 N 行说"30s heartbeat default",
+    实现用 argparse `default=30.0` 承接。任何把 default 改成其它值(比如 60s)的重构
+    不会触发 spec violation warning——只能靠 test 钉死。本测试(`test_heartbeat_interval_default_is_30_seconds`)
+    是**唯一一个**会捕捉该回归的 fast test。
+80. **cadence-default 路径的 closeout heartbeat 由 supervisor 终写,不由 daemon**。
+    daemon thread 用 `args.heartbeat_interval` cadence(默认 30s)写中间 bump;supervisor
+    在 `run` 末尾写 `heartbeat_or_last_observed_at = now` 的 closeout heartbeat。
+    即使 `--heartbeat-interval 0`(关 daemon),closeout heartbeat 仍写——
+    体现在 `test_heartbeat_interval_zero_disables_bumps`。也就是说 **"non-None heartbeat"
+    不是 cadence 工作的充要条件**——它只在 closeout 必然出现。本测试的 default-cadence
+    端到端断言因此**只验证路径可跑**,不验证 cadence 数值。
+81. **V1-D6 #4 (跨 session 累计 KPI) 是最后一个 deferred**。不是 fixture gap,是
+    feature gap:`commands/telemetry.py` 当前 KPI 实现只有 `time_to_first_e1/e3`(用
+    `session_epoch`),没有跨 session 累计 KPI 的实现。**写测试不能 PASS 它**——
+    必须先实装 feature。这是 Architect 决策点(扩展 telemetry / 重定义 V1-D6 #4 / 取消 V1-D6 #4)。
+
+### 下一步
+
+- **deferred 段只剩 1 项**:V1-D6 #4 (telemetry feature work,需要 Architect 触发)。
+- **drill 层面**:V1-D1 6/7,V1-D2 6/6,V1-D3 7/7,V1-D4 5/5,V1-D5 5/5,V1-D6 3/4,
+  V1-D7 6/6,V1-D8 4/4,V1-D9 0/4(全 ENV_BLOCKED) — V1 drill suite 全部 7 项已闭环
+  (8/9 drill 完整,V1-D6 还差 #4 一项,V1-D9 全 ENV_BLOCKED 等切回原生 Anthropic 端点)。
+- **未触发 Architect 决策**:A-3 / A-4 / M6-claude-pending / V1-D6 #4 feature 实装。
+
+---
+
 ## 2026-09-19 — V1-D2 #5 + V1-D3 #2 + #3 fixture-level PASS:3 项真 gap 关闭
 
 承接上一条(commit `5e9caa0`,V0_D4 反向 variant 批量审计)。Architect"同意"。

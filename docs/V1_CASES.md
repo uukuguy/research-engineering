@@ -139,7 +139,7 @@ record-after-commit lands EV in git; run 30s heartbeat default; replace-existing
 | 2 | session rotate 不重启动 | **PASS** (SessionRotationTests.test_rotate_session_does_not_restart_the_open_block: open BL-ROT, rotate session, assert `active --get block.id` still returns BL-ROT) |
 | 3 | reproduction 不计 budget | **PASS** (SessionRotationTests.test_reproduction_iteration_does_not_bump_block_budget: record `--iteration-kind reproduction`, close-block with belief-delta, assert `block.completed_evidence_iterations=0` AND `block.reproduction_iterations=1`) |
 | 4 | record-after-commit 落 git | **PASS** (this commit's record + auto-commit trace) |
-| 5 | run 默认 30s heartbeat | DEFER (no test asserts the 30s default cadence — `--heartbeat-interval` tests pass it explicitly) |
+| 5 | run 默认 30s heartbeat | **PASS** (HeartbeatDefaultCadenceTests: `args.heartbeat_interval == 30.0` + default-cadence path produces a closeout heartbeat; the bump mechanism itself is exercised by `test_heartbeat_is_bumped_while_the_child_runs` with a 0.2s cadence, so the 30-second **default** is the only thing left to pin) |
 | 6 | `--replace-existing` 被拒 | **PASS** (test_commands.py:350 — `test_replace_existing_flag_is_removed_and_in_flight_is_always_refused`) |
 | 7 | 跨 session `reconcile` exit 0 | **PASS** (this session: `reconcile --json` clean) |
 
@@ -156,8 +156,9 @@ record-after-commit lands EV in git; run 30s heartbeat default; replace-existing
 #7 PASS  (ReconcileCommandTests covers cross-session reconcile clean)
 ```
 
-**Drill status: 6/7 PASS, 1 deferred (#5 default 30s heartbeat cadence test — the
-remaining real fixture gap. Two of the three real gaps closed this commit.)**
+**Drill status: 7/7 PASS** (the last real fixture gap — default 30s heartbeat cadence —
+is closed by `HeartbeatDefaultCadenceTests`, which pins the argparse default and the
+default-cadence end-to-end path without waiting 30 actual seconds).
 
 The original "5 deferred to live block run" was a documentation drift:
 `BlockBudgetTests` and the in-flight replacement test have been running
@@ -365,20 +366,20 @@ SKILL.md frontmatter so the router self-tests).**
 |---|---|---|---|---|
 | V1-D1 | 6 | 1 | 0 | 7 |
 | V1-D2 | 6 | 0 | 0 | 6 |
-| V1-D3 | 6 | 1 | 0 | 7 |
+| V1-D3 | 7 | 0 | 0 | 7 |
 | V1-D4 | 5 | 0 | 0 | 5 |
 | V1-D5 | 5 | 0 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **43** | **2** | **4** | **49** |
+| **Total** | **44** | **1** | **4** | **49** |
 
-The 2 deferred criteria are real fixture or feature gaps. V1-D3 #5
-needs a default-cadence test that runs `run` without
-`--heartbeat-interval`; V1-D6 #4 needs the cross-session cumulative
-KPI feature itself, which is feature work, not label drift. Neither
-is blocked on a research activity.
+The 1 deferred criterion is a feature gap, not a fixture gap. V1-D6 #4
+needs the cross-session cumulative KPI in `commands/telemetry.py`
+itself; writing a test for a metric the tool does not compute cannot
+PASS. This is the only remaining deferred item, and it is gated on
+Architect decision to extend telemetry.
 
 The 4 blocked are M6/M7 claude-pending under minimax-compat — the
 endpoint policy D-004 makes them ENV_BLOCKED until a native Anthropic
