@@ -29,12 +29,25 @@ than in `FINDINGS.md`.
   "harnesses": [],
   "capability_map": [],
   "comparability": {
-    "fingerprint": null,
-    "last_material_change": null,
+    "fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
+    "last_material_change": "2026-09-18T12:42:36+00:00",
     "status": "COMPATIBLE",
     "anchor_evidence": []
   },
-  "history": []
+  "history": [
+    {
+      "type": "environment_change",
+      "at": "2026-09-18T12:42:36+00:00",
+      "capability": "V1-D9 acceptance endpoint policy",
+      "changes": {
+        "env.endpoint": "minimax-compat"
+      },
+      "comparability": "COMPATIBLE",
+      "fingerprint": "sha256:1733fb3fb292ba9e6adbf8ea5a152b85c202e404d4f2c9f97795473b0182689c",
+      "evidence_id": "EV-20260918T124236Z-479f",
+      "notes": "Endpoint is steady-state minimax-compat, not a sandbox artifact. ENV-LIM-004's 'M6-claude-pending (re-run under native Anthropic)' clause is non-actionable under the current endpoint policy; see ARCHITECT signal D-004 for the policy decision."
+    }
+  ]
 }
 ```
 

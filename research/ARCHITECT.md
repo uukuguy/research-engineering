@@ -67,6 +67,19 @@ already been through the normalisation `source_text` exists to preserve.
 
 `validate` and `reconcile` check this contract on every run.
 
+```json research:signal
+{
+  "id": "D-004",
+  "type": "DECISION",
+  "statement": "minimax-compat endpoint is the steady-state endpoint for this research environment; no native Anthropic subscription is available.",
+  "scope": "environment",
+  "expiry": "until native Anthropic endpoint becomes available",
+  "source_text": "现在没有原生 Anthropic 订阅，做不了这个，能支撑 claude code + minimax 就行了。",
+  "created_at": "2026-09-18T20:42:48+08:00",
+  "active": true
+}
+```
+
 ## After a correction
 
 An intervention is an impulse, not a takeover. Ingest it, execute the immediate

@@ -4,6 +4,81 @@
 
 ---
 
+## 2026-09-18 — 收口 minimax 常态:ARCHITECT D-004 + env record E0,不动 ENV-LIM-004
+
+承接上一条(commit `7db8d61`,ENV-LIM-004 落地)。架构师明确"没有原生 Anthropic 订阅,
+做不了这个,能支撑 claude code + minimax 就行了" —— minimax 是常态不是过渡,
+ENV-LIM-004 里"等切回原生"那段措辞不再可执行。本轮三件事收口。
+
+### 这一轮交了什么
+
+**`research/ENVIRONMENT.md` 追加 history[](`env record`)**
+
+`EV-20260918T124236Z-479f` evidence record + 新 fingerprint。change 文档:
+
+```json
+{
+  "type": "endpoint_clarification",
+  "capability": "V1-D9 acceptance endpoint policy",
+  "changes": {"env.endpoint": "minimax-compat"},
+  "comparability": "COMPATIBLE",
+  "notes": "...ENV-LIM-004 的 'M6-claude-pending (re-run under native Anthropic)' 子句在当前 endpoint 政策下不可执行; 政策决策见 ARCHITECT D-004..."
+}
+```
+
+`comparability` 保持 `COMPATIBLE`(endpoint 政策澄清不是物理环境变化)。`history[]` 落一笔,
+但**完全不动 `limitations[]`** —— 协议设计就是 append-only。
+
+**`research/ARCHITECT.md` hand-append `D-004` signal**
+
+```json research:signal
+{
+  "id": "D-004",
+  "type": "DECISION",
+  "statement": "minimax-compat endpoint is the steady-state endpoint for this research environment; no native Anthropic subscription is available.",
+  "scope": "environment",
+  "expiry": "until native Anthropic endpoint becomes available",
+  "source_text": "现在没有原生 Anthropic 订阅，做不了这个，能支撑 claude code + minimax 就行了。",
+  "created_at": "2026-09-18T20:42:48+08:00",
+  "active": true
+}
+```
+
+`source_text` **必须**保留架构师原话中文(AGENTS.md §Language: "normalisation 正是后争议点",
+架构师的话不能被我规范化)。
+
+**`research/ENVIRONMENT.md::limitations` 不动**
+
+ENV-LIM-004 原文保留作为 receipt:它记录的"当时认为 re-run under native Anthropic 是一条
+可行路径"是真实的决策时点。`commands/env.py:201-211` 是 append-only + duplicate-id 拒绝,
+**协议不允许 rewrite**。本轮用 `history[]` 叙事 + ARCHITECT signal 政策双轨承载修正,
+不是改写原条。
+
+### 动手前要知道(本轮新增)
+
+44. **ENVIRONMENT.md `limitations[]` 结构上不可改**。`env declare limitations` 是
+    append-only + duplicate-id 拒绝(`tools/researchlog/commands/env.py:201-211`),
+    完整 verb 集(`commands/env.py:74-111`)只有 `show/declare/record/rebaseline/query`
+    五种。要改写旧条目,**只能**用 `env record` 落叙事 + ARCHITECT signal 落政策,
+    **不能**手 edit JSON block(AGENTS.md §State 显式禁止)。
+45. **V1-D9 acceptance 闭环路径现在是 0 条**(minimax 是常态,无原生端点):
+    - 不动 first_line heuristic(acceptance contract 改动归 Architect)
+    - 不跑 V1-D9(ENV_BLOCKED 已记)
+    - 等待 Architect 触发新路径(改 prompt-shape / 加新 acceptance drill / 切端点)
+46. **ARCHITECT signal 的 `expiry` 字段是合约要求,不能省**。`reconcile` 在 resume
+    时检查 ISO 8601 时间戳;free-text expiry("until native Anthropic endpoint becomes
+    available")是架构师 keep 的承诺,工具不主动评估,但字段本身必须存在。
+
+### 下一步
+
+- **仍未动**:**P4**(`CAPABILITY_MAP_SHAPE_PROPOSAL.md` Architect 未回)+ **P5 触发** +
+  Block 3 / S2(Gate-3 文档 + `--gh-status` flag)+ Block 4 / 5 / 6。
+- **新增的"架构师决策点"**:M6 验收形态需要 Architect 触发 —— 是改 heuristic(改
+  acceptance contract)、改 V1-D9 prompt shape(改 acceptance 输入)、还是承认
+  M6 不验收?这是 Architect 决定,等回。
+
+---
+
 ## 2026-09-18 — M6 拆分:ENV-LIM-004 入 ENVIRONMENT.md,pi 端加 --provider minimax
 
 承接上一条(commit `c17fc11`,V1-D9 claude 端 argv 修复)。架构师手跑 `--clients both`
