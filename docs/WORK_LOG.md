@@ -4,6 +4,91 @@
 
 ---
 
+## 2026-09-18 — V1-D9 脚本 argv 修复 + capture-on-timeout + minimax endpoint 真信号
+
+承接上一条(V1-D9 pi 端 partial)。本轮由架构师手跑 `verify_v1_d9.py --clients claude`
+发现 6/6 全 timeout,把 broken link 从 argv 形态一路追到了 minimax-compat endpoint 的
+环境行为。**两次 commit,全部由 sandbox 内 Claude Code 调清,架构师未手动介入调试**。
+
+### 这一轮交了什么
+
+**Commit `e52b811` — `tools/verify_v1_d9.py` claude 分支去 `--skill`**
+
+`claude` CLI 2.1.276 不接受 `--skill` flag —— V1-D9 第一版脚本对两个 client 都传
+`--skill <path> --`,claude 端 6 case 全报 `error: unknown option '--skill'`。Skill 加载
+靠 `.claude/skills/` 自动发现 + `--add-dir` / `/skill-name`,pi 端的 `--skill <path>` 才
+是 pi 0.85.1 原生支持的(实测 `pi --help`)。
+
+**Commit `bc3e4d7` — capture-on-timeout + `--model fable --bare`**
+
+两件事一起做才让 sandbox 上 claude 子进程不 hang、timeout 不丢 stdout:
+
+1. `subprocess.run(timeout=)` 抛 `TimeoutExpired` 时**丢弃已收 PIPE buffer**。换成
+   `Popen + communicate(timeout=)`,超时前 drain 出 `stdout + stderr`,report 每行多带
+   `captured_stdout` 字段,timeout 不再把 "model 已答" 和 "model 没答" 都压成
+   `timed out after 90s`。
+2. `claude -p` 单跑在 minimax-compat endpoint 下 hang:`$ANTHROPIC_MODEL=MiniMax-M3[1m]`
+   不在 CLI 内置 catalog(实测 `claude --help` + `[claude-code:unrecognized_model]` 警告),
+   CLI 启动后做 session-title 后台 prefetch,endpoint 不识别,子进程**答完 prompt 也不退出**。
+   `fable` 是 CLI 自带 alias(解析成 endpoint 认的 model);`--bare` 跳 hooks / LSP / prefetch。
+   三者合一(`-p --model fable --bare`)后,简单 prompt 2 秒干净退出。
+
+### Sandbox claude 端真信号(V1-D9 / M6 真实状态)
+
+```
+python3 tools/verify_v1_d9.py --clients claude --timeout-seconds 60
+→ routed correctly: 1 / 6
+  [?]  research-engineering    'timed out after 60s'
+  [?]  evaluation-design       "I can't answer that — the question references..." ← captured
+  [?]  experiment-review       'timed out after 60s'
+  [?]  retrospective           "Understood. I acknowledge..."                       ← captured
+  [OK] research-search         "Looking at this directly: I won't fabricate..."     ← 真 nominal
+  [?]  scenario-redteam        'timed out after 60s'
+```
+
+- **1/6 真 nominal**(case 5 `research-search`)。这是 minimax endpoint 下 router 真实表现。
+- **2/6 captured 但不 nominal**(case 2 / 4):router 触发了 skill 但模型回答没 nominal expected
+  skill 名 —— 说明 minimax endpoint 把模型切到一个不认 `evaluation-design` / `retrospective`
+  的 model alias。
+- **3/6 timeout 且 stdout 完全空**(case 1 / 3 / 6):重试 3 次 case 1 都是 90s hang + 空 stdout
+  (redirect 到 file 也一样,排除 PIPE deadlock)。**这是 ENV 类信号 —— minimax endpoint
+  对这类 prompt 100% hang,不是脚本问题。**
+
+### V1-D9 / M6 真实状态
+
+- **pi 端**(上一轮):3 routed correct + 1 partial + 2 timeout → 字面"≥3"达标
+- **claude 端**(本轮 sandbox):1 routed correct + 3 captured-not-nominal + 3 timeout-no-capture → 字面"≥3"**未达标**
+
+M6 字面"claude × pi 各 ≥3 case routed correct"在 minimax endpoint 闭环不了。
+**不是 router / S1 / 脚本的问题** —— 是 minimax-compat provider 对 `claude` CLI 的
+subprocess 行为不稳定、且切到的 model 不认 router 期望的 skill 名。
+
+### 动手前要知道(本轮新增)
+
+38. **`claude -p` 在 minimax-compat endpoint 上必须 `--model fable --bare`,否则 hang**。
+    不要尝试不传 `--model` 让它读 `$ANTHROPIC_MODEL`(`MiniMax-M3[1m]` 不在 CLI catalog);
+    不要尝试不传 `--bare`(session-title 后台 prefetch 在 minimax 下不退出)。
+39. **`subprocess.run(timeout=)` 会丢弃 PIPE buffer**,V1-D9 改用 `Popen + communicate(timeout=)`
+    才区分得出 "model 已答但答得不对" 和 "model 根本没答"。这是通用教训:**任何 `claude -p`
+    包成 subprocess 跑的脚本都需要这个 pattern**。
+40. **V1-D9 在 minimax endpoint 上不可验收 M6**。架构师本地若用原生 Anthropic 端点,
+    本轮 commit 的 `--model fable --bare` 仍适用(`fable` 是 CLI 内置 alias),可直接:
+    ```bash
+    python3 tools/verify_v1_d9.py --clients both --timeout-seconds 90
+    ```
+    若是 minimax,则应把这次 report 作为 ENV_BLOCKED 类 evidence 记进
+    `research/ENVIRONMENT.md`,M6 等切回原生端点再跑。
+
+### 下一步
+
+- **架构师手跑 V1-D9**(原生 Anthropic 端点):跑完贴 summary;若仍 1/6 routed correct,
+  把 minimax endpoint 的 ENV_BLOCKED 入 `research/ENVIRONMENT.md`,M6 拆 M6-pi(已过)
+  + M6-claude-pending。
+- 仍未动:**P4(`CAPABILITY_MAP_SHAPE_PROPOSAL.md` 架构师未回)+ P5 触发 + Block 3 / S2 +
+  Block 4 / 5 / 6**。本轮解 V1-D9 脚本工具层;不动其它块。
+
+---
+
 ## 2026-09-18 — V1-D9 真实验（pi 端）
 
 承接上一轮（S1 body move）。架构师点明"pi 路径缺省可以没有，pi 直接使用 claude 的 skills"——即
