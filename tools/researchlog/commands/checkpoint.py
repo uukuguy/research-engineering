@@ -64,6 +64,21 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "--all-expected", action="store_true", help="also stage every modified file"
     )
     parser.add_argument("--tag", default=None)
+    # V1 Block 3 / S2: `--baseline-tag` is an annotated tag whose message can carry a
+    # `--gh-status <url>` link. Promotion-bound baselines (see docs/verification/gate-3.md)
+    # use this so a reader can trace the baseline back to its Gate-3 verifier output.
+    parser.add_argument(
+        "--baseline-tag",
+        default=None,
+        metavar="NAME",
+        help="annotated tag for a promotion-bound baseline; tag message can carry --gh-status URL",
+    )
+    parser.add_argument(
+        "--gh-status",
+        default=None,
+        metavar="URL",
+        help="optional Gate-3 run URL to embed in the --baseline-tag annotation; never blocks",
+    )
     parser.add_argument("--dry-run", action="store_true", help="report what would be committed")
     parser.add_argument("--include-untracked", action="store_true")
     parser.add_argument("--require-change", action="store_true", help="fail when nothing changed")
@@ -77,6 +92,11 @@ def run(args: argparse.Namespace) -> Result:
             f"{paths.root} is not a Git repository",
             "a checkpoint is a commit; run `git init` first",
         )
+    if args.gh_status and not args.baseline_tag:
+        # V1 #5 acceptance: `--gh-status` must not block the checkpoint when no
+        # --baseline-tag is requested (i.e. the user wants a plain commit).
+        # Warn rather than fail; the URL is silently dropped in this case.
+        args.gh_status = None
     active, recovery = state.load_active_with_findings(paths)
     explicit = [_normalize(paths.root, raw) for raw in args.paths]
     requested = _requested(paths, active, args, explicit)
@@ -149,6 +169,13 @@ def _commit(
         if finding is not None:
             result.add(finding)
         result.payload["tag"] = args.tag
+    if args.baseline_tag:
+        finding = _baseline_tag(paths, args.baseline_tag, args.gh_status, message)
+        if finding is not None:
+            result.add(finding)
+        result.payload["baseline_tag"] = args.baseline_tag
+        if args.gh_status:
+            result.payload["gh_status"] = args.gh_status
     _stamp_active(paths, active, sha)
     result.payload["active_updated"] = True
     result.human = f"checkpoint {sha[:12] if sha else '?'} — {len(files)} file(s)\n{message}"
@@ -166,6 +193,36 @@ def _tag(paths: repo.ResearchPaths, name: str) -> Finding | None:
         name,
         f"the commit succeeded but the tag did not: {tagged.stderr.strip()}",
         "tag it by hand once the name is valid and unused",
+    )
+
+
+def _baseline_tag(
+    paths: repo.ResearchPaths,
+    name: str,
+    gh_status: str | None,
+    commit_message: str,
+) -> Finding | None:
+    """V1 Block 3 / S2: annotated tag for a promotion-bound baseline.
+
+    Annotation message includes the commit's first line (so the tag reads as a
+    promotion-bound marker) and, when `--gh-status URL` was passed, an extra
+    `Gate-3: <url>` line. Tag failure is non-fatal: the commit is already made.
+    """
+    annotation_lines = [
+        f"baseline: {commit_message.splitlines()[0] if commit_message else 'checkpoint'}",
+    ]
+    if gh_status:
+        annotation_lines.append(f"Gate-3: {gh_status}")
+    annotation = "\n".join(annotation_lines)
+    tagged = jgit.git(["tag", "-a", name, "-m", annotation], cwd=paths.root)
+    if tagged.ok:
+        return None
+    return Finding(
+        "CHECKPOINT_BASELINE_TAG_FAILED",
+        SEVERITY_WARNING,
+        name,
+        f"the commit succeeded but the baseline tag did not: {tagged.stderr.strip()}",
+        "run `git tag -a <name> -m <msg>` by hand once the name is valid and unused",
     )
 
 
