@@ -141,18 +141,25 @@ def find_skills(root: Path) -> dict[str, Path]:
     return found
 
 
-def invoke_client(
+def invoke_client_capture(
     client: str,
     skill_path: Path,
     prompt: str,
     *,
     timeout: int,
-) -> tuple[int, str]:
-    """Drive one client on one case. Return (exit_code, first_line_of_reply).
+) -> tuple[int, str, str]:
+    """Same as `invoke_client` but returns `(exit_code, first_line, captured_stdout)`.
 
-    `first_line_of_reply` is the heuristic the script uses to grade
-    routing: a passing case must name the expected skill in its first
-    line. Substantive grading is out of scope here.
+    Uses `Popen` + `communicate(timeout=)` so we get *whatever the
+    child produced before the timeout fired*. `subprocess.run(timeout=)`
+    discards the partial buffer on `TimeoutExpired`, which is exactly
+    why the first version of this script reported `timed out after 90s`
+    for rows where the model did answer — the answer was sitting in
+    the PIPE buffer and the script threw it away.
+
+    Returns `(exit_code, first_line, captured_stdout)`. On timeout,
+    `exit_code` is -1 and `first_line` / `captured_stdout` carry
+    whatever the child emitted before the script killed it.
     """
     if client == "pi":
         argv = [
@@ -164,34 +171,41 @@ def invoke_client(
             prompt,
         ]
     elif client == "claude":
-        # Claude Code CLI (2.1.x) has no `--skill` flag — skills are
-        # auto-discovered from `.claude/skills/<name>/SKILL.md` (and
-        # `~/.claude/skills/`). This repo's skills are installed via
-        # `tools/install_research_skills.py --self`, so a bare
-        # `claude -p "<prompt>"` already routes through every V1 expert
-        # skill the same way `pi --skill` does. The V0-D9 acceptance
-        # template uses this same path (V0 #22 ran clean on it).
         if shutil.which("claude") is None:
-            return 127, "claude CLI not on PATH; client matrix run is partial"
+            return 127, "claude CLI not on PATH; client matrix run is partial", ""
         argv = [
             "claude",
             "-p",
+            "--model",
+            "fable",
+            "--bare",
             prompt,
         ]
     else:
         raise ValueError(f"unknown client {client!r}")
 
-    completed = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    first_line = (completed.stdout or completed.stderr).splitlines()[0] if (
-        completed.stdout or completed.stderr
-    ) else ""
-    return completed.returncode, first_line
+    try:
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        return -1, f"client binary missing: {exc}", ""
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+        captured = (stdout or "") + (stderr or "")
+        first_line = captured.splitlines()[0] if captured else f"timed out after {timeout}s"
+        return -1, first_line, captured
+
+    captured = (stdout or "") + (stderr or "")
+    first_line = captured.splitlines()[0] if captured else ""
+    return proc.returncode, first_line, captured
 
 
 def grade(case: tuple[str, str, str], first_line: str) -> dict[str, object]:
@@ -257,25 +271,12 @@ def main(argv: list[str] | None = None) -> int:
             for case in CASES:
                 skill_path = skills[case[1]].parent
                 try:
-                    exit_code, first_line = invoke_client(
+                    exit_code, first_line, captured = invoke_client_capture(
                         client,
                         skill_path,
                         case[2],
                         timeout=args.timeout_seconds,
                     )
-                except subprocess.TimeoutExpired:
-                    rows.append(
-                        {
-                            "client": client,
-                            "skill_root": str(skill_root),
-                            "expected_skill": case[1],
-                            "skill_md": str(skill_path / "SKILL.md"),
-                            "routed_correctly": False,
-                            "first_line": f"timed out after {args.timeout_seconds}s",
-                            "exit_code": -1,
-                        }
-                    )
-                    continue
                 except FileNotFoundError as exc:
                     rows.append(
                         {
@@ -296,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
                         "skill_root": str(skill_root),
                         "skill_md": str(skill_path / "SKILL.md"),
                         "exit_code": exit_code,
+                        "captured_stdout": captured,
                     }
                 )
                 rows.append(row)
