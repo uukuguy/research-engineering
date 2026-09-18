@@ -8,6 +8,13 @@ The prose below is generated from the `research:findings` block by
 `researchlog findings render`. Do not edit that block by hand, and do not edit the
 prose expecting it to survive — the block wins.
 
+<!-- researchlog:findings:begin -->
+
+## Findings
+
+No durable beliefs recorded yet.
+
+<!-- researchlog:findings:end -->
 ```json research:findings
 {
   "schema_version": "1.0",

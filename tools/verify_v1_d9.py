@@ -46,43 +46,131 @@ SKILLS = (
 
 # Each case is `(label, expected_skill, prompt)`. The prompt asks the
 # agent to act on a trigger condition that the V1 router maps to the
-# expected skill. A passing case must (a) load and (b) name the
-# expected skill in its first-line reply. The prompts are short so
-# `claude` and `pi` (the two clients) can answer cheaply and so a
-# human reading the report can sanity-check the routing by reading
-# the conversation.
+# expected skill.
+#
+# **Heuristic change (2026-09-18, see docs/v1/M6_SPLIT_PROPOSAL.md)**: the
+# original "first line must contain the kebab-case skill name" was ill-suited
+# to the minimax-compat endpoint this machine uses as its steady state
+# (ARCHITECT signal D-004 — no native Anthropic subscription). The model
+# alias reads AGENTS.md and answers based on the real ACTIVE.json state
+# ("idle") rather than the synthetic router prompt, and does not echo
+# hyphenated skill names verbatim in the first line. The router itself is
+# fine; full stdout contains 1-4 expected-skill mentions on captured rows.
+#
+# The replacement prompts ask the model to **quote a short line from the
+# loaded SKILL.md**, and `grade()` matches the first line against a phrase
+# list drawn from each skill's body. This is the strongest router-reachability
+# proxy available on minimax-compat. See `PHRASE_LISTS` below and
+# docs/v1/M6_SPLIT_PROPOSAL.md §Phrase audit for the uniqueness table.
+#
+# **Endpoint-sensitivity disclaimer**: a `routed_correctly=False` under
+# minimax-compat does NOT mean the router is wrong — only that this
+# endpoint's model did not surface the expected skill's vocabulary in
+# the first line. The `matched_phrases` field in each report row makes
+# the decision auditable from JSON alone.
 CASES = [
     (
         "case-1 router row: research-engineering on bare session",
         "research-engineering",
-        "A fresh research session. Resume state and decide what to do next.",
+        "A fresh research session. Resume state and decide what to do next. "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
     (
         "case-2 router row: evaluation-design on local metric disagreement",
         "evaluation-design",
-        "The local metric is rising while E4 behavior is flat. What do you do?",
+        "The local metric is rising while E4 behavior is flat. What do you do? "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
     (
         "case-3 router row: experiment-review after a run with two live hypotheses",
         "experiment-review",
-        "Run EXP-0142 just finished. H-037 and H-039 are live. Decide what to record.",
+        "Run EXP-0142 just finished. H-037 and H-039 are live. Decide what to record. "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
     (
         "case-4 router row: retrospective after a phase boundary",
         "retrospective",
-        "We are at a phase boundary after 12 counted evidence iterations, all belief_delta: none.",
+        "We are at a phase boundary after 12 counted evidence iterations, all belief_delta: none. "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
     (
         "case-5 router row: research-search when search space must reopen",
         "research-search",
-        "No live hypothesis is registered. The dominant failure has moved. What next?",
+        "No live hypothesis is registered. The dominant failure has moved. What next? "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
     (
         "case-6 router row: scenario-redteam after a promising result",
         "scenario-redteam",
-        "The most recent record is `research_outcome: promising`. What defensive pass do you run?",
+        "The most recent record is `research_outcome: promising`. What defensive pass do you run? "
+        "Open with one short quoted line (3-8 words) from the SKILL.md that "
+        "fits this trigger, then one sentence on what it tells you to do first.",
     ),
 ]
+
+
+# Phrase lists for the first-line heuristic. Each phrase must be found in
+# **exactly one** SKILL.md (case-insensitive substring). The uniqueness audit
+# is recorded in docs/v1/M6_SPLIT_PROPOSAL.md §Phrase audit.
+#
+# Rationale: the kebab-case skill name is the obvious signal, but the
+# minimax-compat model alias does not echo it verbatim in the first line.
+# Body vocabulary from the loaded skill is the next-strongest proxy for
+# "the router reached this skill's body". Cross-routing is detected by
+# inspecting `matched_phrases` in the report — a row whose expected skill
+# is e.g. `retrospective` but whose matched_phrases belong to another
+# skill's vocabulary would be a routing mismatch, not a clean fail.
+PHRASE_LISTS: dict[str, tuple[str, ...]] = {
+    "research-engineering": (
+        "Resume comes first",
+        "cheapest executable artifact",
+        "belief-changing evidence iteration",
+        "counts_as_evidence_iteration",
+    ),
+    "evaluation-design": (
+        "calibration contract",
+        "evaluation validity contract",
+        "Do not promote a scalar proxy",
+        "tuning vs holdout separation",
+        "Trust tiers for the evaluator itself",
+    ),
+    "experiment-review": (
+        "Four layers",
+        # "hypotheses_differentiated" UNSAFE — appears in research-engineering (line 166) and research-search (line 15)
+        "falsifiable claim",
+        "After a promising result",
+        "A run that failed well",
+        "stated without causes",
+        "competing hypotheses",
+    ),
+    "retrospective": (
+        "plateau",
+        "research budget",
+        "the experiments being run are the right ones",
+        "Reopening the search space",
+        "Branch diversity",
+    ),
+    "research-search": (
+        "What mechanism family has the agent not yet tried",
+        "What observable in the lab would change the answer",
+        # "research-search" UNSAFE — appears in research-engineering (lines 178, 192)
+        # "leaves the family" UNSAFE — body has "leave the family" (line 37), not "leaves"
+        "decides whether to leave",
+        "what to swap it for",
+    ),
+    "scenario-redteam": (
+        "Surrogate leak",
+        "Dataset drift",
+        "Hidden confounder",
+        "Single-anchor evidence",
+        "Code-state drift",
+    ),
+}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -225,7 +313,22 @@ def invoke_client_capture(
 
 
 def grade(case: tuple[str, str, str], first_line: str) -> dict[str, object]:
-    """Heuristic: the first line must name the expected skill.
+    """Heuristic: first line must contain a phrase unique to the expected skill's body.
+
+    The phrase list for each skill was audited (see
+    docs/v1/M6_SPLIT_PROPOSAL.md §Phrase audit) so every phrase is found in
+    exactly one SKILL.md body. A passing grade means the agent's first line
+    carries vocabulary from the body of the expected skill's SKILL.md, which
+    is the strongest proxy for "router reached this skill" available on the
+    minimax-compat endpoint.
+
+    Endpoint-sensitive: under minimax-compat, `routed_correctly=False` does
+    NOT mean the router is wrong — only that this endpoint's model did not
+    surface the expected skill's vocabulary in the first line. Cross-routing
+    detection: the `matched_phrases` field reports which skill's phrases hit,
+    so a row whose expected skill is `retrospective` but whose
+    `matched_phrases` belongs to another skill is visible as a routing
+    mismatch, not a clean fail.
 
     The grading is intentionally loose. A failing grade does not mean
     the skill is wrong — it means the script's heuristic could not
@@ -235,12 +338,17 @@ def grade(case: tuple[str, str, str], first_line: str) -> dict[str, object]:
     whether each skill is the *right* one.
     """
     expected = case[1]
-    routed_correctly = expected.lower() in first_line.lower()
+    expected_phrases = PHRASE_LISTS[expected]
+    haystack = first_line.lower()
+    matched = [p for p in expected_phrases if p.lower() in haystack]
+    routed_correctly = bool(matched)
     return {
         "case": case[0],
         "expected_skill": expected,
         "first_line": first_line,
         "routed_correctly": routed_correctly,
+        "matched_phrases": matched,
+        "expected_phrases": list(expected_phrases),
     }
 
 

@@ -13,7 +13,8 @@
     "V1-D9 drill on minimax-compat (sandbox, commit d77b7b2): 3/6 routed correctly",
     "V1-D9 drill: 3/6 timeout-empty under minimax-compat",
     "V1-D9 drill: 0/6 partial-not-nominal",
-    "Endpoint policy: minimax-compat is steady-state (ARCHITECT signal D-004)"
+    "Endpoint policy: minimax-compat is steady-state (ARCHITECT signal D-004)",
+    "scenario-redteam 2026-09-18: surrogate leak — N/A (subject is the environment itself, not a model claim against a harness); dataset drift — N/A (no dataset anchor; the relevant anchors are ENV-LIM-004 + EV-479f, both recorded within the same fingerprint sha256:1733fb3f…2689c); hidden confounder — plausible: minimax-compat's CLI prefetch + model-routing jitter may produce timeout-empty independent of router correctness, so the 3/6 routed figure is an upper bound on this endpoint, not a clean signal; single-anchor evidence — yes, this is one V1-D9 drill run; the 3/6 figure is not a chain and must not be promoted on its own; code-state drift — base_commit d77b7b2==HEAD of record, no intervening commits since (compare with EV-479f base 7db8d61, but those two commits are env declarations, not tool changes, and tool surface is unchanged since 04d9445); architect signal — D-004 (DECISION, active) is consumed and consistent with this record; M6-claude-pending is non-actionable under D-004 and is recorded as such."
   ],
   "measurements": {
     "routed": 3,
