@@ -21,6 +21,15 @@ is. Accounting that does not change what the loop can do is not worth the wall-c
 This file is the always-loaded contract. The detailed protocol lives in the skills and
 is loaded on demand — do not expect to find it here.
 
+**Current state (2026-09-19).** V1 tool-layer is closed: drill suite 8/9 complete (V1-D9
+stays `ENV_BLOCKED` under the minimax-compat endpoint until a native Anthropic
+subscription is available). Aggregate **45 PASS + 0 deferred + 4 ENV_BLOCKED** across
+49 criteria; 304 tests passing in `tools/researchlog/tests/`. The repo's own
+`research/ACTIVE.json` is **idle** — V1 closure is a delivered, not running, artifact.
+Next live research activity is gated on an Architect decision: extend telemetry,
+switch endpoint, or pick a hypothesis. See `docs/WORK_LOG.md` and
+`docs/V1_ACCEPTANCE_GUIDE.md` for the measured state.
+
 ## Working mode
 
 Optimize **validated technical progress per unit of wall-clock, compute, tokens, and
@@ -249,7 +258,34 @@ writes them.
 
 ## Skills
 
+Three **entry skills** + five V1 **expert skills** that the main loop dispatches to:
+
+**Entry skills** — always reachable from the main router:
+
 - `research-bootstrap` — zero-state initialization. Only when canonical state is
   absent, unrecoverable, or the architect asks for a clean re-initialization.
 - `research-engineering` — the main loop; holds the router table for `references/`.
 - `research-status` — read-mostly Chinese Project Working Model for the architect.
+
+**V1 expert skills** — loaded by the main loop when their trigger fires (a router
+table inside `research-engineering` decides; see the V1_IMPLEMENTATION_PLAN §10):
+
+- `evaluation-design` — when no evaluator exists for the hypothesis, or a local metric
+  rises while E4/E5 or architect observation falls. Owns the question of whether the
+  existing measurement surface is honest and how to write a calibration contract that
+  survives the next iteration.
+- `experiment-review` — when a run just finished and ≥ 2 hypotheses are live. Walks
+  what the run actually said against the registered hypotheses and decides which
+  one(s) it differentiated.
+- `research-search` — when the search space must be reopened: no live hypothesis exists,
+  the dominant failure has moved, or a phase boundary shows the current mechanism
+  family is exhausted.
+- `retrospective` — when the last 5 counted iterations all carry `belief_delta: none`,
+  or at a phase boundary. The slow loop: asks whether the experiments being run are
+  the right ones at all.
+- `scenario-redteam` — after a promising or informative_failure result, or before
+  promoting a candidate claim to Integration Mode. Walks the claim through the
+  failure scenarios a careful reviewer would raise.
+
+The expert skills are **conditional** — never load all five by default. The main loop's
+router table decides based on observation, not on the agent's preference.
