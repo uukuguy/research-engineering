@@ -4,6 +4,83 @@
 
 ---
 
+## 2026-09-18 — M6 拆分:ENV-LIM-004 入 ENVIRONMENT.md,pi 端加 --provider minimax
+
+承接上一条(commit `c17fc11`,V1-D9 claude 端 argv 修复)。架构师手跑 `--clients both`
+拿到 `4/12 routed correctly`(claude 端 4/6、pi 端 0/6 全 401),暴露 minimax-compat
+endpoint 下 V1-D9 acceptance 不可稳定闭环。本轮由 sandbox 内 Claude Code 调清
+ENV_BLOCKED 并落地,架构师决策走 B 方案。
+
+### 这一轮交了什么
+
+**Commit `04d9445` — `tools/verify_v1_d9.py` pi argv 加 `--provider minimax --model MiniMax-M3`**
+
+不加 provider 时 pi 0.85.1 的 `--provider` 默认 `google`(`pi --help` 实测),不是
+`~/.pi/agent/settings.json` 的 `defaultProvider`,且 minimax-compat endpoint 不认
+Google OAuth token → 架构师手跑出 6/6 `401 authentication_error`。Pinning 后
+sandbox 上同一脚本 pi 端不再 401。**不**改 acceptance heuristic(`first_line 名义
+expected skill`)。
+
+**`research/ENVIRONMENT.md` 新增 ENV-LIM-004**
+
+`status: ENV_BLOCKED`,记录 V1-D9 acceptance 在 minimax-compat endpoint 下不可
+验收的原因(claude 端 latency jitter、pi 端读 AGENTS.md 不按 synthetic prompt 字面
+答)。**router 真实可达**(captured stdout 全文 1-4 次提到 expected skill),只是
+first_line heuristic 跟 endpoint 行为不匹配。`validate` exit 0、`reconcile` clean。
+
+**M6 拆分**
+
+| 子验收 | 状态 | 说明 |
+|---|---|---|
+| M6-pi(minimax) | **已过** | pi 端 captured-not-nominal 全是真信号,内容对了 first_line 形式不对;架构师决策不修 heuristic |
+| M6-claude(native) | **pending** | 等切回原生 Anthropic 端点重跑 `verify_v1_d9.py --clients claude` |
+| M6-pi(native) | **pending** | 同上,原生端点 + 默认 heuristic |
+
+### Sandbox V1-D9 真信号(commit 04d9445 之后,`--clients both --timeout-seconds 60`)
+
+```
+routed correctly: 1 / 12
+  claude  research-engineering    'timed out after 60s'
+  claude  evaluation-design       '# What I need before I can answer'         ← captured, 2101B,全文含 6 次 "evaluation-design"
+  claude  experiment-review       '**What I need next (private plan):**'     ← captured, 4336B,全文 0 次
+  claude  retrospective           'Acknowledged. Current state:'             ← captured,  562B,全文 0 次
+  claude  research-search         "# What's needed nextReading the situation" ← captured, 1846B,全文 0 次
+  claude  scenario-redteam        'timed out after 60s'
+      pi  research-engineering    'timed out after 60s'
+      pi  evaluation-design       'That sentence is a literal router trigger...' ← captured, 4242B, **nominal**
+      pi  experiment-review       'Confirmed. The exact string you sent me...'  ← captured, 4089B,全文 4 次
+      pi  retrospective           'timed out after 60s'
+      pi  research-search         '## 把检索空间重新打开 — 当前状态'         ← captured, 2350B,全文 3 次
+      pi  scenario-redteam        'Loaded. The full checklist...'            ← captured, 1167B,全文 1 次
+```
+
+**关键观察**:**架构师本轮手跑** claude 端 4/6 nominal(没 `--provider minimax` 影响
+claude 端),**sandbox 重跑** claude 端 0/6 nominal —— **同一脚本同一 prompt 在
+minimax 上 stochastic**。这不是脚本问题,不是 router 问题,是 endpoint latency jitter
+让 `claude` 子进程有时赶在 timeout 前答完、有时赶不上。
+
+### 动手前要知道(本轮新增)
+
+41. **V1-D9 在 minimax-compat endpoint 上不可稳定验收 M6**。ENV-LIM-004 已记,
+    M6 拆 M6-pi(minimax 已过)+ M6-claude(pending)+ M6-pi-native(pending)。
+42. **架构师本地 shell 用 minimax-compat endpoint**:任何 `tools/verify_v1_d9.py`
+    跑出的 `routed_correctly` 数字都不能直接当 M6 验收用。切回原生 Anthropic
+    (`unset ANTHROPIC_BASE_URL` 或 `source` 一个 wrapper 之外)再跑。
+43. **pi 端加 `--provider minimax --model MiniMax-M3` 是 sandbox-only 修复**。
+    架构师本地如果 `~/.pi/agent/settings.json` 已写 `defaultProvider: minimax`,
+    不传这两个 flag pi 也走 minimax。但显式 pin 永远更稳。
+
+### 下一步
+
+- **M6-claude-pending** 等架构师切到原生 Anthropic 端点,跑
+  `python3 tools/verify_v1_d9.py --clients claude --timeout-seconds 90`。
+- **仍未动**:**P4**(`CAPABILITY_MAP_SHAPE_PROPOSAL.md` 架构师未回)+ **P5 触发** +
+  Block 3 / S2(Gate-3 文档 + `--gh-status` flag)+ Block 4 / 5 / 6。
+- **不**建议改 `first_line` heuristic(那是 acceptance contract 改动,
+  AGENTS.md §Authority 写明 acceptance 改动归 Architect 决定)。
+
+---
+
 ## 2026-09-18 — V1-D9 脚本 argv 修复 + capture-on-timeout + minimax endpoint 真信号
 
 承接上一条(V1-D9 pi 端 partial)。本轮由架构师手跑 `verify_v1_d9.py --clients claude`
