@@ -45,7 +45,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | **#1** | Research Capability Map 真实可写、real entries ≥3 | V1-D7 | ✅ V1-D7 #2 (3 entries seeded) |
 | **#2** | 高复用 harness 投资判断:reuse_counter 字段存在 + ≥3 | V1-D7 | ✅ V1-D7 #3 (3 entries with reuse_counter) |
 | **#3** | productivity telemetry 全表可查 (§21 KPI) | V1-D6 | ⏳ V1-D6 3/4 |
-| **#4** | `STATUS.md` milestone cache 可写 + stale-detection 自动告警 | V1-D4 | ⏳ V1-D4 4/5 (synthesize 落地 §14;stale-detection 待 live EV) |
+| **#4** | `STATUS.md` milestone cache 可写 + stale-detection 自动告警 | V1-D4 | ✅ V1-D4 5/5 (synthesize 落地 §14;stale-detection PASS via `ReconcileStaleStatusTests`) |
 | **#5** | GitHub remote 可选集成 (`--gh-status` 不报错) | V1-D9 (工具层) | ✅ checkpoint --gh-status flag landed |
 | **#6** | manual Gate-3 verifier 文档完整,可走通一个完整流程 | V1-D9 (文档层) | ✅ docs/verification/gate-3.md landed |
 | **#7** | worktree single-writer enforcement | V1-D5 | ✅ V1-D5 5/5 (this commit) |
@@ -70,7 +70,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 |---|---|---|---|
 | M3 | 三件套端到端连通 | ⏳ 9/18 | V1-D7 6/6 + V1-D1 6/7 + V1-D2 1/6 |
 | M4 | bounded block | ⏳ 2/7 | V1-D3 第 #4 + #7 工具层 PASS |
-| M5 | snapshot + synthesis | ⏳ 4/5 | V1-D4 #1+#2+#4+#5 工具层 PASS;#3 stale-detection 仍需 live EV-after-STATUS.md;synthesize --block (§14) 落地,P1-8 触发 SYNTHESIS_BELIEF_DELTA_MISSING |
+| M5 | snapshot + synthesis | ✅ 5/5 | V1-D4 全过;stale-detection 已由 `ReconcileStaleStatusTests.test_reconcile_flags_when_ledger_advances_past_cache` 覆盖(P1 era 测试,本 commit 修文档漂移) |
 | M6-pi | pi 端 ≥3 routed | ❌ 1/6 | 详见 `docs/V1_CASES.md` §V1-D9 + `EV-20260918T133714Z-7b6f` |
 | M6-claude-pending | claude 端 ≥3 routed | ⛔ ENV_BLOCKED | D-004 + ENV-LIM-004 |
 | M7-pi | V1 两客户端矩阵 (pi 端) | ❌ | 同 M6-pi |
@@ -78,7 +78,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #1 | capability_map shape + ≥3 entries | ✅ | commit `30d0b89` + V1-D7 #1+#2 |
 | #2 | reuse_counter 字段存在 | ✅ | schema + 3 entries |
 | #3 | productivity telemetry | ⏳ 3/4 | V1-D6 |
-| #4 | STATUS.md cache + stale | ⏳ 4/5 | V1-D4 #1+#2+#4+#5 工具层 PASS;#3 stale-detection 仍需 live EV-after-STATUS.md |
+| #4 | STATUS.md cache + stale | ✅ 5/5 | V1-D4 #3 stale-detection 由 ReconcileStaleStatusTests 覆盖 |
 | #5 | `--gh-status` 不报错 | ✅ | checkpoint 命令行 + flag |
 | #6 | Gate-3 verifier 文档 | ✅ | docs/verification/gate-3.md |
 | #7 | worktree single-writer | ✅ 5/5 | V1-D5 (#1-#4 fixture-level PASS this commit) |
@@ -112,13 +112,13 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 13 deferred criteria across V1-D2/D3/D4/D6 are tool-layer PASS structurally;
+The 12 deferred criteria across V1-D2/D3/D6 are tool-layer PASS structurally;
 they need a live autonomous block / E2-E3 harness run / multi-session data to fully
-exercise. This commit closed V1-D5 #1-#4 (fixture-level test for P9 single-writer
-enforcement: dirty-only-main-worktree, two-dirty-worktrees, session rotation,
-detached-worktree carve-out), bringing the aggregate to **32 PASS + 13 deferred +
+exercise. This commit closed V1-D4 #3 (doc-only — `ReconcileStaleStatusTests.test_reconcile_flags_when_ledger_advances_past_cache`
+has exercised the live-EV-after-STATUS.md path since P1 era; only the V1-D4 drill
+row was labelled DEFERRED), bringing the aggregate to **33 PASS + 12 deferred +
 4 ENV_BLOCKED** (49 criteria: 295 tests across `tools/researchlog/tests/test_commands.py`
-all green).
+all green — no test count change).
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。

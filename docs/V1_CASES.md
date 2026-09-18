@@ -153,18 +153,22 @@ five need a live autonomous block; V1 has not yet run one end-to-end
 | 4 | `synthesize --block` 出 1-2 页 | `python3 tools/researchlog synthesize --block` | exit 0; output is 1-2 pages |
 | 5 | reconcile 一致 | `python3 tools/researchlog reconcile --json` | `payload.clean == true` |
 
-**Run record (2026-09-18, commit TBD — synthesize verb landing)**:
+**Run record (2026-09-19, commit TBD — V1-D4 #3 status-table drift close)**:
 
 ```
 #1 PASS  (status --write exits 0; STATUS.md lands at repo root)
 #2 PASS  (head -1 == "<!-- DERIVED SNAPSHOT — NOT SOURCE OF TRUTH -->")
-#3 DEFER (still needs a live EV-after-STATUS.md to trigger reconcile's STATUS_STALE)
-#4 PASS  (synthesize --block BL-N --write BL-N.md produces 30-60 line markdown body,
-         all six sections §0..§6 present; test_synthesize_writes_to_research_dot_derived)
+#3 PASS  (ReconcileStaleStatusTests.test_reconcile_flags_when_ledger_advances_past_cache:
+         status --write caches last_evidence_modified = N; record lands a new EV file
+         with mtime > N; reconcile emits STATUS_STALE. The test has existed since P1
+         era but the V1-D4 drill row still said DEFERRED — a documentation drift,
+         not a tool defect.)
+#4 PASS  (SynthesizeCommandTests.test_synthesize_writes_to_research_dot_derived)
 #5 PASS  (reconcile --json: clean=true after synthesize calls)
 ```
 
-**Drill status: 4/5 PASS, 1 deferred (#3 needs a live EV-after-STATUS.md to exercise `STATUS_STALE`; tool-level `reconcile._stale_status` is already wired per `commands/reconcile.py:482` and tested by `ReconcileStaleStatusTests`)**
+**Drill status: 5/5 PASS** (`reconcile._stale_status` was already wired per `commands/reconcile.py:482`
+and tested by `ReconcileStaleStatusTests` since P1; only the drill row's "DEFERRED" label was stale).
 
 synthesize landed this commit; V1 §14 closed; P1-8 invariant surfaced as `SYNTHESIS_BELIEF_DELTA_MISSING` warning.
 
@@ -332,15 +336,15 @@ SKILL.md frontmatter so the router self-tests).**
 | V1-D1 | 6 | 1 | 0 | 7 |
 | V1-D2 | 1 | 5 | 0 | 6 |
 | V1-D3 | 2 | 5 | 0 | 7 |
-| V1-D4 | 4 | 1 | 0 | 5 |
+| V1-D4 | 5 | 0 | 0 | 5 |
 | V1-D5 | 5 | 0 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
 | V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **32** | **13** | **4** | **49** |
+| **Total** | **33** | **12** | **4** | **49** |
 
-The 13 deferred criteria are tool-level PASS structurally but require a
+The 12 deferred criteria are tool-level PASS structurally but require a
 live autonomous block / E2-E3 harness run / cross-session data to fully
 exercise. None of them is blocked on a tool defect; all are blocked on
 missing research activity, which is the right shape for a protocol at

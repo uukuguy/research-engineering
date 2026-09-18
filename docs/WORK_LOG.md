@@ -4,6 +4,67 @@
 
 ---
 
+## 2026-09-19 — V1-D4 #3 doc-drift close:STATUS_STALE 测试在 P1 era 就已存在
+
+承接上一条(commit `70d546a`,V1-D5 全过)。架构师"继续"走 V1-D4 #3。
+本轮**不写代码**,只修文档漂移。
+
+### 这一轮交了什么
+
+`ReconcileStaleStatusTests.test_reconcile_flags_when_ledger_advances_past_cache`
+(`tests/test_commands.py:1108`)在 P1 era 就已存在,跑通了完整的 stale-detection
+路径:`status --write` 落 STATUS.md with `last_evidence_modified: N` →
+`record` 落新 EV 文件 with mtime > N → `reconcile` 报 STATUS_STALE。本轮
+实测该测试仍 5/5 PASS(整套 295/295 PASS,**无测试数变化**——只是把文档里
+被错标 DEFERRED 的 V1-D4 #3 翻成 PASS)。
+
+V1-D4 drill row 原文是:
+> `| 3 | stale-detection 触发 | DEFERRED (still needs a live EV-after-STATUS.md)`
+
+但对应测试**已存在**。这是 `re-dev-gotchas.md` "声明了但没人接线" 缺陷模式的
+**反向 variant**:不是 test 缺失,是 V1-D4 drill 的 status label 跟测试存在
+事实脱钩。V0 评审里标过(`re-p1-backlog.md` "写反了比缺失危险")的同类情形。
+
+**全套 295/295 PASS**(无变化),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D4:**4/5 → 5/5 PASS**(drill row 翻成 PASS,
+  `reconcile._stale_status` 实装早已就绪,见 `reconcile.py:482`)。
+- `docs/V1_CASES.md` aggregate:V1-D4 4→5,deferred 13→12;
+  totals: **33 PASS + 12 deferred + 4 ENV_BLOCKED** = 49 criteria。
+- `docs/V1_ACCEPTANCE_GUIDE.md` #4 行:`⏳ 4/5 → ✅ 5/5`;M5 行 `⏳ 4/5 → ✅ 5/5`;
+  aggregate 段同步更新。
+
+### 动手前要知道(本轮新增)
+
+70. **drill row status label 与测试存在性的脱钩是 V0 评审预言的反向 defect**。
+    V0_D4 gotcha 训诫是"声明了但没人接线"(test 缺失);本轮发现的是它的反向
+    variant:"测试在,但 status label 还停在 pre-test 的 DEFERRED"。
+    后果:Architect/Agent 读 V1_CASES.md 看 V1-D4 #3 = DEFERRED,以为还要再写
+    fixture——其实**测试早 PASS**,只是文档漂移。**任何 drill row 的 status
+    label 必须与对应 test class 实际 PASS 状态逐条核过**,不能复用旧 commit
+    里的字符串。
+71. **本轮没新增测试,只修了三个文档的 drill status label**。提交 message 显式
+    标 "doc-only"——commit 历史要让 reviewer 看到"这次没有代码改动",与
+    V0_D4 反向 variant 一起沉淀到 `re-dev-gotchas.md` 候选 list。
+72. **deferred 段从 13 → 12** 没有"接了数据"——只是文档与现实对齐。这条不算
+    "接了但没数据"风险(`re-p1-backlog.md` "接了但没数据"训诫),因为原本的
+    "数据"(测试)一直在,只是文档没说。下一轮 session 读 V1_CASES 看到
+    `deferred = 12` 时要知道:这数字包含了"测试在但 drill 没标 PASS"的隐患,
+    一次性扫描要 grep "DEFERRED" + "DEFER" 字符串确认是否真缺 fixture。
+
+### 下一步
+
+- **仍未跑研究**。deferred 段 12 项仍缺 live 数据:
+  - V1-D2 #1-#5:真实 E2/E3 harness 跑一次
+  - V1-D3 #1+#2+#3+#5+#6:live autonomous block 跨 session
+  - V1-D6 #4:≥2 sessions with completed work
+  - V1-D1 #4:subsumed by #2,无独立 criterion
+- 架构师未触发的决策点同上一轮:A-3 / A-4 / M6-claude-pending。
+
+---
+
 ## 2026-09-19 — V1-D5 #1-#4 fixture-level PASS:P9 single-writer enforcement + 四条 carve-out
 
 承接上一条(commit `3937ecd`,V1-D8 #2 PASS)。架构师"同意"继续。本轮挑 V1-D5
