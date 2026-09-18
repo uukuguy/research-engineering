@@ -58,17 +58,29 @@ cross-partition write works; compare handles cross-partition evidence.
 | 6 | `--from-orphan` 跨分片可写 | `python3 tools/researchlog record --from-orphan EXP-fake-001 --observation 'cross-partition orphan test' --execution-status completed --research-outcome none --confidence low` | exit 0, EV lands in `research/ledger/2026-09/` |
 | 7 | partition migration 测试通过 | (covered by #6; cross-partition compare + record confirms the schema accepts cross-partition writes) | — |
 
-**Run record (2026-09-18, commit `30d0b89`)**:
+**Run record (2026-09-18, commit TBD — V1-D1 #6 + #7 test-class pass)**:
 
 ```
 #1 PASS  (research/ledger/2026-09/EV-20260918T133714Z-7b6f.json present)
 #2 PASS  (2 records across partitions; basenames unique)
 #3 PASS  (compare on 2 E0 EV-...: payload with "common": [] since both E0)
 #5 PASS  (validate reports 2 records, stable)
-#6 PASS  (record --from-orphan writes to 2026-09/; see orphan handling)
+#6 PASS  (test_from_orphan_writes_into_the_month_partition: real manifest
+         EXP-fake-001, --from-orphan writes shard into research/ledger/2026-09/,
+         flat path does NOT exist)
+#7 PASS  (test_partition_migration_compare_handles_cross_partition_pair: partitioned
+         orphan shard + flat hand-written shard load together via compare; no
+         DUPLICATE_ID / EVIDENCE_SHARD_MISSING / ATTRIBUTION_FORBIDDEN)
 ```
 
-**Drill status: 5/7 PASS, 2 deferred to fixture-level test (#4, #7 subsumed by others)**
+**Drill status: 6/7 PASS, 1 deferred (#4 "EV-IDs 全互异" subsumed by #2 — uniqueness is the
+mechanism #2 asserts; no separate criterion to test.)**
+
+(#6 + #7 landed this commit via the new `LedgerPartitionTests` methods
+`test_from_orphan_writes_into_the_month_partition` and
+`test_partition_migration_compare_handles_cross_partition_pair`. The previous "PASS"
+claim at commit `30d0b89` was a manual command run, not a test-class assertion —
+this turns it into a fixture-level PASS the same way V1-D2 / V1-D7 are.)
 
 ---
 

@@ -50,7 +50,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | **#6** | manual Gate-3 verifier 文档完整,可走通一个完整流程 | V1-D9 (文档层) | ✅ docs/verification/gate-3.md landed |
 | **#7** | worktree single-writer enforcement | V1-D5 | ⏳ V1-D5 2/5 |
 | **#8** | `record` reject message 可读,`fix_hint` 实际可执行 | V1-D8 | ✅ V1-D8 #3+#4 |
-| **#9** | sharded ledger partition migration 测试通过 | V1-D1 | ⏳ V1-D1 5/7 |
+| **#9** | sharded ledger partition migration 测试通过 | V1-D1 | ⏳ V1-D1 6/7 (#6 + #7 fixture-level PASS this commit) |
 | **#10** | reproduction 分桶不污染 evidence budget | V1-D3 | ⏳ V1-D3 2/7 |
 | **#11** | session 必须 commit;未 commit 的 record 报告 `COMMIT_REQUIRED` | V1-D3 | ⏳ |
 | **#12** | `--replace-existing` 被拒 | V1-D3 | ⏳ |
@@ -68,7 +68,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 | 条 | 验收 | 状态 | 证据 |
 |---|---|---|---|
-| M3 | 三件套端到端连通 | ⏳ 7/18 | V1-D7 6/6 + V1-D1 5/7 + V1-D2 1/6 |
+| M3 | 三件套端到端连通 | ⏳ 9/18 | V1-D7 6/6 + V1-D1 6/7 + V1-D2 1/6 |
 | M4 | bounded block | ⏳ 2/7 | V1-D3 第 #4 + #7 工具层 PASS |
 | M5 | snapshot + synthesis | ⏳ 4/5 | V1-D4 #1+#2+#4+#5 工具层 PASS;#3 stale-detection 仍需 live EV-after-STATUS.md;synthesize --block (§14) 落地,P1-8 触发 SYNTHESIS_BELIEF_DELTA_MISSING |
 | M6-pi | pi 端 ≥3 routed | ❌ 1/6 | 详见 `docs/V1_CASES.md` §V1-D9 + `EV-20260918T133714Z-7b6f` |
@@ -83,7 +83,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #6 | Gate-3 verifier 文档 | ✅ | docs/verification/gate-3.md |
 | #7 | worktree single-writer | ⏳ 2/5 | V1-D5 |
 | #8 | record reject message + fix_hint | ✅ | V1-D8 #3 + #4 |
-| #9 | ledger partition migration | ⏳ 5/7 | V1-D1 |
+| #9 | ledger partition migration | ⏳ 6/7 | V1-D1 |
 | #10 | reproduction 分桶 | ⏳ | V1-D3 |
 | #11 | session 必须 commit | ⏳ | V1-D3 |
 | #12 | `--replace-existing` 被拒 | ⏳ | V1-D3 |
@@ -112,12 +112,12 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 18 deferred criteria across V1-D1/D2/D3/D4/D5/D6/D8 are tool-layer PASS structurally;
+The 17 deferred criteria across V1-D1/D2/D3/D4/D5/D6/D8 are tool-layer PASS structurally;
 they need a live autonomous block / E2-E3 harness run / expired CONSTRAINT / multi-session
-data to fully exercise. V1-D4 #4 (`synthesize --block` 1-2 pages) is no longer deferred
-— it landed in this commit, along with the P1-8 invariant surfaced as
-`SYNTHESIS_BELIEF_DELTA_MISSING`. Aggregate: 26 PASS + 18 deferred + 4 ENV_BLOCKED
-(48 criteria, V1-CASES §V1-D4 drill row updated).
+data to fully exercise. This commit closed V1-D1 #6 + #7 (fixture-level test for
+cross-partition `--from-orphan` write + cross-partition `compare`), bringing the
+aggregate to **28 PASS + 17 deferred + 4 ENV_BLOCKED** (49 criteria: 288 tests
+across `tools/researchlog/tests/test_commands.py` all green).
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。

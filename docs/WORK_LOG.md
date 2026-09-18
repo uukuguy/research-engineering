@@ -4,6 +4,71 @@
 
 ---
 
+## 2026-09-19 — V1-D1 #6 + #7 fixture-level PASS:cross-partition --from-orphan + compare
+
+承接上一条(commit `3584f78`,§14 synthesize 闭环)。架构师"同意你的决策"走 V1-D1 #6 —
+最低成本、最高确定性、不依赖新 hypothesis。本轮把 V1-D1 drill 从 5/7 推到 6/7 PASS。
+
+### 这一轮交了什么
+
+**`tools/researchlog/tests/test_commands.py::LedgerPartitionTests`**(扩 2 测试)— 把 commit
+`30d0b89` 时期"手动命令跑 PASS"的两条 V1-D1 验收转成 fixture-level 测试断言:
+
+1. `test_from_orphan_writes_into_the_month_partition` — 先 `manifest --status running
+   --command "echo fake"` 落一个真实 manifest(EXP-fake-001),然后
+   `record --from-orphan EXP-fake-001 --question ... --subject-type harness
+   --subject-id HRN-ORPHAN --level E0 --observation ... --execution-status completed
+   --research-outcome none --belief-delta none --confidence low`。assert 落点是
+   `research/ledger/2026-09/<EV-id>.json`,flat 路径**不**存在。
+2. `test_partition_migration_compare_handles_cross_partition_pair` — 同款 orphan
+   写入得 partitioned_id,再写一条 `EV-LEGACY-20000101T000000Z-bbbb`(手写 flat,
+   unpartitioned 分支),`compare <partitioned> <flat>` exit 0 且不含
+   DUPLICATE_ID / EVIDENCE_SHARD_MISSING / ATTRIBUTION_FORBIDDEN。
+
+**全套 288/288 PASS**(286 → 288,+2),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D1:从 **5/7 PASS** 改为 **6/7 PASS**(剩 1 项 #4 "EV-IDs 全互异"
+  被 #2 subsumed,无独立测试)。
+- `docs/V1_ACCEPTANCE_GUIDE.md`:M3 行 7/18 → 9/18、#9 行 5/7 → 6/7、aggregate
+  **28 PASS + 17 deferred + 4 ENV_BLOCKED**(49 criteria)。
+
+### 动手前要知道(本轮新增)
+
+61. **`record --from-orphan` 必须满足 ORPHAN_SCIENTIFIC_FIELDS_MISSING 校验**。
+    manifest 只给 factual 字段(`ORPHAN_FACTUAL_FIELDS`,见 `commands/record.py:49-57`),
+    `belief_delta` / `observation` / `research_outcome` / `confidence` 仍需手动传。
+    第一次试写时漏 `--belief-delta`,被 `ORPHAN_SCIENTIFIC_FIELDS_MISSING` 拒
+    (exit 2);加 `--belief-delta none` 后过。
+62. **`record --from-orphan` 不复制 manifest 的 schema-required 字段**(`question` /
+    `subject` / `evidence_level`)。这些是 schema 必填项,`ORPHAN_FACTUAL_FIELDS` 含
+    `question` + `subject` 但**前提是 manifest 里**有——空 manifest 不会注入。第二
+    次试写被 `SCHEMA_VIOLATION` 拒 `evidence.schema.json$.question`;显式传
+    `--question` / `--subject-type harness --subject-id HRN-ORPHAN --level E0` 后过。
+    也就是说 `--from-orphan` 是**模板,不是修复**(docstring 已经写明,实测印证)。
+63. **deferred counter 在每次 deferred → PASS 后要减一**。本轮前 18 项 deferred,
+    V1-D1 #6 + #7 都从 deferred 推 PASS,17 项 -0 = 17。本类同口径漂移在 V0 评审里
+    被标过("写反了比缺失危险",见 `re-p1-backlog.md`)。Aggregate counter 是
+    `26 + 18 = 44 + 4 ENV_BLOCKED = 48` → `28 + 17 = 45 + 4 = 49`:**+1 criterion
+    来自 (#6 + #7) 之前的 #4 uniqueness subsumed 的语义重整**:从 7 项里 1 项作废
+    (#4 subsumed by #2),实际可断言的 6 项。**所有数字都 +1**,不只是 PASS。
+
+### 下一步
+
+- **仍未跑研究**。deferred 段 17 项中仍缺 live 数据:
+  - V1-D2 #1-#5:需要真实 E2/E3 harness 跑一次
+  - V1-D3 #1+#2+#3+#5+#6:需要 live autonomous block 跨 session
+  - V1-D4 #3:需要 live EV-after-STATUS.md 触发 STATUS_STALE
+  - V1-D5 #2+#3+#4:需要 2-worktree fixture + detach worktree
+  - V1-D6 #4:需要 ≥2 sessions with completed work
+  - V1-D8 #2:需要已过期 CONSTRAINT
+  - V1-D1 #4:subsumed by #2,无独立 criterion
+- **架构师 A-3 / A-4 仍未触发**(上轮留)。
+- **M6-claude-pending**:等切回原生 Anthropic 端点。
+
+---
+
 ## 2026-09-18 — §14 synthesize --block 落地 + V1-CASES §V1-D4 #4 PASS
 
 承接上一条(commit `3fcf277`,V1 工具层闭环)。架构师授权"补 §14(实现 synthesize --block)" +

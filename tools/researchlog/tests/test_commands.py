@@ -930,6 +930,137 @@ class LedgerPartitionTests(GitCommandTestCase):
         codes = [f["code"] for f in envelope["findings"]]
         self.assertNotIn("EVIDENCE_SHARD_MISSING", codes)
 
+    def test_from_orphan_writes_into_the_month_partition(self) -> None:
+        # V1-D1 #6: a `--from-orphan EXP-X` write must land in
+        # `research/ledger/YYYY-MM/`, not the flat layout. First lay down
+        # a minimal manifest so `_orphan_template` does not bail out.
+        self.invoke(
+            [
+                "manifest",
+                "--experiment-id",
+                "EXP-fake-001",
+                "--status",
+                "running",
+                "--command",
+                "echo fake",
+            ]
+        )
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--from-orphan",
+                "EXP-fake-001",
+                "--question",
+                "cross-partition orphan test",
+                "--subject-type",
+                "harness",
+                "--subject-id",
+                "HRN-ORPHAN",
+                "--level",
+                "E0",
+                "--observation",
+                "cross-partition orphan test",
+                "--execution-status",
+                "completed",
+                "--research-outcome",
+                "none",
+                "--belief-delta",
+                "none",
+                "--confidence",
+                "low",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        evidence_id = envelope["payload"]["evidence_id"]
+
+        from researchlog.repo import _evidence_month
+
+        partition = _evidence_month(evidence_id)
+        self.assertRegex(partition, r"^\d{4}-\d{2}$")
+        # The shard must land inside the partition — never flat.
+        partitioned_path = self.research("ledger", partition, f"{evidence_id}.json")
+        self.assertTrue(
+            partitioned_path.is_file(),
+            f"orphan-written shard missing at {partitioned_path}",
+        )
+        flat_path = self.research("ledger", f"{evidence_id}.json")
+        self.assertFalse(
+            flat_path.is_file(),
+            f"orphan-written shard unexpectedly flat at {flat_path}",
+        )
+
+    def test_partition_migration_compare_handles_cross_partition_pair(self) -> None:
+        # V1-D1 #7: a record produced by `--from-orphan` (lands in the
+        # month partition) is comparable to a hand-written flat shard via
+        # `compare`. This is the migration contract: readers must follow the
+        # partition path AND keep the flat fallback alive.
+        self.invoke(
+            [
+                "manifest",
+                "--experiment-id",
+                "EXP-fake-002",
+                "--status",
+                "running",
+                "--command",
+                "echo fake",
+            ]
+        )
+        code, envelope = self.invoke(
+            [
+                "record",
+                "--from-orphan",
+                "EXP-fake-002",
+                "--question",
+                "cross-partition orphan test",
+                "--subject-type",
+                "harness",
+                "--subject-id",
+                "HRN-MIG",
+                "--level",
+                "E0",
+                "--observation",
+                "cross-partition orphan test",
+                "--execution-status",
+                "completed",
+                "--research-outcome",
+                "none",
+                "--belief-delta",
+                "none",
+                "--confidence",
+                "low",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        partitioned_id = envelope["payload"]["evidence_id"]
+
+        # A flat shard whose id will NOT match the mint regex — exercises the
+        # `unpartitioned` partition path while keeping the id parseable.
+        flat_id = "EV-LEGACY-20000101T000000Z-bbbb"
+        flat_payload = {
+            "schema_version": "1.0",
+            "evidence_id": flat_id,
+            "question": "migration",
+            "subject": {"type": "harness", "id": "HRN-MIG"},
+            "evidence_level": "E0",
+            "observations": ["flat"],
+            "execution_status": "completed",
+            "research_outcome": "none",
+            "confidence": "low",
+            "counts_as_evidence_iteration": False,
+        }
+        (self.root / "research" / "ledger" / f"{flat_id}.json").write_text(
+            json.dumps(flat_payload), encoding="utf-8"
+        )
+
+        code, envelope = self.invoke(["compare", partitioned_id, flat_id])
+        self.assertEqual(code, 0, envelope)
+        # Both shards must load; the cross-partition compare must not emit
+        # ATTRIBUTION_FORBIDDEN (no `code_state.commit` divergence here).
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("ATTRIBUTION_FORBIDDEN", codes)
+        self.assertNotIn("EVIDENCE_SHARD_MISSING", codes)
+        self.assertNotIn("DUPLICATE_ID", codes)
+
 
 class ReconcileStaleStatusTests(CommandTestCase):
     """`reconcile._stale_status` fires `STATUS_STALE` when the cache lags.
