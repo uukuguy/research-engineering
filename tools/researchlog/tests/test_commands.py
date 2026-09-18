@@ -2069,5 +2069,113 @@ class HumanRenderingTests(unittest.TestCase):
         self.assertIn("worth knowing", text)
 
 
+class ExpiredArchitectSignalTests(CommandTestCase):
+    """V1-D8 #2: a CONSTRAINT whose ISO-8601 expiry is in the past is surfaced.
+
+    `reconcile._expired_signals` (`commands/reconcile.py:320`) walks every
+    `research:signal` block in `research/ARCHITECT.md`, skips inactive signals
+    and free-text expiries, then emits `EXPIRED_ARCHITECT_SIGNAL` for any ISO
+    timestamp that has already passed. This is the mechanism that prevents a
+    temporary constraint from hardening into unchallengeable doctrine by
+    accident — the failure mode ARCHITECT.md's own heading warns about.
+
+    `validate` also runs the same `check_signal` predicate, but `reconcile`
+    is the path the resume protocol actually takes, so the assertion lives
+    there.
+    """
+
+    def test_expired_constraint_signal_emits_finding_on_reconcile(self) -> None:
+        # Append an expired CONSTRAINT signal. The fixture's `init` lays down
+        # an empty ARCHITECT.md that already carries a `research:signal` block
+        # shape (see `templates/research/ARCHITECT.md`), so we just add one
+        # more. Using a deadline two days in the past to avoid timezone
+        # edge cases at midnight UTC.
+        architect = self.research("ARCHITECT.md")
+        from datetime import datetime, timedelta, timezone
+        past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds")
+        new_block = (
+            "\n```json research:signal\n"
+            "{\n"
+            '  "id": "C-TEST-EXPIRED",\n'
+            '  "type": "CONSTRAINT",\n'
+            '  "statement": "do not touch the navigation planner (test fixture)",\n'
+            '  "scope": "synthesize tests",\n'
+            f'  "expiry": "{past}",\n'
+            '  "source_text": "导航 planner 先别改 (test fixture)",\n'
+            f'  "created_at": "{past}",\n'
+            '  "active": true\n'
+            "}\n"
+            "```\n"
+        )
+        architect.write_text(architect.read_text(encoding="utf-8") + new_block, encoding="utf-8")
+
+        code, envelope = self.invoke(["reconcile", "--json"])
+        # Exit code is 3 (`EXIT_FINDINGS_PRESENT`) because the warning is a
+        # `SEVERITY_WARNING`, not an error — the resume protocol can still
+        # proceed, it just needs the Architect to re-confirm or let it lapse.
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertIn("EXPIRED_ARCHITECT_SIGNAL", codes)
+        # The finding subject carries the signal id, so the Architect can
+        # locate the offending block without grepping ARCHITECT.md.
+        expired = [f for f in envelope["findings"] if f["code"] == "EXPIRED_ARCHITECT_SIGNAL"]
+        self.assertEqual(expired[0]["subject"], "C-TEST-EXPIRED")
+
+    def test_free_text_expiry_is_not_evaluated(self) -> None:
+        # A CONSTRAINT whose `expiry` is a human-kept promise ("recovery
+        # checkpoint") is intentionally NOT evaluated by the tool. Without
+        # this carve-out the tool would silently promote "I'll re-confirm
+        # later" into "never re-confirmed" — exactly the doctrine-by-accident
+        # failure the detector exists to prevent.
+        architect = self.research("ARCHITECT.md")
+        new_block = (
+            "\n```json research:signal\n"
+            "{\n"
+            '  "id": "C-TEST-PROMISE",\n'
+            '  "type": "CONSTRAINT",\n'
+            '  "statement": "do not change the bootstrap (test fixture)",\n'
+            '  "scope": "bootstrap tests",\n'
+            '  "expiry": "recovery checkpoint",\n'
+            '  "source_text": "bootstrap 改之前先复盘 (test fixture)",\n'
+            '  "created_at": "2026-01-01T00:00:00+00:00",\n'
+            '  "active": true\n'
+            "}\n"
+            "```\n"
+        )
+        architect.write_text(architect.read_text(encoding="utf-8") + new_block, encoding="utf-8")
+
+        code, envelope = self.invoke(["reconcile", "--json"])
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("EXPIRED_ARCHITECT_SIGNAL", codes)
+
+    def test_inactive_signal_is_not_evaluated(self) -> None:
+        # `active: false` means the signal has been acknowledged as expired
+        # or superseded — the tool must not double-report it.
+        architect = self.research("ARCHITECT.md")
+        from datetime import datetime, timedelta, timezone
+        past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds")
+        new_block = (
+            "\n```json research:signal\n"
+            "{\n"
+            '  "id": "C-TEST-INACTIVE",\n'
+            '  "type": "CONSTRAINT",\n'
+            '  "statement": "do not touch X (test fixture, already retired)",\n'
+            '  "scope": "tests",\n'
+            f'  "expiry": "{past}",\n'
+            '  "source_text": "X 先别动 (test fixture, retired)",\n'
+            f'  "created_at": "{past}",\n'
+            '  "active": false\n'
+            "}\n"
+            "```\n"
+        )
+        architect.write_text(architect.read_text(encoding="utf-8") + new_block, encoding="utf-8")
+
+        code, envelope = self.invoke(["reconcile", "--json"])
+        self.assertIn(code, (0, 3), envelope)
+        codes = [f["code"] for f in envelope["findings"]]
+        self.assertNotIn("EXPIRED_ARCHITECT_SIGNAL", codes)
+
+
 if __name__ == "__main__":
     unittest.main()

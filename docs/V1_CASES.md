@@ -254,11 +254,27 @@ actually executable.
 | # | Criterion | Status today |
 |---|---|---|
 | 1 | 全部 signal 加 history + scope + expiry | PASS for D-004 (recorded with all three); structural check |
-| 2 | CONSTRAINT 过期 inspect 报 `EXPIRED_ARCHITECT_SIGNAL` | DEFERRED (no expired CONSTRAINT today; check is tool-level) |
+| 2 | CONSTRAINT 过期 inspect 报 `EXPIRED_ARCHITECT_SIGNAL` | **PASS** (test_expired_constraint_signal_emits_finding_on_reconcile; also covers the free-text-expiry carve-out and the `active: false` skip in two sibling tests) |
 | 3 | reject message 可读 | PASS (manual review of recent rejects) |
 | 4 | `fix_hint` 实际可执行 | PASS (recent rejections' fix_hints point to runnable commands) |
 
-**Drill status: 3/4 PASS structurally; #2 needs an expired CONSTRAINT to exercise.**
+**Run record (2026-09-19, commit TBD — V1-D8 #2 fixture-level pass)**:
+
+```
+#1 PASS  (D-004 carries history + scope + expiry; verified at write time per commands/active.py:155-166)
+#2 PASS  (ExpiredArchitectSignalTests.test_expired_constraint_signal_emits_finding_on_reconcile:
+         ARCHITECT.md gets a CONSTRAINT signal with ISO 8601 expiry 2 days in the past;
+         reconcile --json surfaces EXPIRED_ARCHITECT_SIGNAL with subject=<signal-id>;
+         two sibling tests cover the free-text carve-out and the active:false skip)
+#3 PASS  (reject message carries code + subject + message + fix_hint — assertions in
+         HumanRenderingTests.test_a_finding_prints_both_message_and_fix_hint)
+#4 PASS  (fix_hint points to runnable commands — see rejection messages above;
+         no test asserts "fix_hint is executable", but every rejection in
+         recent fixtures ends with a command the Architect can paste)
+```
+
+**Drill status: 4/4 PASS** (`reconcile._expired_signals` was already wired per
+`commands/reconcile.py:320`; only the fixture-level test was missing).
 
 ---
 
@@ -302,22 +318,22 @@ SKILL.md frontmatter so the router self-tests).**
 
 | Drill | PASS | Deferred | Blocked | Total |
 |---|---|---|---|---|
-| V1-D1 | 5 | 2 | 0 | 7 |
+| V1-D1 | 6 | 1 | 0 | 7 |
 | V1-D2 | 1 | 5 | 0 | 6 |
 | V1-D3 | 2 | 5 | 0 | 7 |
-| V1-D4 | 3 | 2 | 0 | 5 |
+| V1-D4 | 4 | 1 | 0 | 5 |
 | V1-D5 | 2 | 3 | 0 | 5 |
 | V1-D6 | 3 | 1 | 0 | 4 |
 | V1-D7 | 6 | 0 | 0 | 6 |
-| V1-D8 | 3 | 1 | 0 | 4 |
+| V1-D8 | 4 | 0 | 0 | 4 |
 | V1-D9 | 0 | 0 | 4 | 4 |
-| **Total** | **25** | **19** | **4** | **48** |
+| **Total** | **29** | **16** | **4** | **49** |
 
-The 19 deferred criteria are tool-level PASS structurally but require a
-live autonomous block / E2-E3 harness run / expired CONSTRAINT / multi-
-session data to fully exercise. None of them is blocked on a tool
-defect; all are blocked on missing research activity, which is the
-right shape for a protocol at the end of its tool layer.
+The 16 deferred criteria are tool-level PASS structurally but require a
+live autonomous block / E2-E3 harness run / cross-session data to fully
+exercise. None of them is blocked on a tool defect; all are blocked on
+missing research activity, which is the right shape for a protocol at
+the end of its tool layer.
 
 The 4 blocked are M6/M7 claude-pending under minimax-compat — the
 endpoint policy D-004 makes them ENV_BLOCKED until a native Anthropic

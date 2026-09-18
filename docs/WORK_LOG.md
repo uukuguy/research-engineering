@@ -4,6 +4,69 @@
 
 ---
 
+## 2026-09-19 — V1-D8 #2 fixture-level PASS:`EXPIRED_ARCHITECT_SIGNAL` 工具就绪 + 测试到位
+
+承接上一条(commit `fdf6d82`,V1-D1 #6 + #7 PASS)。架构师"按最佳选择走"。
+本轮继续挑 deferred → PASS,挑 V1-D8 #2:不依赖 live block、不依赖 harness、
+不依赖跨 session,只需要一条已过期 CONSTRAINT signal + `reconcile`。
+
+### 这一轮交了什么
+
+**`tools/researchlog/tests/test_commands.py::ExpiredArchitectSignalTests`**(NEW, 3 测试)— 把
+V1-D8 #2 "需要已过期 CONSTRAINT" 这个陈年老 deferred 转成 fixture-level 断言。
+
+1. `test_expired_constraint_signal_emits_finding_on_reconcile` — 在 fixture 的
+   `ARCHITECT.md` 追加一条 `research:signal` block(`type: CONSTRAINT`,ISO 8601
+   expiry = now − 2 天,`active: true`),`reconcile --json` 必报
+   `EXPIRED_ARCHITECT_SIGNAL` 且 subject = signal id。
+2. `test_free_text_expiry_is_not_evaluated` — 同结构但 expiry = "recovery checkpoint"
+   (人类承诺),**不**触发 —— 这是 ARCHITECT.md §expiry 的设计意图,本测试把意图钉死。
+3. `test_inactive_signal_is_not_evaluated` — `active: false` 的信号**不**触发
+   (避免"已 retire 的信号重复报警")。
+
+**全套 291/291 PASS**(288 → 291,+3),无回归。
+
+### 状态表更新
+
+- `docs/V1_CASES.md` §V1-D8:**3/4 → 4/4 PASS**(`reconcile._expired_signals` 之前已经实装
+  在 `commands/reconcile.py:320`,只缺 fixture-level 验证)。
+- `docs/V1_CASES.md` aggregate:V1-D1 5→6, V1-D4 3→4, V1-D8 3→4,deferred 19→16;
+  totals: **29 PASS + 16 deferred + 4 ENV_BLOCKED** = 49 criteria。
+- `docs/V1_ACCEPTANCE_GUIDE.md` #8 行:✅ #3+#4 → ✅ 4/4;aggregate 段同步更新。
+
+### 动手前要知道(本轮新增)
+
+64. **`research/signal` 的 `expiry` 字段有三种合法形态**,`reconcile._expired_signals`
+    只处理其中一种:
+    - ISO 8601 timestamp(过去 → 报警);
+    - ISO 8601 timestamp(未来 → 沉默);
+    - free-text promise(任意 → 沉默,工具主动不评估)。
+    第三种的存在是因为"recovery checkpoint"这类承诺是人类 keep 的,工具若强行评估
+    会把"我回头再看"悄悄升级为"永远不再看"——正是 ARCHITECT.md heading 警告的失败模式。
+65. **`active: false` 跳过 expired detection** 与 `active: true` 跳过 source-text rule
+    (`constraints.check_signal`) 是两条不同的 gate,**两条都要写测试**。前者避免重复
+    报警,后者避免"已 retire 的信号仍被引用"。本轮只覆盖前者(`_expired_signals`
+    那条);后者(`check_signal`)在 V1-D8 #1 路径里被 D-004 record 的 history/scope/expiry
+    一并覆盖(见 V1-D8 drill "PASS for D-004 (recorded with all three)")。
+66. **V1_CASES.md aggregate 表本轮重写**。老表(25 PASS / 19 deferred / 4 BLK / 48)
+    自 commit `5a7ce88` 起就没动过,本轮 V1-D1 + V1-D4 + V1-D8 各 +1 PASS 让 deferred
+    从 19 跌到 16,total 从 48 涨到 49(V1-D1 #4 "subsumed by #2" 重整 +1)。
+    **不重写 aggregate 表,grep "Total" 拿到的数字会谎报状态**——这是 WORK_LOG §63
+    (上一轮)预言的"aggregate 漂移",现在实证。
+
+### 下一步
+
+- **仍未跑研究**。deferred 段 16 项仍缺 live 数据:
+  - V1-D2 #1-#5:真实 E2/E3 harness
+  - V1-D3 #1+#2+#3+#5+#6:live autonomous block 跨 session
+  - V1-D4 #3:live EV-after-STATUS.md 触发 STATUS_STALE
+  - V1-D5 #2+#3+#4:2-worktree fixture + detach
+  - V1-D6 #4:≥2 sessions with completed work
+  - V1-D1 #4:subsumed by #2,无独立 criterion
+- 架构师未触发的决策点同上一轮:A-3 / A-4 / M6-claude-pending。
+
+---
+
 ## 2026-09-19 — V1-D1 #6 + #7 fixture-level PASS:cross-partition --from-orphan + compare
 
 承接上一条(commit `3584f78`,§14 synthesize 闭环)。架构师"同意你的决策"走 V1-D1 #6 —

@@ -49,7 +49,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | **#5** | GitHub remote 可选集成 (`--gh-status` 不报错) | V1-D9 (工具层) | ✅ checkpoint --gh-status flag landed |
 | **#6** | manual Gate-3 verifier 文档完整,可走通一个完整流程 | V1-D9 (文档层) | ✅ docs/verification/gate-3.md landed |
 | **#7** | worktree single-writer enforcement | V1-D5 | ⏳ V1-D5 2/5 |
-| **#8** | `record` reject message 可读,`fix_hint` 实际可执行 | V1-D8 | ✅ V1-D8 #3+#4 |
+| **#8** | `record` reject message 可读,`fix_hint` 实际可执行 | V1-D8 | ✅ V1-D8 4/4 (#2 fixture-level PASS this commit) |
 | **#9** | sharded ledger partition migration 测试通过 | V1-D1 | ⏳ V1-D1 6/7 (#6 + #7 fixture-level PASS this commit) |
 | **#10** | reproduction 分桶不污染 evidence budget | V1-D3 | ⏳ V1-D3 2/7 |
 | **#11** | session 必须 commit;未 commit 的 record 报告 `COMMIT_REQUIRED` | V1-D3 | ⏳ |
@@ -82,7 +82,7 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 | #5 | `--gh-status` 不报错 | ✅ | checkpoint 命令行 + flag |
 | #6 | Gate-3 verifier 文档 | ✅ | docs/verification/gate-3.md |
 | #7 | worktree single-writer | ⏳ 2/5 | V1-D5 |
-| #8 | record reject message + fix_hint | ✅ | V1-D8 #3 + #4 |
+| #8 | record reject message + fix_hint | ✅ 4/4 | V1-D8 (#2 fixture-level PASS this commit) |
 | #9 | ledger partition migration | ⏳ 6/7 | V1-D1 |
 | #10 | reproduction 分桶 | ⏳ | V1-D3 |
 | #11 | session 必须 commit | ⏳ | V1-D3 |
@@ -112,12 +112,11 @@ V1 complete) and §7 (drill suite). 本文件只做拆分与状态表,不改写�
 
 ## 关于 deferred
 
-The 17 deferred criteria across V1-D1/D2/D3/D4/D5/D6/D8 are tool-layer PASS structurally;
-they need a live autonomous block / E2-E3 harness run / expired CONSTRAINT / multi-session
-data to fully exercise. This commit closed V1-D1 #6 + #7 (fixture-level test for
-cross-partition `--from-orphan` write + cross-partition `compare`), bringing the
-aggregate to **28 PASS + 17 deferred + 4 ENV_BLOCKED** (49 criteria: 288 tests
-across `tools/researchlog/tests/test_commands.py` all green).
+The 16 deferred criteria across V1-D2/D3/D4/D5/D6 are tool-layer PASS structurally;
+they need a live autonomous block / E2-E3 harness run / multi-session data to fully
+exercise. This commit closed V1-D8 #2 (fixture-level test for `EXPIRED_ARCHITECT_SIGNAL`),
+bringing the aggregate to **29 PASS + 16 deferred + 4 ENV_BLOCKED** (49 criteria:
+291 tests across `tools/researchlog/tests/test_commands.py` all green).
 
 按 V0_D4 gotcha "声明了但没人接线" 的对称面:**"接了但没数据" 也是 risk signal**——但 deferred
 criteria 的"接了"是工具接线,工具不假装有数据。读 evidence ledger 才是"有没有数据"的判定。
