@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "question": "Does the existing tests/main/verify_case.py machinery still hold against V1-D1 ledger partitioning?",
+  "subject": {
+    "type": "harness",
+    "id": "HRN-001"
+  },
+  "evidence_level": "E2",
+  "execution_status": "completed",
+  "research_outcome": "informative_failure",
+  "confidence": "high",
+  "belief_delta": "refined",
+  "observations": [
+    "verify_case.Ctx.added_since used top-level 'git ls-tree --name-only <baseline>:research/ledger', which returns per-month subtree names when the ledger is partitioned under research/ledger/YYYY-MM/. A session that records EV at research/ledger/2026-09/<id>.json is therefore invisible to the helper — added_since returns []. r2 (did not repair the stale run) of the recovery drill reads the helper's result as 'no new evidence' whenever status != running, and so reports 'silently repaired' even when the session did the work and committed the EV. Real run on 2026-09-19 with claude minimax-compat produced 7/8 PASS, FAIL row=r2; the 8/8 was latent (claude did not finalize the run). Fix: switched added_since to recursive git ls-tree -r + rglob, dropping the partition branch as a special case."
+  ],
+  "iteration_kind": "evidence",
+  "created_at": "2026-09-19T13:50:00+00:00",
+  "code_state": {
+    "branch": "main",
+    "commit": "a26203f7ad01d282c1e7a90963ae6f7a28a2fe3e",
+    "base_commit": "a26203f7ad01d282c1e7a90963ae6f7a28a2fe3e",
+    "dirty": true,
+    "diff_sha256": "sha256:d1af62021361b4745c3ac1364192f067c547f20d8cd326990fab07ea240d333c"
+  },
+  "block_id": null,
+  "environment": {
+    "id": null,
+    "comparability": "COMPATIBLE",
+    "fingerprint": "sha256:905ec22fa4076f9485a74cf774cc6c8a414d813cb9398988f4819fca6fde0024",
+    "endpoint": "minimax-compat"
+  },
+  "counts_as_evidence_iteration": true,
+  "evidence_id": "EV-20260919T135000Z-6985"
+}
