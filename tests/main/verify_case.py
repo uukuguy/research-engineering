@@ -215,16 +215,26 @@ class Ctx:
 
         Comparing the directory against the baseline tree sees both, and only additions:
         a deleted record is not a record added.
+
+        The ledger is partitioned under ``research/ledger/YYYY-MM/`` (V1-D1), so a flat
+        ``ls-tree <baseline>:research/ledger`` lists the per-month subtrees and matches
+        nothing inside them — a session that *added* ``research/ledger/2026-09/EV-...``
+        would read as having added nothing. Recursive listing on both sides is the same
+        comparison at any depth, with no special case for whether the path is a leaf or a
+        subtree: every added file shows up whether or not its parent existed at baseline.
         """
-        listing = self.git("ls-tree", "--name-only", f"{self.baseline}:{path}")
-        at_baseline = {line.strip() for line in listing.splitlines() if line.strip()}
+        listing = self.git("ls-tree", "-r", "--name-only", self.baseline, "--", path)
+        at_baseline = {
+            line.strip() for line in listing.splitlines() if line.strip() and "/" in line
+        }
         directory = self.fixture / path
         if not directory.is_dir():
             return []
         return sorted(
-            str(directory.relative_to(self.fixture) / entry.name)
-            for entry in directory.iterdir()
-            if entry.name not in at_baseline
+            str(entry.relative_to(self.fixture))
+            for entry in directory.rglob("*")
+            if entry.is_file()
+            and str(entry.relative_to(self.fixture)) not in at_baseline
         )
 
     def transcript_text(self) -> str | None:
