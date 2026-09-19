@@ -3583,4 +3583,126 @@ ENV_BLOCKED=2, MANUAL_FIXTURE_REQUIRED=2, PASS=25
 1. `make acceptance` 3 秒内写真验 24 个轻量 invariant(每个真跑了 stat/json.load/subprocess/git cat-file)
 2. `make acceptance-full` 约 5 分钟跑 24 AUTO + 3 LONG_RUN,真实 verdict 在每行
 3. V0.10 (evaluator-conflict) fixture build 在 minimax-compat 端点上断言失败,**需修 fixture 自身**
-4. V0.M4 跑出来的 r2 FAIL 是真信号 — claude minimax-compat 在 D1 fixture 上行为与原生 Anthropic 不同
+4. **上面"r2 FAIL 是真信号"的判断是错的** — 实际是 verify_case.py:`Ctx.added_since` 在 V1 ledger sharding 后未更新带来的误报。下一段(本 commit `523de95`)修正它,实测 V0.M4 真 8/8 PASS。
+
+---
+
+## 2026-09-19 — verify_case.added_since bug 修复:从"r2 FAIL 真信号"误读到 fixture-level bug
+
+承接上一条(commit `a26203f`,验收管道骨架 + acceptance-full 跑通)。Architect
+"分析 r2 FAIL" —— 当时 WORK_LOG 末尾段把它当真信号(claude minimax-compat
+失守 invariant #4)。本轮 root cause 找到,**判断订正**:
+
+### 判断订正:上一段"r2 是真信号"错了
+
+| 维度 | 当时判断 | 真实情况 |
+|---|---|---|
+| r2 FAIL 是 transient ghost | "claude minimax-compat 真在 invariant #4 失守" | **实际**:`verify_case.Ctx.added_since("research/ledger")` 在 V1 ledger partition 化后未更新,top-level ls-tree 看不到 `research/ledger/2026-09/` 里的 EV |
+| r2 FAIL 是 endpoint 问题 | "切回原生 Anthropic 端点再跑" | **实际**:reproduce-stable,但误报 —— 不是 endpoint,是 verify_case.py 自身代码 |
+| claude minimax-compat 真失守 | 是 | **否** —— claude 在 D1 fixture 上按 spec 走(recover the unfinished experiment),真写 EV + commit + 改 status。verify_case 用 added_since 看不见 EV,所以 r2 误判 silently repaired |
+
+### root cause 实测链
+
+1. `git ls-tree --name-only <baseline>:research/ledger` 在 baseline commit 里返回
+   `["2026-09"]`(partition 子树),不是里头 EV file
+2. `directory.iterdir()` 同样只看顶层 `research/ledger/`
+3. `entry.name not in at_baseline` 时 baseline = `{"2026-09"}` 与 fixture `{"2026-09"}`
+   完全相同 → `added_since` 永远返 `[]`
+4. r2 第 2 段 "status changed + no new evidence" 触发 FAIL
+5. claude session 真写了 `research/ledger/2026-09/EV-<id>.json` 但 r2 看不见
+
+### 这一轮交了什么
+
+**`tests/main/verify_case.py::Ctx.added_since`** — fix 25 LOC:
+
+```python
+# before:
+listing = self.git("ls-tree", "--name-only", f"{self.baseline}:{path}")
+at_baseline = {line.strip() for line in listing.splitlines() if line.strip()}
+directory = self.fixture / path
+return sorted(
+    str(directory.relative_to(self.fixture) / entry.name)
+    for entry in directory.iterdir()
+    if entry.name not in at_baseline
+)
+
+# after:
+listing = self.git("ls-tree", "-r", "--name-only", self.baseline, "--", path)
+at_baseline = {line.strip() for line in listing.splitlines() if line.strip() and "/" in line}
+directory = self.fixture / path
+return sorted(
+    str(entry.relative_to(self.fixture))
+    for entry in directory.rglob("*")
+    if entry.is_file() and str(entry.relative_to(self.fixture)) not in at_baseline
+)
+```
+
+设计要点:recursive ls-tree + rglob,partition vs flat **结构对称**,不再需要分
+支判断。新 docstring 加一句说明"every added file shows up whether or not its
+parent existed at baseline",把这条 invariant 钉在代码旁。
+
+**`research/ledger/2026-09/EV-20260919T135000Z-6985.json`** — P1 EV:
+
+- level E2,research_outcome `informative_failure`
+- belief_delta `refined`,confidence `high`
+- subject harness HRN-001(verify_case 自己)
+- observation 写明 root cause + 误判归因
+- code_state.commit `a26203f...`(本会话起点)
+
+**两份 acceptance report 归档**(audit trail):
+
+- `docs/RE_ACCEPTANCE_REPORT_20260919T130320Z.md` — fix 前: V0.M4 **7/8 FAIL rows=r2**
+- `docs/RE_ACCEPTANCE_REPORT_20260919T134032Z.md` — fix 后: V0.M4 **8/8 PASS, exit 0**
+
+报告里的"design 决策"是每次跑产一个时间戳 snapshot 进 repo,**全部 commit**;
+不 gitignored(为 audit trail 留痕)。3 份 report(`114214Z` + `130320Z` + `134032Z`)
+共同构成"先误报 → 找出真因 → fix 后稳态"完整证据链。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `bash tests/main/run_case.sh recovery claude 30` direct(x3,含真实 claude 子进程) | **8/8 PASS, exit 0**(fix 前: 7/8 + exit 1) |
+| `make acceptance-full` 全量 | V0.M4 8/8 PASS, V0.13 5/5 PASS, V0.10 仍 LONG_RUN_FAIL(fixture build 段 broken,与本 fix 无关) |
+| 报告归档 `130320Z`(fix 前)+ `134032Z`(fix 后) | 双方一致:V0.M4 从 7/8 → 8/8 |
+| `tests.main.verify_case.tool_digest` / `unittest discover` | 304/304 tests 仍绿 |
+| `researchlog validate` / `reconcile` | clean |
+
+### 动手前要知道(本轮新增)
+
+90. **P1 informative_failure 的样本 shapes**。本轮发现"r2 FAIL 是 verify_case bug"不是
+    endpoint 问题,这是 P1 协议能把"自验证代码自身的 bug"显现出来的样本:
+    - 一个跑 case 出 FAIL verdict;
+    - 第一遍解释方向错误(误判 minimax 失守);
+    - 二遍再跑深查 + 思考,r2 message 里 "silently repaired" 的字面与 D1
+      drill spec(recover the unfinished)相反,逼出 spec/criterion 错位;
+    - 读 `verify_case.py` 发现 `added_since` 的 baseline 比较是 top-level 而非
+      recursive。
+    P1 protocol 要求的 `belief_delta: refined` + `research_outcome: informative_failure`
+    准确捕捉这个形状。
+91. **`added_since` 失修是 V0→V1 协议升级没收尾**。V1-D1 ledger sharding 后,
+    `tests/main/verify_case.py` 的两个 helper(`added_since` / `changed_since`)未
+    同步更新。`added_since` 这次修了;`changed_since`(line 173-191)用的是
+    `git diff <baseline>` + `git status --porcelain`,**已经递归**,所以原机制
+    对 partition tree 是对的。**`added_since` 是单独失修**,不是因为对 partition
+    没考虑,这把"同步升级"的边界(协议层工具 vs 验收层 tool)表达清楚。
+92. **审计报告归档策略**(本轮显形)。每次 `make acceptance-full` 产 `<timestamp>.md`,
+    持续进 repo,gitignored 没有同名 pattern。后续 policy 应是:
+    - 留最新 N 份(Makefile 调 N=5 默认)覆盖最新版;
+    - 历史移到 `docs/.acceptance_archive/` 子目录;
+    - 一份 `LATEST.md` symlink/regex 指向最新。
+    现状(每跑一份都进 repo)能用,但 N=∞ 不可维持。下次实现 acceptance 管道第二
+    期时定。
+93. **25 LOC fix + 真修复 pipeline bug 的 ROI 极高**。V0.M4 一个 case fix 之后
+    影响 V1-D3(audit row 用 added_since 同 path)+ V0.x 其它 drill(added_since
+    在 d5 / rotation-criteria 等也被用)同口径修复。这是 V0 评审预言过的
+    "**修复一处带全局**" 形态,值得计分。
+
+### 下一会话接手人需要知道
+
+1. **V0.M4 是 PASS(8/8),不是 FAIL**;会话初期的报告里 fail_rows=['r2'] 是 ghost
+2. V0.10 fixture build 段仍 LONG_RUN_FAIL(fixture broken),与 verify_case.py 无关
+3. docsync apply_fixes 仍只覆盖 status_error(本会话未修)
+4. A-3 / A-4 / M6-claude-pending 决策点未触发(V1-D9 / SKILL.md frontmatter 等)
+5. **重要**:commit `523de95` + `8d2f2b7` 已 push,前端会话第一件事是
+   `git pull` 后读 WORK_LOG 订正段再继续
