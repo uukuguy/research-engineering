@@ -89,6 +89,16 @@ cd <cwd> && git log --oneline --abbrev-commit -10
   commit <hash1>: 自动由 `researchlog record` P1 触发
   commit <hash2>: operator 或 AI 自己 `git commit`(audit finding 之类)
 
+cwd 是该 workspace 的 own git repo,operator / RE session 可以直接:
+
+```bash
+git add -A
+git commit -m 'subject: ... body ...'
+git push               # 默认 upstream
+```
+
+RE 协议不引入 commit / push 的目标 shell — 不在 Makefile layer;直接 git 即可。
+
 ## 3. 投 Operator Signal
 
 如果 operator 想打断 session 改方向,**不要** 直接 Edit chat — 在
