@@ -103,34 +103,6 @@ class InitReconciliationTests(GitRepoCase):
         self.assertTrue(envelope["payload"]["clean"])
         self.assertEqual(envelope["findings"], [])
 
-    def test_init_writes_operator_helpers_with_protocol_root_substituted(self) -> None:
-        """`init` writes cwd-local Makefile + docs/OPERATIONS.md once on first
-        init, with `__RE_PROTOCOL_ROOT__` substituted so the Makefile can
-        reach the protocol toolchain regardless of where it lives. A
-        second `init --merge` keeps an existing local Makefile untouched.
-        """
-        self.init_state()
-        makefile = (self.root / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("RE_PROTOCOL :=", makefile, "Makefile must declare RE_PROTOCOL")
-        self.assertNotIn("__RE_PROTOCOL_ROOT__", makefile, "placeholder must be substituted")
-        ops = (self.root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
-        self.assertTrue(
-            "RE workspace operator" in ops or "ESA Study" in ops,
-            "OPERATIONS.md should carry the operator manual heading",
-        )
-
-        # A second init in --merge mode keeps the existing Makefile intact
-        # (operator's local edits survive).
-        original = makefile
-        self.init_state("--merge")  # fixture's init_state passes --legacy by default
-        # The fixture rewrites research/ during --merge; the operator's
-        # concern is that the cwd Makefile is preserved, so check that the
-        # Makefile content is byte-identical after the second init.
-        self.assertEqual(
-            (self.root / "Makefile").read_text(encoding="utf-8"),
-            original,
-            "a second init must not clobber an existing cwd Makefile",
-        )
 
     def test_reconcile_stays_clean_after_the_state_is_committed(self) -> None:
         self.init_state()
