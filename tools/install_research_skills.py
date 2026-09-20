@@ -249,10 +249,16 @@ def _run_global(args: argparse.Namespace) -> int:
         destination = GLOBAL_CLIENTS[relative]
         expected_full = expected_tree(source, overlay)
         # Restrict to RE-owned skill trees so unrelated plugins sharing the
-        # same home directory never get flagged.
-        expected = {f"{name}/{rest}": content for name, rest in (
-            (k.partition("/")[0], k.partition("/")[2]) for k in expected_full
-        ) if name in owned for k, content in expected_full.items() if k.startswith(f"{name}/")}
+        # same home directory never get flagged. The plain comprehension
+        # variant had a shadowing bug where every owned key got the last
+        # iterated (k, content) pair; writing it out makes the filter
+        # explicit and avoids that mistake.
+        expected: dict[str, bytes] = {}
+        for full_key, content in expected_full.items():
+            name = full_key.partition("/")[0]
+            if name not in owned:
+                continue
+            expected[full_key] = content
 
         if args.check:
             differences = diff(expected, _installed_re_skills(destination, owned))
