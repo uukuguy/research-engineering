@@ -102,13 +102,21 @@ class CommandTestCase(unittest.TestCase):
     def invoke_raw(self, argv: list[str]) -> tuple[int, str]:
         """Run the CLI with --json and return (exit code, raw stdout).
 
-        `--root` is a per-command flag, so it goes after the command name and before any
-        sub-action or `--` separator.
+        Operates from the fixture's `self.root` as cwd so verbs that walk up
+        to discover the state root (e.g. `references`) see the seeded
+        skeleton. The previous version passed `--root` as a verb-local flag,
+        but verbs added later (such as V2 G3's `references`) only resolve
+        the cwd, not the flag, so a uniform chdir keeps every verb happy.
         """
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(io.StringIO()):
-            code = cli.main(_with_json([argv[0], "--root", str(self.root), *argv[1:]]))
-        return code, buffer.getvalue()
+        previous = Path.cwd()
+        os.chdir(self.root)
+        try:
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(io.StringIO()):
+                code = cli.main(_with_json(argv))
+            return code, buffer.getvalue()
+        finally:
+            os.chdir(previous)
 
     def invoke(self, argv: list[str]) -> tuple[int, dict]:
         code, text = self.invoke_raw(argv)
@@ -161,10 +169,17 @@ class CommandTestCase(unittest.TestCase):
 
 
 def _with_json(argv: list[str]) -> list[str]:
-    """--json must precede a `--` separator, or it becomes part of the child command."""
+    """--json must precede a `--` separator, or it becomes part of the child command.
+
+    Multi-subparser verbs (`references`, `env`, `findings`) parse the action
+    as the second positional, with --json still inside the verb parser
+    so it remains a tool-level flag.
+    """
     if "--" in argv:
         index = argv.index("--")
         return [*argv[:index], "--json", *argv[index:]]
+    if len(argv) >= 2 and not argv[1].startswith("-"):
+        return [argv[0], "--json", *argv[1:]]
     return [*argv, "--json"]
 
 
@@ -2652,5 +2667,146 @@ class SessionEventLogTests(CommandTestCase):
         self.assertEqual(per_session[rotated_epoch], 2)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class ReferencesVerbTests(CommandTestCase):
+    """`researchlog references` registers external read-mostly targets in
+    .research/references.json. The legacy `research/` fixture matches the rest
+    of the suite; the schema-version field on the document means a runner
+    that wrote 1.0 file in the past is read cleanly today.
+    """
+
+    def _read_refs(self) -> dict:
+        path = self.research("references.json")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_add_registers_a_target_with_default_purpose(self) -> None:
+        target = self._tmp_path() / "sibling-project"
+        target.mkdir()
+        code, envelope = self.invoke(
+            [
+                "references",
+                "add",
+                "--id",
+                "sibling",
+                "--path",
+                str(target),
+                "--type",
+                "experimental_project",
+                "--purpose",
+                "primary_read_only_target",
+                "--doc-anchor",
+                "docs/TASK.md",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        refs = self._read_refs()["external_refs"]
+        self.assertEqual(len(refs), 1)
+        entry = refs[0]
+        self.assertEqual(entry["id"], "sibling")
+        self.assertEqual(entry["read_only"], True)
+        self.assertEqual(entry["purpose"], "primary_read_only_target")
+        self.assertEqual(entry["doc_anchors"], ["docs/TASK.md"])
+        self.assertEqual(entry["path"], str(target))
+        self.assertIn("REFERENCE_REGISTERED", {f["code"] for f in envelope["findings"]})
+
+    def test_add_replaces_existing_id_in_place(self) -> None:
+        target = self._tmp_path() / "one"
+        target.mkdir()
+        self.invoke(["references", "add", "--id", "thing", "--path", str(target)])
+
+        target2 = self._tmp_path() / "two"
+        target2.mkdir()
+        code, _envelope = self.invoke(["references", "add", "--id", "thing", "--path", str(target2)])
+        self.assertEqual(code, 0)
+
+        refs = self._read_refs()["external_refs"]
+        ids = [r["id"] for r in refs]
+        self.assertEqual(ids.count("thing"), 1)
+        self.assertEqual(next(r["path"] for r in refs if r["id"] == "thing"), str(target2))
+
+    def test_add_refuses_a_missing_path(self) -> None:
+        ghost = self._tmp_path() / "does-not-exist"
+        code, envelope = self.invoke(
+            ["references", "add", "--id", "ghost", "--path", str(ghost)]
+        )
+        # Precondition missing is exit 5 (RESEARCH_STATE_ABSENT family);
+        # not a refusal of policy.
+        self.assertEqual(code, 5)
+        self.assertIn("REFERENCE_PATH_MISSING", {f["code"] for f in envelope["findings"]})
+
+    def test_list_returns_every_registered_target(self) -> None:
+        for name in ("a", "b"):
+            target = self._tmp_path() / name
+            target.mkdir()
+            self.invoke(["references", "add", "--id", name, "--path", str(target)])
+
+        code, envelope = self.invoke(["references", "list"])
+        self.assertEqual(code, 0)
+        ids = [r["id"] for r in envelope["payload"]["external_refs"]]
+        self.assertEqual(ids, ["a", "b"])
+
+    def test_check_reports_a_path_that_no_longer_exists(self) -> None:
+        target = self._tmp_path() / "ghost-target"
+        target.mkdir()
+        self.invoke(["references", "add", "--id", "will-vanish", "--path", str(target)])
+        target.rmdir()  # path goes missing after registration
+
+        code, envelope = self.invoke(["references", "check"])
+        self.assertIn(code, (0, 3), envelope)
+        codes = {f["code"] for f in envelope["findings"]}
+        self.assertIn("REFERENCE_PATH_GONE", codes)
+        self.assertEqual(envelope["payload"]["checked"], 1)
+        self.assertGreaterEqual(envelope["payload"]["findings"], 1)
+
+    def test_sync_refreshes_the_git_fingerprint(self) -> None:
+        target = self._tmp_path() / "sibling-with-git"
+        target.mkdir()
+        subprocess.run(
+            ["git", "init", "-q", "--initial-branch=main"],
+            cwd=target,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(target), "config", "user.email", "x@example.invalid"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(target), "config", "user.name", "test"],
+            check=True,
+            capture_output=True,
+        )
+        # Seed one commit so the target's HEAD is not empty; sync pins
+        # the actual head_commit, not "no commit" placeholder.
+        (target / "marker.txt").write_text("seed", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(target), "add", "marker.txt"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(target), "commit", "-q", "-m", "seed"],
+            check=True,
+            capture_output=True,
+        )
+
+        self.invoke(["references", "add", "--id", "git-target", "--path", str(target)])
+        code, _envelope = self.invoke(["references", "sync"])
+        self.assertEqual(code, 0)
+        refs_after = self._read_refs()["external_refs"]
+        head = refs_after[0]["fingerprint"]["git"]["head_commit"]
+        self.assertTrue(head, "sync should pin a non-empty head_commit")
+
+    def _tmp_path(self) -> Path:
+        """Subdirectory of the test root for an external target.
+
+        Each call returns a fresh path with a unique naming suffix.
+        The path itself is created with `mkdir(parents=True, exist_ok=True)`
+        so callers can populate subdirectories underneath without race
+        conditions.
+        """
+        counter = getattr(type(self), "_sibling_counter", 0) + 1
+        setattr(type(self), "_sibling_counter", counter)
+        path = self.root / f"_sibling_{counter}"
+        path.mkdir(parents=True, exist_ok=True)
+        return path

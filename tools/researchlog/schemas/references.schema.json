@@ -1,0 +1,73 @@
+{
+  "title": "References document",
+  "description": "External read-mostly research targets recorded by `researchlog references add`. Each entry points at a sibling project the cwd reads from; reconcile enforces presence and doc-anchors.",
+  "type": "object",
+  "required": ["schema_version", "external_refs"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "external_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "path", "purpose", "read_only"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+            "description": "Stable id used by `references add` and by EV artifact URIs."
+          },
+          "type": {
+            "enum": [
+              "experimental_project",
+              "experimental_project_data",
+              "local_baseline",
+              "other"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the target on disk. The workspace never copies the target's content; paths must remain valid for as long as the workspace exists."
+          },
+          "purpose": {
+            "enum": [
+              "primary_read_only_target",
+              "secondary_evidence_source",
+              "local_baseline"
+            ],
+            "description": "How this target is used by the workspace: the primary study, a cross-check source, or a baseline of the workspace's own past work."
+          },
+          "read_only": {
+            "type": "boolean",
+            "description": "True iff the workspace never writes to this target. reconcile asserts this on every artifact reference."
+          },
+          "doc_anchors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Relative paths inside the target that act as discoverable entry points."
+          },
+          "size_gb": {
+            "type": ["number", "null"],
+            "description": "Approximate size of the target in GB; recorded for human readers, never validated."
+          },
+          "invalidated_if": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Predicate strings the target must keep satisfying for any EV depending on it to stay valid."
+          },
+          "fingerprint": {
+            "type": "object",
+            "properties": {
+              "git": {
+                "type": "object",
+                "properties": {
+                  "branch": { "type": ["string", "null"] },
+                  "head_commit": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

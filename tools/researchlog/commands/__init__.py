@@ -20,6 +20,7 @@ from researchlog.commands import (
     init,
     job,
     manifest,
+    references,
     reconcile,
     record,
     run as run_cmd,
@@ -49,6 +50,7 @@ MODULES: tuple[ModuleType, ...] = (
     checkpoint,
     current,
     boundaries,
+    references,
 )
 
 # `sessions` is NOT in MODULES — it is a helper module that other commands

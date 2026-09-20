@@ -100,11 +100,11 @@ class KeywordGuardTests(unittest.TestCase):
         schema is complete, which a derived count would let pass unnoticed.
         """
         found = sorted(registry.schema_dir().glob("*.schema.json"))
-        # Seven since `boundaries` — the canonical file that had a validator reachable only
-        # through `reconcile`, a reader, and no verb to write it.
+        # Eight since `references` (V2 G3) — `researchlog references add` writes
+        # the external-targets document that the new verb maintains.
         self.assertEqual(
             len(found),
-            7,
+            8,
             f"expected seven schemas (active, boundaries, current, environment, evidence, "
             f"findings-entry, manifest), found {[p.name for p in found]}",
         )
