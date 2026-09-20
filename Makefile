@@ -55,3 +55,20 @@ install-global:
 
 install-global-check:
 	python3 tools/install_research_skills.py --global --check
+
+# Symlink the no-PYTHONPATH entry script into ~/.local/bin/ so any cwd
+# can call `re <verb>` after a single one-shot install. Goes through
+# the user-level bin (not /opt/homebrew/bin) so it never collides with
+# Homebrew-managed Python. PATH is left to the operator: this Makefile
+# only writes the file.
+install-shell:
+	mkdir -p $$HOME/.local/bin
+	ln -sf $(PWD)/tools/re $$HOME/.local/bin/re
+	@echo "Linked $$(PWD)/tools/re -> $$HOME/.local/bin/re"
+	@echo "Add to PATH if not already:  export PATH=\$$HOME/.local/bin:\$$PATH"
+	@echo "Then: re init  /  re state  /  re record ..."
+
+# Undo install-shell.
+uninstall-shell:
+	rm -f $$HOME/.local/bin/re
+	@echo "Removed $$HOME/.local/bin/re"
