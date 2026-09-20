@@ -454,6 +454,34 @@ purpose 取值:
 - 完成度 / Architect 干预次数 / 持续自主时长 / 无故闲置次数（Architect 给）
 - 只能在 treatment 启动后实测，**前 3 项必依赖 G2（dashboard）或 G2 替代（log 解析）**
 
+### 8.5 EsaStudy cwd 的边界（session 后拍板）
+
+实操中 Architect 又加了两条具体边界：
+
+- **AGENTS.md 内容分权**：协议方不主动维护 study cwd 的 AGENTS.md。AGENTS.md 放
+  "RE must-have"内容（cwd 是什么 / 怎么启 session / RE 协议记录 / 协调），但
+  **项目方自有责任**项目 specific 部分（cwd 结构 / 主研究对象 / 起点 / 协调）。
+  Architect 已自行维护 EsaStudy 的 AGENTS.md(78 行含 cwd 结构、ESA 项目细节、
+  8 个 skill names、记录与协调)。协议方**不动 EsaStudy AGENTS.md**;若以后需要
+  RE must-have 内容,项目方 RE 自己补。
+
+- **esa-study cwd 的 git commit/push 不归 RE 协议 fence**：cwd 是普通 git
+  repo，**任何 commit / push 都行**（developer / Architect / 项目 RE session）。
+  协议方不在 Makefile 暴露 `commit / commit-and-push / push / status` targets
+  —— 直接用 `git` 即可。Architect 的话："不用这么纠结，esa-study 的 git commit
+  开发者自己也有可能做的，不影响 RE 判断"。
+
+  **实际含义**：
+    - RE 协议不引入 commit 权限 fence（commit 不分协议方 vs 项目方）
+    - `make session-spawn` 启的 RE session 自己有 push 能力（cwd 已是 git repo）
+    - 协议方做错的事（我自己误改了 EsaStudy AGENTS.md / .gitignore / commit 了不该
+      commit 的文件）**不应自己去 revert history** —— 让开发者看到 git log 后 prune。
+    协议方**主动停止**对 EsaStudy cwd 的 modify,只维持 commit 历史的可读性。
+
+**边界总论**：协议方现在的 scope 是 `research-engineering/` 本体（commit + push  
+到 uukuguy/research-engineering）。EsaStudy cwd 让项目方自治。两者通过
+`.research/references.json` + `install_research_skills.py --global`(未启用)契约。
+
 ---
 
 ## 9. 待办
@@ -466,3 +494,14 @@ purpose 取值:
   - `RE_RENAME_RESEARCH_DIR_AND_REFERENCES_SPEC.md`（协议层）
   - `RE_RESEARCHLOG_UI_JSON_SPEC.md`（UI verb）
 - [ ] Architect 二次批准后动 code；动 code 前 commit 本讨论锚点
+
+### 9.1 后续 session 的方向
+
+按 Architect 拍板:
+- EsaStudy cwd 现在 ready,开发者 / Architect / RE session 在 cwd 起 codex/claude 
+  后直接操作 RE 协议(`make state` / `make record` / `make reconcile` / `make
+  telemetry`)。cwd is plain project dir,无 .claude/ .agents/。
+- EsaStudy cwd 的 git history 中 `dfe2ff4 / dd79fbf / 1458a2a / d0f4eea` 是 AI 误操作的
+  + 撤回痕迹,开发者在 git log 能追踪;AI 不动它们。
+- RE protocol 本体的下个动作:不大动;若 Protocol 缺什么 `research-engineering/` 本
+  体 commit 进。

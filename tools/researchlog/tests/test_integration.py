@@ -95,6 +95,71 @@ class InitReconciliationTests(GitRepoCase):
         self.assertTrue(active["git"]["dirty_expected"])
         self.assertEqual(active["git"]["expected_touched_files"], ["research/"])
 
+    def test_init_merge_preserves_project_side_git_state(self) -> None:
+        """A `--merge` re-init must not stomp on the cwd's git block.
+
+        The project side curates `git.branch / base_commit / dirty_expected`
+        to match its own workflow. Overwriting those on a no-op re-init
+        would race with the next project-side commit and force
+        ACTIVE_GIT_MISMATCH until the project commits again.
+        """
+        self.init_state()
+        active = json.loads((self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8"))
+        original_git = dict(active["git"])
+
+        # Simulate the project curating its own state: set a custom branch
+        # and a stale `base_commit` and a different `dirty_expected`.
+        custom = dict(active)
+        custom["git"] = {
+            "branch": "feature/curated",
+            "base_commit": "deadbeef0000000000000000000000000000dead",
+            "checkpoint_commit": None,
+            "dirty_expected": True,
+            "expected_touched_files": ["research/", "src/"],
+        }
+        (self.root / "research" / "ACTIVE.json").write_text(
+            json.dumps(custom, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+        # Re-run init in merge mode.
+        self.init_state("--merge")
+
+        after = json.loads((self.root / "research" / "ACTIVE.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            after["git"],
+            custom["git"],
+            "merge re-init must not touch ACTIVE.json's git block",
+        )
+        self.assertNotEqual(
+            after["git"],
+            original_git,
+            "sanity: the project-side change was actually applied",
+        )
+
+    def test_init_merge_does_not_emit_a_new_session_started_event(self) -> None:
+        """A `--merge` re-init must not append a new "started" session event.
+
+        The session log is append-only; the epoch is curated by the project.
+        Restarting either on an idempotent re-init would race with the
+        project side.
+        """
+        self.init_state()
+        sessions_path = self.root / "research" / "sessions.jsonl"
+        before = sessions_path.read_text(encoding="utf-8") if sessions_path.exists() else ""
+        before_lines = [l for l in before.splitlines() if l.strip()]
+        self.assertTrue(before_lines, "fresh init must have seeded at least one session log line")
+
+        # Re-run init in merge mode.
+        self.init_state("--merge")
+        after = sessions_path.read_text(encoding="utf-8")
+        after_lines = [l for l in after.splitlines() if l.strip()]
+        self.assertEqual(
+            len(after_lines),
+            len(before_lines),
+            "merge re-init must not append session log entries",
+        )
+
     def test_reconcile_is_clean_immediately_after_init(self) -> None:
         """The state `init` creates must not be reported as inconsistent by `init`'s own tool."""
         self.init_state()
