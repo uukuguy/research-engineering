@@ -101,21 +101,13 @@ def run(args: argparse.Namespace) -> Result:
     operator_written, operator_kept = _copy_operator_helpers(root, merge=args.merge)
     written = sorted(written + operator_written)
     kept = sorted(kept + operator_kept)
-    # On a fresh init the protocol stamps ACTIVE.json so reconcile does
-    # not cry wolf on day one. On a `--merge` re-init the cwd already has
-    # curated git state (branch, base_commit, dirty_expected) that the
-    # project side maintains; overwriting it here would race against the
-    # project's own commits and force ACTIVE_GIT_MISMATCH until the next
-    # project-side commit lands. So `--merge` keeps ACTIVE.json's git
-    # block exactly as the project wrote it.
-    if not existed:
-        _stamp_active(paths)
-    # V1 Block 2 / T5: on a fresh init, open the first session event so
-    # the cumulative telemetry KPI has an anchor to count from. A
-    # `--merge` re-init does NOT touch the session log: the existing cwd
-    # already has a curated epoch and an existing log, and restarting
-    # either on an idempotent re-run would race against the project side.
-    if not existed:
+    _stamp_active(paths)
+    # V1 Block 2 / T5: open the first session event so the cumulative
+    # telemetry KPI has an anchor to count from. Append-only: a re-init
+    # (`init` without --merge) refuses earlier; `--merge` skips the
+    # existing line by leaving the file alone (idempotent on the
+    # session log, just like on the canonical markdown files).
+    if not existed or args.merge:
         # Import by absolute module path to avoid re-entering this
         # package's `__init__.py` (which already imports `init` and
         # would self-trigger). The runtime resolver see this as
