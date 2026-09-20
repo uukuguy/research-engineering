@@ -121,6 +121,28 @@ def templates_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "templates" / "research"
 
 
+def workspace_helpers_dir() -> Path:
+    """Init-time non-state helpers: cwd-local Makefile + docs/OPERATIONS.md.
+
+    These do NOT belong to the canonical state schema — they are operator
+    affordances, written once on `init` and treated like AGENTS.md
+    (project-locale, free to edit). They live next to the state skeleton
+    so a single `init` writes the whole operator surface in one pass.
+    """
+    return Path(__file__).resolve().parents[2] / "templates" / "workspace-helpers"
+
+
+def protocol_root() -> Path:
+    """The repository root of the protocol install.
+
+    Used by `init` to substitute template placeholders (e.g.
+    `__RE_PROTOCOL_ROOT__` in the Makefile) with the absolute path of the
+    installed protocol so the cwd Makefile can reach the protocol toolchain
+    regardless of where the cwd lives.
+    """
+    return Path(__file__).resolve().parents[2]
+
+
 def build(root: Path, *, research_dir: str | None = None) -> ResearchPaths:
     """Build the canonical paths object for a research state root.
 

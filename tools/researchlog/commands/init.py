@@ -5,9 +5,16 @@ whether the repository's own `.gitignore` would silently exclude run provenance.
 
 That last check earns its place because the failure it catches is invisible. An
 unanchored `runs/` pattern excludes `research/runs/**` at any depth, and Git cannot
-re-include a file whose parent directory is excluded — so `manifest.json` never reaches
+re-include a file whose an excluded directory — so `manifest.json` never reaches
 the remote, the loss shows up only on another machine, and by then the run identity is
 gone.
+
+Plus a second concern: the operator (Architect, AI session, or downstream CI)
+needs surface affordances — a `Makefile` plus `docs/OPERATIONS.md` — to read
+state, observe progress, and spawn sessions without memorising long CLI
+incantations. Those helpers live in `templates/workspace-helpers/` next to the
+canonical-state skeleton and are written once on `init`, against the same
+idempotency rules as the rest of the skeleton (`--merge` preserves existing files).
 """
 
 from __future__ import annotations
@@ -38,6 +45,17 @@ SKELETON = (
     "BOUNDARIES.md",
     "ENVIRONMENT.md",
     "FINDINGS.md",
+)
+
+# Operator-affordance files written alongside the canonical state. Each entry
+# is a (source-relative-name, target-relative-name) pair. Source paths are
+# rooted at `templates/workspace-helpers/`; target paths are rooted at the
+# cwd. Placeholders of the form `__FOO__` are substituted with the actual
+# protocol root path so the cwd Makefile can find its toolchain regardless
+# of where it was installed.
+OPERATOR_HELPERS: tuple[tuple[str, str], ...] = (
+    ("Makefile", "Makefile"),
+    ("docs/OPERATIONS.md", "docs/OPERATIONS.md"),
 )
 
 
@@ -80,6 +98,9 @@ def run(args: argparse.Namespace) -> Result:
 
     repo.initialize_dirs(paths)
     written, kept = _copy_skeleton(source, paths, merge=args.merge)
+    operator_written, operator_kept = _copy_operator_helpers(root, merge=args.merge)
+    written = sorted(written + operator_written)
+    kept = sorted(kept + operator_kept)
     _stamp_active(paths)
     # V1 Block 2 / T5: open the first session event so the cumulative
     # telemetry KPI has an anchor to count from. Append-only: a re-init
@@ -117,6 +138,7 @@ def run(args: argparse.Namespace) -> Result:
             "written": sorted(written),
             "kept": sorted(kept),
             "already_initialized": existed,
+            "protocol_root": str(repo.protocol_root()),
         }
     )
     if args.submission_budget is not None:
@@ -153,6 +175,42 @@ def _copy_skeleton(source: Path, paths: repo.ResearchPaths, *, merge: bool) -> t
             continue
         shutil.copyfile(source / name, target)
         written.append(name)
+    return written, kept
+
+
+def _copy_operator_helpers(root: Path, *, merge: bool) -> tuple[list[str], list[str]]:
+    """Write the cwd-local `Makefile` and `docs/OPERATIONS.md` if absent.
+
+    These are non-canonical-state operator affordances: writing them once
+    on `init` keeps the cwd usable without the Architect memorising long
+    CLI invocations. `--merge` keeps an existing file unchanged, the same
+    idempotency rule the canonical state follows.
+
+    The `__RE_PROTOCOL_ROOT__` placeholder in `Makefile` is substituted
+    with the protocol's actual install root, so cwd Makefile entries
+    reach the toolchain regardless of where it lives on disk.
+    """
+    source_root = repo.workspace_helpers_dir()
+    if not source_root.is_dir():
+        return [], []
+    protocol = repo.protocol_root()
+    written: list[str] = []
+    kept: list[str] = []
+    for src_rel, tgt_rel in OPERATOR_HELPERS:
+        target = root / tgt_rel
+        if target.exists():
+            if merge:
+                kept.append(tgt_rel)
+                continue
+            # Avoid clobbering unless --merge (the user almost always wants
+            # to keep their local Makefile edits on re-init).
+            kept.append(tgt_rel)
+            continue
+        body = (source_root / src_rel).read_text(encoding="utf-8")
+        body = body.replace("__RE_PROTOCOL_ROOT__", str(protocol))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+        written.append(tgt_rel)
     return written, kept
 
 
