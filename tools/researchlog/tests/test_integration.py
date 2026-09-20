@@ -68,7 +68,13 @@ class GitRepoCase(unittest.TestCase):
             os.chdir(previous)
 
     def init_state(self, *extra: str) -> dict:
-        code, envelope = self.run_cli("init", *extra)
+        # Fixtures keep the legacy `research/` directory name so existing tests
+        # can hardcode paths unchanged; the dotted `.research/` form is exercised
+        # by the dedicated test suite (`DotResearchDirTests`).
+        argv = list(extra)
+        if "--legacy" not in argv:
+            argv = ["--legacy", *argv]
+        code, envelope = self.run_cli("init", *argv)
         self.assertEqual(code, 0, envelope)
         return envelope
 

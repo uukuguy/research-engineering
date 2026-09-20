@@ -50,11 +50,17 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="number of official submissions available; reaching it becomes an error",
     )
     parser.add_argument("--merge", action="store_true", help="fill in missing files without overwriting")
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="create the unprefixed `research/` directory instead of `.research/` "
+             "(only when an existing repo on the older layout must be preserved)",
+    )
 
 
 def run(args: argparse.Namespace) -> Result:
     root = (args.root or Path.cwd()).resolve()
-    paths = repo.build(root)
+    paths = repo.build(root, research_dir=("research" if args.legacy else None))
     existed = paths.active.exists()
 
     if existed and not args.merge:
@@ -74,7 +80,7 @@ def run(args: argparse.Namespace) -> Result:
 
     repo.initialize_dirs(paths)
     written, kept = _copy_skeleton(source, paths, merge=args.merge)
-    _stamp_active(paths, root)
+    _stamp_active(paths)
     # V1 Block 2 / T5: open the first session event so the cumulative
     # telemetry KPI has an anchor to count from. Append-only: a re-init
     # (`init` without --merge) refuses earlier; `--merge` skips the
@@ -150,10 +156,10 @@ def _copy_skeleton(source: Path, paths: repo.ResearchPaths, *, merge: bool) -> t
     return written, kept
 
 
-def _stamp_active(paths: repo.ResearchPaths, root: Path) -> None:
+def _stamp_active(paths: repo.ResearchPaths) -> None:
     data = json.loads(paths.active.read_text(encoding="utf-8"))
     data["updated_at"] = _now()
-    data["git"] = _initial_git_state(root)
+    data["git"] = _initial_git_state(paths)
     # V1 P2: backfill block.reproduction_iterations on ACTIVE instances that
     # pre-date the field. The template ships with the key set, but a repo that
     # ran `init` before P2 still has it missing; without this line the next
@@ -163,7 +169,7 @@ def _stamp_active(paths: repo.ResearchPaths, root: Path) -> None:
     paths.active.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def _initial_git_state(root: Path) -> dict[str, object]:
+def _initial_git_state(paths: repo.ResearchPaths) -> dict[str, object]:
     """Describe the tree as it actually is, so reconciliation does not cry wolf on day one.
 
     Straight after `init` the research directory is untracked, which makes the working
@@ -171,6 +177,7 @@ def _initial_git_state(root: Path) -> dict[str, object]:
     contradicts the moment anyone looks, and `reconcile` would report a mismatch on a
     state this very command just created.
     """
+    root = paths.root
     blank: dict[str, object] = {
         "branch": None,
         "base_commit": None,
@@ -185,7 +192,9 @@ def _initial_git_state(root: Path) -> dict[str, object]:
         "base_commit": jgit.head_commit(root),
         "checkpoint_commit": None,
         "dirty_expected": jgit.is_dirty(root),
-        "expected_touched_files": [f"{repo.RESEARCH_DIR}/"],
+        # Reflects whatever directory name `init` (or `--legacy`) actually
+        # wrote, so reconcile sees the real path under either layout.
+        "expected_touched_files": [f"{paths.research.name}/"],
     }
 
 

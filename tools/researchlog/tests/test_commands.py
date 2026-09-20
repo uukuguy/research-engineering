@@ -73,9 +73,11 @@ class CommandTestCase(unittest.TestCase):
         # gitignored, and the snapshot path is `research/.derived/`. Lay down
         # the same ignore pattern the production repo uses so the tests can
         # exercise the happy path under P1's new "every record is committed"
-        # regime.
+        # regime. The fixture keeps the legacy `research/` directory name
+        # (--legacy) so a single .gitignore line is enough; a separate class
+        # covers `.research/` discovery (DotResearchDirTests).
         (self.root / ".gitignore").write_text("research/.derived/\n", encoding="utf-8")
-        code, _ = self.invoke(["init"])
+        code, _ = self.invoke(["init", "--legacy"])
         self.assertEqual(code, 0, "init must succeed before any other command")
         # Baseline commit so V1 P1's "tree clean after record" assertion has a
         # well-defined starting point. Without this the test setup itself

@@ -53,7 +53,10 @@ DEFAULT_PROTECTED: tuple[str, ...] = (
     "*.ckpt",
 )
 MAX_FILE_BYTES = 20 * 1024 * 1024
+# Per-call: derived from the resolved research directory of the active state.
+# The legacy fixed string is kept for any external tooling that imports it.
 RESEARCH_PREFIX = "research/"
+LEGACY_RESEARCH_PREFIX = RESEARCH_PREFIX
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -241,7 +244,10 @@ def _requested(
 ) -> list[str]:
     requested = list(explicit)
     if paths.research.is_dir():
-        requested.append(RESEARCH_PREFIX)
+        # The active state decides which directory name to stage: `.research/`
+        # when that is what's on disk, `research/` for legacy state, with both
+        # forms never ambiguous (discover prefers .research).
+        requested.append(f"{paths.research.name}/")
     requested.extend(
         _normalize(paths.root, raw) for raw in active.get("git.expected_touched_files") or []
     )

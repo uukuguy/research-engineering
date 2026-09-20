@@ -1,8 +1,14 @@
 """Locating a research repository, and naming the files inside it.
 
-Discovery walks upward from the working directory looking for `research/ACTIVE.json`,
-the way Git looks for `.git`. That makes every subcommand work from anywhere in the
+Discovery walks upward from the working directory looking for `.research/ACTIVE.json`
+and falls back to `research/ACTIVE.json` for legacy state. The dotted name is the
+preferred one: a `research/` next to an existing `docs/research/` (as in the
+Embodied Safety Application challenge) is a different concept and the dot makes
+the RE state distinct on `ls`. That makes every subcommand work from anywhere in the
 tree without a `--root` flag, while `--root` remains available for scripts.
+
+RESEARCH_DIRS is the ordered pair [preferred, legacy]. New `init` writes the
+preferred name; legacy state keeps being read for backward compatibility.
 """
 
 from __future__ import annotations
@@ -13,7 +19,13 @@ import re
 
 from researchlog.errors import Finding, PreconditionMissing, SEVERITY_ERROR
 
-RESEARCH_DIR = "research"
+# Ordered [preferred, legacy]. Discovery checks the preferred name first so a
+# cwd that has both `.research/` and `research/` unambiguously uses `.research/`.
+# This is the same precedence a reader would give to the dot-prefixed directory
+# on a casual `ls`.
+RESEARCH_DIRS: tuple[str, ...] = (".research", "research")
+RESEARCH_DIR = RESEARCH_DIRS[0]  # preferred; kept for any external code that
+                                  # imports the single name
 ACTIVE_NAME = "ACTIVE.json"
 LEDGER_DIR = "ledger"
 RUNS_DIR = "runs"
@@ -109,8 +121,16 @@ def templates_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "templates" / "research"
 
 
-def build(root: Path) -> ResearchPaths:
-    research = root / RESEARCH_DIR
+def build(root: Path, *, research_dir: str | None = None) -> ResearchPaths:
+    """Build the canonical paths object for a research state root.
+
+    `research_dir` is the resolved directory name — `.research` or `research`.
+    When omitted, the preferred name is used, so a fresh `init` writes to
+    `.research/` while legacy state still reads from `research/` through
+    `discover`.
+    """
+    name = research_dir or RESEARCH_DIR
+    research = root / name
     return ResearchPaths(
         root=root,
         research=research,
@@ -129,11 +149,18 @@ def build(root: Path) -> ResearchPaths:
 
 
 def discover(start: Path | None = None) -> ResearchPaths | None:
-    """Walk up from `start` looking for a research state root. None if there is none."""
+    """Walk up from `start` looking for a research state root. None if there is none.
+
+    Each candidate directory is checked against `RESEARCH_DIRS` in order, so a
+    repo with both `.research/` and `research/` always resolves to `.research/`.
+    The chosen name is captured in `ResearchPaths.research` and used everywhere
+    downstream; nothing in the rest of the tool actually cares which one it is.
+    """
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
-        if (candidate / RESEARCH_DIR / ACTIVE_NAME).is_file():
-            return build(candidate)
+        for dirname in RESEARCH_DIRS:
+            if (candidate / dirname / ACTIVE_NAME).is_file():
+                return build(candidate, research_dir=dirname)
     return None
 
 
@@ -141,9 +168,10 @@ def require(start: Path | None = None) -> ResearchPaths:
     """Like discover, but explains what to do when there is no state yet."""
     found = discover(start)
     if found is None:
+        wanted = " or ".join(f"{d}/{ACTIVE_NAME}" for d in RESEARCH_DIRS)
         raise PreconditionMissing(
             "RESEARCH_STATE_ABSENT",
-            f"no {RESEARCH_DIR}/{ACTIVE_NAME} found in this directory or any parent",
+            f"no {wanted} found in this directory or any parent",
             "run `researchlog init` to create the skeleton, or pass --root for a different tree",
         )
     return found

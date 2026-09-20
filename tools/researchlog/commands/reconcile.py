@@ -434,20 +434,34 @@ def _gitignore_guard(
 def _worktree_multi_writer(
     paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
 ) -> list[Finding]:
-    """P9 single-writer enforcement: only one worktree may write research/ at a time.
+    """P9 single-writer enforcement: only one worktree may write the canonical
+    state directory at a time. Both `.research/` (preferred) and `research/`
+    (legacy) are checked, so a repo mid-migration cannot accidentally drop
+    coverage of whichever form is still on disk.
 
     Multi-writer is structurally unsafe — a merge conflict in canonical state silently
     loses one writer's work. The detector flags every dirty worktree beyond the first,
     so the agent has a name to act on rather than a vague "stop writing".
 
-    The check is on `research/` specifically, not the whole tree: `code_state` already
-    tracks general dirtiness, and a code change on a sibling worktree is unrelated to
-    canonical state. The protocol binds canonical state, not code.
+    The check is on the canonical state directory specifically, not the whole tree:
+    `code_state` already tracks general dirtiness, and a code change on a sibling
+    worktree is unrelated to canonical state. The protocol binds canonical state,
+    not code.
     """
     if not jgit.is_repository(paths.root):
         return []
     worktrees = _list_worktrees(paths.root)
     if len(worktrees) <= 1:
+        return []
+    # Pick whichever directory name actually exists. Both must never be
+    # simultaneously dirty (that itself is a finding the detector surfaces) but
+    # in normal operation exactly one of them is on disk.
+    target = None
+    for dirname in repo.RESEARCH_DIRS:
+        if (paths.root / dirname).is_dir():
+            target = dirname
+            break
+    if target is None:
         return []
     dirty: list[dict[str, str]] = []
     for wt in worktrees:
@@ -455,10 +469,11 @@ def _worktree_multi_writer(
         if not wt_path:
             continue
         # Skip detached worktrees the porcelain check can't address safely — detached
-        # worktrees that dirty research/ are still illegal; we just can't reach them here
-        # without making the detector's false-negative rate worse than its signal.
+        # worktrees that dirty the canonical directory are still illegal; we just
+        # can't reach them here without making the detector's false-negative rate
+        # worse than its signal.
         porcelain = jgit.git(
-            ["status", "--porcelain", "--", repo.RESEARCH_DIR], cwd=Path(wt_path)
+            ["status", "--porcelain", "--", target], cwd=Path(wt_path)
         )
         if porcelain.ok and porcelain.stdout.strip():
             dirty.append(wt)
