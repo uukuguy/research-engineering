@@ -33,6 +33,28 @@ CLIENTS: dict[str, str] = {
     ".agents/skills": ".agents",
 }
 
+# Global install dirs (each client picks up its skills from one of these).
+# Claude Code reads ~/.claude/skills/<skill>/. Codex (current) reads from
+# ~/.agents/skills/<skill>/ per its config. ~/.codex/skills/ is the older
+# Codex layout and is still kept in sync for users with that path pinned.
+GLOBAL_CLIENTS: dict[str, Path] = {
+    "~/.claude/skills": Path.home() / ".claude" / "skills",
+    "~/.agents/skills": Path.home() / ".agents" / "skills",
+    "~/.codex/skills": Path.home() / ".codex" / "skills",
+}
+
+
+def re_skill_names(source: Path) -> frozenset[str]:
+    """Names of skills the RE protocol owns. Anything else in a global
+    skills directory belongs to another plugin / tool and must not be touched
+    by install or --check.
+    """
+    return frozenset(
+        child.name
+        for child in source.iterdir()
+        if child.is_dir() and (child / "SKILL.md").is_file()
+    )
+
 EXIT_OK = 0
 EXIT_DRIFT = 1
 EXIT_ERROR = 2
@@ -41,14 +63,26 @@ EXIT_ERROR = 2
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="install_research_skills",
-        description="Install the canonical skills into .claude/skills and .agents/skills.",
+        description="Install the canonical skills into the chosen destinations.",
         epilog="Run with --check in CI or a gate to catch drift between the two copies.",
     )
     target = parser.add_mutually_exclusive_group(required=True)
-    target.add_argument("--self", action="store_true", help="install into this repository")
-    target.add_argument("--target", type=Path, help="install into another repository")
+    target.add_argument("--self", action="store_true", help="install into this repository's .claude/ and .agents/")
+    target.add_argument("--target", type=Path, help="install into another repository's .claude/ and .agents/")
+    target.add_argument(
+        "--global",
+        dest="install_global",
+        action="store_true",
+        help="install into the user's global client skill directories "
+             "(~/.claude/skills/, ~/.agents/skills/, ~/.codex/skills/) so every "
+             "research workspace session picks them up without per-study sync",
+    )
     parser.add_argument("--check", action="store_true", help="report drift; write nothing")
-    parser.add_argument("--client", choices=sorted(CLIENTS), help="limit to one client")
+    parser.add_argument(
+        "--client",
+        choices=sorted(CLIENTS) + sorted(GLOBAL_CLIENTS),
+        help="limit to one client (project-relative or global path)",
+    )
     parser.add_argument("--quiet", action="store_true")
     return parser.parse_args(argv)
 
@@ -128,6 +162,10 @@ def install(expected: dict[str, bytes], destination: Path, *, quiet: bool) -> in
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.install_global:
+        return _run_global(args)
+
     root = Path.cwd().resolve() if args.self else args.target.resolve()  # type: ignore[union-attr]
     source = canonical_source()
 
@@ -162,6 +200,125 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_DRIFT
+    return EXIT_OK
+
+
+def _run_global(args: argparse.Namespace) -> int:
+    """Install into ~/.claude/skills/, ~/.agents/skills/, ~/.codex/skills/.
+
+    The clients only need their own overlay; Claude Code reads from .claude/,
+    Codex (current) from .agents/ and the legacy ~/.codex/skills/ mirror is
+    preserved for users with that path pinned. Each overlay is installed
+    against the canonical source so a downstream workspace session sees the
+    exact same SKILL.md as a developer running --self on this repo.
+
+    Scope: only RE-owned skills are touched. Other plugins share the same
+    global directories and must not be overwritten or have their files
+    listed as drift.
+    """
+    source = canonical_source()
+    if not source.is_dir():
+        print(f"error: canonical skill source not found at {source}", file=sys.stderr)
+        return EXIT_ERROR
+
+    owned = re_skill_names(source)
+    if not owned:
+        print("error: no RE-owned skills found in canonical source", file=sys.stderr)
+        return EXIT_ERROR
+
+    targets: dict[str, str]
+    if args.client:
+        if args.client in GLOBAL_CLIENTS:
+            targets = {args.client: ".agents" if ".agents" not in args.client else ".claude"}
+        else:
+            print(f"error: --client {args.client!r} is not a global target", file=sys.stderr)
+            return EXIT_ERROR
+    else:
+        # Each global dir has its own overlay dir name on disk because the
+        # convention stores a per-client overlay next to it (e.g. ~/.agents/
+        # carries a Codex-style subdirectory). We map each global home to the
+        # overlay it should consume from `skills/<overlay>/`.
+        targets = {
+            "~/.claude/skills": ".claude",
+            "~/.agents/skills": ".agents",
+            "~/.codex/skills": ".codex",
+        }
+
+    drift_found = False
+    for relative, overlay in targets.items():
+        destination = GLOBAL_CLIENTS[relative]
+        expected_full = expected_tree(source, overlay)
+        # Restrict to RE-owned skill trees so unrelated plugins sharing the
+        # same home directory never get flagged.
+        expected = {f"{name}/{rest}": content for name, rest in (
+            (k.partition("/")[0], k.partition("/")[2]) for k in expected_full
+        ) if name in owned for k, content in expected_full.items() if k.startswith(f"{name}/")}
+
+        if args.check:
+            differences = diff(expected, _installed_re_skills(destination, owned))
+            if differences:
+                drift_found = True
+                print(f"{relative}: DRIFT ({len(differences)} file(s))", file=sys.stderr)
+                for line in differences:
+                    print(line, file=sys.stderr)
+            elif not args.quiet:
+                print(f"{relative}: up to date ({len(expected)} file(s))")
+            continue
+
+        _install_re_skills(expected, destination, quiet=args.quiet)
+
+    if drift_found:
+        print(
+            "\nGlobal copies differ from skills/. Edit skills/ and re-run with --global; "
+            "never edit an installed copy directly.",
+            file=sys.stderr,
+        )
+        return EXIT_DRIFT
+    if not args.quiet:
+        print(
+            f"\nInstalled {len(targets)} global client dir(s) (RE-owned skills only). "
+            f"Every research workspace session picks them up on next start."
+        )
+    return EXIT_OK
+
+
+def _installed_re_skills(destination: Path, owned: frozenset[str]) -> dict[str, bytes]:
+    """Read installed files only under RE-owned skill subdirectories.
+
+    Other plugins share the destination home (`~/.claude/skills/`, etc.);
+    listing them as drift would be a false positive and overwrite them on
+    real install. Scoping is `path.parts[0] in owned` after relativising to
+    `destination`.
+    """
+    if not destination.is_dir():
+        return {}
+    out: dict[str, bytes] = {}
+    for path in sorted(destination.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(destination)
+        if not rel.parts or rel.parts[0] not in owned:
+            continue
+        out[str(rel)] = path.read_bytes()
+    return out
+
+
+def _install_re_skills(
+    expected: dict[str, bytes], destination: Path, *, quiet: bool
+) -> int:
+    """Install only RE-owned skill trees; leave other plugins untouched."""
+    owned_names = {k.partition("/")[0] for k in expected}
+    # Remove only the RE-owned subtrees first so unrelated plugin files stay.
+    for name in owned_names:
+        sub = destination / name
+        if sub.is_dir():
+            shutil.rmtree(sub)
+    for name, content in expected.items():
+        path = destination / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    if not quiet:
+        print(f"installed {len(expected)} file(s) for {len(owned_names)} RE skill(s) into {destination}")
     return EXIT_OK
 
 

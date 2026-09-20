@@ -3,7 +3,7 @@
 
 .PHONY: acceptance acceptance-full acceptance-v0 acceptance-v1 acceptance-manual \
         acceptance-list acceptance-scan-docs acceptance-fix-docs \
-        acceptance-clean
+        acceptance-clean install-global install-global-check
 
 # Fast run — AUTO cases only (≤60s each). Default entry point.
 # 27 V0/V1 cases that don't need claude/pi.
@@ -45,3 +45,13 @@ acceptance-fix-docs:
 # docs/RE_ACCEPTANCE_REPORT_<timestamp>.md.
 acceptance-clean:
 	rm -rf /tmp/re-fixture-* /tmp/re-acceptance-* /tmp/re-case-* 2>/dev/null || true
+
+# Install RE skills into the user's global client directories so every
+# research workspace (~/sandbox/agentic-2026/<study>/) picks them up on
+# next start. Scope is RE-owned skills only; other plugins sharing the same
+# global home stay untouched.
+install-global:
+	python3 tools/install_research_skills.py --global
+
+install-global-check:
+	python3 tools/install_research_skills.py --global --check
