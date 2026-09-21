@@ -89,8 +89,21 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "add",
         help="add or replace a registered external research target",
     )
-    add.add_argument("--id", required=True, help="stable id used to reference this target")
-    add.add_argument("--path", required=True, type=Path, help="absolute path to the target")
+    add.add_argument(
+        "id_positional",
+        nargs="?",
+        default=None,
+        help="stable id used to reference this target (positional; equivalent to --id)",
+    )
+    add.add_argument(
+        "path_positional",
+        nargs="?",
+        default=None,
+        type=Path,
+        help="absolute path to the target (positional; equivalent to --path)",
+    )
+    add.add_argument("--id", dest="id", default=None, help="stable id used to reference this target")
+    add.add_argument("--path", dest="path", default=None, type=Path, help="absolute path to the target")
     add.add_argument(
         "--type",
         default="experimental_project",
@@ -161,6 +174,24 @@ def _ref_id_already_exists(doc: dict[str, Any], ref_id: str) -> bool:
 
 
 def run_add(args: argparse.Namespace, paths: repo.ResearchPaths) -> Result:
+    # The operator may pass either `id / path` as `--id X --path Y` (explicit)
+    # or positionally as `references add <id> <path>` (compact). Merge both
+    # before any validation so the two forms behave identically.
+    args.id = args.id or args.id_positional
+    args.path = args.path or args.path_positional
+    if not args.id:
+        raise PreconditionMissing(
+            "REFERENCE_ID_MISSING",
+            "an id is required (positional first arg or --id)",
+            "pass `references add <id> <path>` or `references add --id X --path Y`",
+        )
+    if not args.path:
+        raise PreconditionMissing(
+            "REFERENCE_PATH_MISSING_ON_ARGPARSE",
+            "a path is required (positional second arg or --path)",
+            "pass `references add <id> <path>` or `references add --id X --path Y`",
+        )
+
     if args.purpose not in VALID_PURPOSES:
         raise RefusedByPolicy(
             "INVALID_PURPOSE",

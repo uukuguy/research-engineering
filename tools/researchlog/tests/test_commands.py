@@ -2708,6 +2708,30 @@ class ReferencesVerbTests(CommandTestCase):
         self.assertEqual(entry["path"], str(target))
         self.assertIn("REFERENCE_REGISTERED", {f["code"] for f in envelope["findings"]})
 
+    def test_add_accepts_id_and_path_as_positional_args(self) -> None:
+        """`references add <id> <path>` is the compact form operators reach
+        for first. The verb must accept the two values positionally and
+        produce the same registration as the explicit `--id / --path` form.
+        """
+        target = self._tmp_path() / "sibling-positional"
+        target.mkdir()
+        code, envelope = self.invoke(
+            [
+                "references",
+                "add",
+                "sibling-pos",
+                str(target),
+                "--purpose",
+                "primary_read_only_target",
+            ]
+        )
+        self.assertEqual(code, 0, envelope)
+        refs = self._read_refs()["external_refs"]
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(refs[0]["id"], "sibling-pos")
+        self.assertEqual(refs[0]["path"], str(target))
+        self.assertEqual(refs[0]["read_only"], True)
+
     def test_add_replaces_existing_id_in_place(self) -> None:
         target = self._tmp_path() / "one"
         target.mkdir()
