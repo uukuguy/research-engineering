@@ -1,6 +1,7 @@
 ---
 name: evaluation-design
-description: 测量表面本身可不可信——"用来评价机制的尺子"准不准。Trigger: 没有 evaluator / local metric 与 E4/E5 或 architect 观察矛盾 / leakage/reward hacking/proxy overfit 风险。不要调我: 单 run 对照假设 → `experiment-review` / 方向反思 → `retrospective` / 换家族 → `research-search` / claim 落地前红队 → `scenario-redteam`。
+description: >-
+  测量表面本身可不可信——"用来评价机制的尺子"准不准。Trigger: 没有 evaluator / local metric 与 E4/E5 或 architect 观察矛盾 / leakage/reward hacking/proxy overfit 风险。不要调我: 单 run 对照假设 → `experiment-review` / 方向反思 → `retrospective` / 换家族 → `research-search` / claim 落地前红队 → `scenario-redteam`。
 ---
 
 # Evaluation Design
@@ -67,6 +68,29 @@ The last one matters most for how the surface may be cited. A local proxy calibr
 against nothing is an E1 artifact. A local proxy that has been checked against a set of E4
 episodes and a handful of architect observations is much stronger, and it should say which
 comparison produced that.
+
+## Check what produces the number
+
+Before using a probe to favor a mechanism, trace its reported result back to the
+actual input and computation. Distinguish measured behavior, extracted source facts,
+and investigator-authored assumptions. List which premises come from authoritative
+artifacts and which were chosen by the agent. A manifest naming documents does not
+prove the script reads or checks them.
+
+A hardcoded coverage/compatibility matrix can expose consequences of explicit
+assumptions, but executing it does not independently validate those assumptions or
+establish detector performance. Repeating the same calculation establishes only
+computational repeatability. Availability of RGB or text is not by itself proof that
+an attack is distinguishable from benign input. Missing documentation is not proof
+of a missing runtime capability.
+
+Ask whether the same output would be produced if the real-world mechanism failed
+while the authored constants stayed fixed. If yes, that output cannot support a
+claim that the mechanism works. Retain useful contract analysis at its justified
+scope; do not claim hypotheses were differentiated merely because a script ran.
+For a broader claim, use independent observations or calibration that can actually
+contradict it. If required causal information is absent, mark the broader evidence
+invalid/undetermined instead of validating it through a limitation paragraph.
 
 ## Do not promote a scalar proxy into the real objective
 

@@ -62,7 +62,8 @@ LEGACY_RESEARCH_PREFIX = RESEARCH_PREFIX
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", type=Path, default=None)
     parser.add_argument("--message", default=None)
-    parser.add_argument("--paths", action="append", default=[], metavar="PATH")
+    parser.add_argument("--paths", action="append", default=[], metavar="PATH",
+                        help="exclusive scope; includes untracked files in these paths")
     parser.add_argument(
         "--all-expected", action="store_true", help="also stage every modified file"
     )
@@ -150,10 +151,11 @@ def _commit(
         raise StateInvalid(
             [Finding("CHECKPOINT_STAGE_FAILED", SEVERITY_ERROR, "git add", staged.stderr.strip())]
         )
-    if not jgit.git(["diff", "--cached", "--name-only"], cwd=paths.root).stdout.strip():
+    if not jgit.git(["diff", "--cached", "--name-only", "--", *files], cwd=paths.root).stdout.strip():
         return _nothing_to_commit(result, args)
 
-    committed = jgit.git(["commit", "-m", message], cwd=paths.root)
+    # A checkpoint owns its screened paths, not the user's entire index.
+    committed = jgit.git(["commit", "--only", "-m", message, "--", *files], cwd=paths.root)
     if not committed.ok:
         raise StateInvalid(
             [
@@ -242,6 +244,15 @@ def _requested(
     args: argparse.Namespace,
     explicit: list[str],
 ) -> list[str]:
+    # An explicit scope is a boundary, not an addition to the default scope.
+    if explicit:
+        if args.all_expected or args.include_untracked:
+            raise RefusedByPolicy(
+                "CHECKPOINT_AMBIGUOUS_SCOPE",
+                "--paths cannot be combined with broad inclusion flags",
+                "explicit paths already include untracked files within that scope",
+            )
+        return _dedupe(explicit)
     requested = list(explicit)
     if paths.research.is_dir():
         # The active state decides which directory name to stage: `.research/`

@@ -173,12 +173,25 @@ An `idle` `ACTIVE.json` on this repository is the normal state, not a gap to fil
 5. **Raw evidence is append-only.** Beliefs and current state are rebuildable; chat
    context is not a source of truth.
 6. **Session context is disposable.** Everything decision-relevant lives in the repo.
-7. **Architect steering is an impulse, not a takeover.** After any correction, return
-   to autonomous research.
+7. **Architect steering is an impulse, not a takeover.** During an authorized block,
+   incorporate corrections and return to autonomous research within its remaining scope
+   and budget. Discussion or critique at a pause does not authorize another block.
 8. **A missing or untrustworthy evaluation surface is a research problem**, not a
    licence to optimize a bad metric.
 
 ## Authority
+
+Distinguish discussion from execution. Questions, observations, critiques and proposed
+directions at a pause call for application/architecture analysis and recommendations,
+not automatic research-engineering execution or canonical writes. Explicit requests to
+fix, implement or continue authorize bounded work; no special phrasing is required.
+Skill auto-selection itself never supplies that authority. Do not ask for permission
+after every discussion reply; leave work unstarted unless requested.
+
+For unfamiliar files, identify type before text inspection. Never cat/head/sed binary
+executables, archives or binary USD to terminal/tool output. `/usr/bin/usdcat` is a
+Mach-O executable, not a script. The research-engineering skill's `scripts/safe_preview.py`
+provides bounded escaped text or hex; it is a safe reader, not a shell interception hook.
 
 The architect owns: strategic direction, HARD boundaries and resource policy,
 physical/simulation observation, major architecture decisions and vetoes, external
@@ -245,6 +258,22 @@ writes them.
 
 ## Language
 
+### Reports to the architect
+
+Lead with what happened, what it means for the project, and whether a human decision
+is needed. Default to a short Chinese brief, not a protocol walkthrough. Explain
+unavoidable technical terms on first use; keep model/library names exact. Do not
+make the architect decode terms such as evidence surface, frontier, closure, or
+rehydration to understand progress. Internal IDs, schema fields, maturity codes,
+and YAML belong in linked evidence or an explicitly requested handoff/audit appendix.
+Say what was actually tested and what remains unproven in ordinary language.
+Distinguish observed facts, interpretations, and recommendations. A script running,
+a schema check passing, or a file being written is not by itself research progress.
+For a decision, state the choice, recommendation, practical tradeoff, and consequence
+of waiting. For an error, name the mistake and its effect without euphemism. If no
+decision is needed, say so briefly; do not invent one. Expand detail when asked or
+when it materially changes the decision, not to fill a standard report template.
+
 - **Human-facing research artifacts: Chinese**, keeping technical terms, algorithm and
   library names, metrics, and IDs in their original English form. This includes the
   architect-facing output of `research-status`.
@@ -258,14 +287,23 @@ writes them.
 
 ## Skills
 
-Three **entry skills** + five V1 **expert skills** that the main loop dispatches to:
+Six **entry skills** + five V1 **expert skills** that the main loop dispatches to:
 
 **Entry skills** — always reachable from the main router:
+
+- `research-resume` — session-local read-only recovery after clearing or a fresh start;
+  delegates to research-status and waits. No automatic clear hook or research authority.
+- `research-routes` — inspect the durable portfolio, or explicitly park/switch/wake
+  a route without starting experiments. CURRENT.research_routes is written through
+  `researchlog routes`; AI compares routes at authorized block boundaries and retains
+  valuable deferred options with wake conditions. ACTIVE remains the execution pointer.
 
 - `research-bootstrap` — zero-state initialization. Only when canonical state is
   absent, unrecoverable, or the architect asks for a clean re-initialization.
 - `research-engineering` — the main loop; holds the router table for `references/`.
 - `research-status` — read-mostly Chinese Project Working Model for the architect.
+- `research-pause` — explicit session close: persist existing work, verify recovery
+  prerequisites, and report readiness without starting experiments or lifting constraints.
 
 **V1 expert skills** — loaded by the main loop when their trigger fires (a router
 table inside `research-engineering` decides; see the V1_IMPLEMENTATION_PLAN §10):

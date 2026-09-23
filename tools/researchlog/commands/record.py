@@ -245,6 +245,12 @@ def _build(
     _apply_science(document, args, paths, warnings)
     _apply_links(document, args)
     document.setdefault("created_at", _now())
+    if document.get("session_epoch") is None:
+        try:
+            document["session_epoch"] = state.load_active(paths).get("session_epoch")
+        except StateInvalid:
+            # Evidence must remain recordable during recovery of a broken pointer.
+            document["session_epoch"] = None
     if document.get("code_state") is None:
         document["code_state"] = jgit.code_state(paths.root).to_dict()
     if document.get("block_id") is None:
@@ -669,7 +675,9 @@ def _commit_evidence(
         handle.write(message + "\n")
         message_path = Path(handle.name)
     try:
-        committed = jgit.commit_with_message_file(paths.root, message_path)
+        committed = jgit.commit_with_message_file(
+            paths.root, message_path, only_paths=[evidence_relpath]
+        )
     finally:
         message_path.unlink(missing_ok=True)
 

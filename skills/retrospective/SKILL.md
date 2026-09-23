@@ -1,6 +1,7 @@
 ---
 name: retrospective
-description: 当前机制家族内一系列实验的方向是否对——慢循环里"家族内"那一半。Trigger: 5+ counted iterations belief_delta: none / phase boundary 8-15 / local metric vs 物理/仿真观察分歧。不要调我: 测量表面 → `evaluation-design` / 单 run 对照假设 → `experiment-review` / 换家族 → `research-search` / claim 落地前 → `scenario-redteam`。
+description: >-
+  当前机制家族内一系列实验的方向是否对——慢循环里"家族内"那一半。Trigger: 5+ similar changes without substantive progress, including uncounted attempts / phase boundary 8-15 / local metric vs 物理/仿真观察分歧。不要调我: 测量表面 → `evaluation-design` / 单 run 对照假设 → `experiment-review` / 换家族 → `research-search` / claim 落地前 → `scenario-redteam`。
 ---
 
 # Retrospective
@@ -17,7 +18,10 @@ retrospective asks whether the experiments being run are the right ones at all.
 - the agent has been doing exploitation inside one parameter or mechanism family;
 - the dominant failure has moved and the research has not followed it.
 
-The first of those is a scheduled check. The rest are alarms.
+The first of those is a scheduled check. The rest are alarms. Count failed/uncounted
+attempts when assessing wasted effort; valid-evidence counters are not stagnation
+counters. Research-engineering's immediate method-reset alarm acts before this slower
+allocation review and does not require loading every expert skill.
 
 ## The questions
 

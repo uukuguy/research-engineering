@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RE · 研究工作台</title><meta name="description" content="项目能力、研究路线与证据的本地只读工作台">
+<link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<header><a class="brand" href="#"><span class="mark">RE</span><span>研究工作台</span></a><span class="readonly">本地 · 只读</span><button id="refresh">刷新记录 ↻</button></header>
+<main>
+<div class="project-line"><div><span class="eyebrow">RESEARCH ENGINEERING</span><h1 id="project">正在读取项目</h1></div><div class="state"><span id="status" class="pill">读取中</span><span id="updated" class="meta">连接本地记录…</span></div></div>
+<div id="error" role="alert" hidden></div>
+<div id="freshness" class="notice">首次读取中。页面刷新不是研究进展，也不是进程心跳。</div>
+<section class="panel routes-panel" aria-labelledby="activity-title"><h2 id="activity-title">当前研究记录</h2><p id="activity-text">正在读取…</p><p id="activity-meta" class="meta"></p><button id="activity-details" class="text-button">查看本轮目标与最新记录 ↗</button><p class="section-note">本轮工作与下方保存的路线焦点分别展示；记录状态不代表进程存活。</p></section>
+<details id="brief-panel" class="brief panel" open><summary class="section-label"><span id="brief-label">当前判断</span><span id="brief-date" class="meta"></span></summary><h2 id="headline">等待项目摘要</h2><p id="goal" class="goal"></p><div class="brief-grid"><article><h3><span class="dot mint"></span>已经具备</h3><p id="capability"></p></article><article><h3><span class="dot amber"></span>关键缺口</h3><p id="gap"></p></article><article><h3><span class="dot blue"></span>AI 建议下一步</h3><p id="next"></p></article></div><div class="decision"><span>架构师决策</span><p id="decision"></p></div></details>
+<div class="workspace"><section class="panel routes-panel"><div class="section-head"><div><span class="eyebrow">RESEARCH PORTFOLIO</span><h2>研究路线</h2></div><span id="route-count" class="meta"></span></div><p class="section-note">当前焦点不代表正在运行；优先级不代表执行授权。</p><div id="routes" class="routes"></div></section>
+<section class="panel timeline-panel"><div class="section-head"><div><span class="eyebrow">WHAT CHANGED</span><h2>最近变化</h2></div></div><p class="section-note">路线转向与已落地证据，不展示工具调用流水。</p><div id="events" class="timeline"></div></section></div>
+<section class="panel conclusions-panel"><div class="section-head"><div><span class="eyebrow">EVIDENCE & INSIGHT</span><h2>结论与研究文档</h2></div><span id="finding-count" class="meta"></span></div><p class="section-note">结论有适用边界。支持某次局部实验，不等于应用已经可用。</p><div id="conclusions" class="conclusions"></div></section>
+<footer><span id="health">等待状态校验</span><button id="diagnostics" class="text-button">查看记录与校验依据 ↗</button><span>进程存活、心跳：尚未采集</span></footer>
+</main>
+<dialog id="detail" aria-labelledby="detail-title"><div class="drawer-head"><span class="eyebrow">RESEARCH DETAIL</span><button id="close" aria-label="关闭详情">关闭 ×</button></div><h2 id="detail-title"></h2><div id="detail-body"></div></dialog>
+</body></html>

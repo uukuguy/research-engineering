@@ -210,8 +210,23 @@ def _verdict(
             "a delta measured while several inputs moved cannot be assigned to any one of them",
         ]
 
+    left_code = first.get("code_state") or {}
+    right_code = second.get("code_state") or {}
+    left_tree, right_tree = left_code.get("tree_sha256"), right_code.get("tree_sha256")
+    if left_tree and right_tree:
+        same_code = left_tree == right_tree
+    else:
+        # Older evidence has no code-tree hash. Different commits cannot safely
+        # be declared equal just because both working trees were clean.
+        same_code = left_code.get("commit") == right_code.get("commit")
+    if not same_code:
+        return ATTRIBUTION_FORBIDDEN, [
+            "committed code identities differ (or legacy records cannot establish equality)",
+            "use the same executable baseline before attributing the measurement delta",
+        ]
+
     if _diff(first) == _diff(second):
-        return COMPARABLE, ["environment fingerprint and working-tree delta are identical"]
+        return COMPARABLE, ["environment, committed code and working-tree delta are identical"]
 
     return ATTRIBUTION_FORBIDDEN, [
         "the working-tree delta differs between the two records",

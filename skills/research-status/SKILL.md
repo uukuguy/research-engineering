@@ -5,12 +5,9 @@ description: Use when the lead architect asks for current project progress, glob
 
 # Research Status
 
-Compile the repository's current research state into a compact Project Working Model.
-
-Two audiences read the same report:
-
-1. the lead architect, who needs the global picture without reconstructing it;
-2. an AI agent, which can paste it back in as high-quality context compression.
+Explain the project's current state to the architect in plain Chinese. The default
+reader is a human deciding what to do, not an agent parsing a compressed state dump.
+An explicitly requested handoff can additionally serve a future agent.
 
 It is a **derived snapshot**. Canonical truth stays in `research/ACTIVE.json`,
 `CURRENT.md`, `ARCHITECT.md`, `BOUNDARIES.md`, `ENVIRONMENT.md`, `FINDINGS.md`, the
@@ -21,13 +18,15 @@ skill does not restate them.
 
 ## Language
 
-The visible report is **Chinese**, with technical terms, algorithm and library names,
-metrics, protocol names, Git refs and tags, and canonical IDs (`EV-*`, `EXP-*`, `H-*`,
-`FND-*`, `RB-*`, `ENV-*`) kept in their original English form.
+The visible report is **plain Chinese**. Preserve exact model/library names and
+necessary metrics; explain unfamiliar terms at first use. Prefer "只检查了输入文件，
+还没运行机器人任务" to "E1 闭环完成，E4 尚未闭合". Prefer "它漏查了数据链接，
+所以错误地认为没有数据" to "环境可行性表面出现偏移". These are examples of clarity,
+not phrases to repeat regardless of evidence.
 
-Keep the structure stable enough that the same report can be pasted into a new Codex or
-Claude Code session as usable context. Do not maintain a bilingual duplicate — one
-canonical English state, one Chinese report that references it by ID.
+Do not lead with protocol names, IDs, Git hashes, or state fields. Put evidence links
+next to material claims; reserve machine-readable detail for a requested handoff or
+audit. Canonical state remains English; do not create a second bilingual truth source.
 
 ## Read-mostly
 
@@ -49,6 +48,32 @@ working tree — a query that manufactures a dirty diff makes the next resume tr
 own footprints.
 
 ## Sources, in order
+
+### Lightweight session opening
+
+If the canonical state directory contains `delegations/`, query `delegate list` with
+the local CLI. Include unanswered worker questions, returned-but-unreviewed results,
+and their application relevance. Recorded dispatch is not liveness; do not relaunch,
+collect, cancel or review work during a read-only opening.
+
+For an established project, this skill contains the read-only opening protocol;
+do not load the full research-engineering loop merely because a new client opened.
+Read TASK, active architect directions and canonical state first, batching independent
+reads. Inspect only the few evidence/artifact references needed for material claims.
+`reconcile`, `validate`, `active --get-json` and snapshot queries are read-only and
+need no authorization to begin research. They must not be confused with repair.
+
+Do not re-extract an original DOCX/PDF, reload domain documentation skills, enumerate
+the whole repository/data tree or repeat the prior investigation simply because TASK
+links an original source. Descend to source when the required fact is missing, conflicts
+with current instructions, or source identity has changed/has not been established for
+a claim requiring verification. Otherwise report the recorded conclusion with its basis
+and limitations; do not describe it as newly verified. An unverified source freshness
+check is unknown, not an excuse to silently certify old conclusions as current.
+
+Run mechanical checks once on an unchanged snapshot. If they fail, report the impact
+and stop at the briefing; do not expand into a repair or research cycle. If opening
+takes over a minute, explain the specific remaining check rather than going silent.
 
 ```bash
 python3 tools/researchlog reconcile --json    # ACTIVE / Git / runs / evidence, one shot
@@ -89,8 +114,10 @@ Also check:
 - whether `FINDINGS.md` cites evidence that is present in the ledger.
 
 `reconcile` reports most of this mechanically; read `findings[].code` rather than
-re-deriving it. On material inconsistency, put a `STATUS INTEGRITY WARNING` near the top
-naming the conflicting facts and the IDs involved. Do not silently repair a destructive
+re-deriving it. On material inconsistency, put a plain Chinese warning near the top
+explaining which records disagree, what that prevents us from trusting, and the next
+safe step. Link affected evidence; do not make a code the explanation.
+Do not silently repair a destructive
 ambiguity — that is `research-engineering`'s job, under the resume protocol.
 
 ## Reporting principles
@@ -115,28 +142,82 @@ environment-relevant progress. Do not enumerate commits, files, tests, or routin
 experiments — a status report that reads as a project-management ledger has failed at
 context compression.
 
-## Default report structure
+## Default brief
 
-1. One-line project status
-2. Current working contract (active block, objective, limits)
-3. Three-axis maturity: System / Evidence / Research Environment
-4. Current system and architecture shape, marked provisional unless it is not
-5. Recent substantive progress — belief-changing or architecture-changing only
-6. Findings: Established / Provisional / Refuted / Open
-7. Current research frontier, when more than one meaningful family is live
-8. Key unknowns, failures, and bottlenecks
-9. Research environment: only capabilities and limits that bear on current research
-10. Active research: hypothesis IDs, experiment ID, current observation, next action
-11. Next-stage research priorities
-12. Items needing the architect
-13. Risks and drift signals
-14. Continue-research context capsule
-15. Snapshot basis / provenance
+Before compressing state, recover the application objective and success criteria
+from the project's TASK or original brief and active architect signals. CURRENT is
+working memory, not permission to silently narrow the task to the current probe.
+If these disagree, disclose the narrowing; do not rewrite state during this query.
 
-Default length is about 1–3 screens. Expand the evidence history only when the architect
-explicitly asks for it.
+Report from the outside in: application capability, system responsibilities and
+candidate choices, implementation and validation, then the next decision. Explain:
+
+- What the user needs the system to do and how success will be judged. A ranking
+  aspiration is a goal, not a measured capability or a promised result.
+- Which components are supplied externally versus built here, how inputs/actions
+  cross that boundary, and which parts are known versus still uninvestigated.
+- Which materially different approaches remain plausible, their practical benefits
+  and costs, and what evidence would distinguish them. Do not turn routine algorithm
+  selection into an architect vote. If no defensible comparison exists, say so.
+- What code actually does today: documentation inspection, authored-rule calculation,
+  component execution, or task execution. Name the missing link to useful capability.
+- Why the next investigation changes an application or architecture decision, and
+  whether the agreed investigation-to-discussion milestone has actually been reached.
+
+These are reasoning obligations, not five mandatory extra sections. Include a small
+system sketch or comparison only if grounded and useful; label a proposed structure
+as proposed. Missing architecture research cannot be filled with an invented diagram.
+If state alone cannot answer a material question, inspect the relevant task/interface
+or implementation artifact read-only; otherwise report the gap explicitly.
+
+Answer the architect's actual question, usually in a few short paragraphs or up to
+five bullets. These are questions to answer where relevant, not mandatory headings:
+
+- Where are we, in one sentence?
+- What did we actually learn or change, and why does it matter?
+- What is wrong, uncertain, or still untested?
+- What is the next concrete action?
+- Does the architect need to decide anything? If yes, give the recommendation,
+  practical alternatives, cost/risk, and consequence of waiting.
+
+Do not use completion percentages without a meaningful denominator, or counts of
+files/tests/evidence as substitutes for research value. Do not soften a mistake into
+"drift" or hide a failed assumption behind a successful tool run. "I checked X"
+does not mean "X works"; "I recommend X" does not mean "X has been demonstrated".
+
+Keep the three maturity distinctions in the reasoning, but express them as what
+exists, what has actually been tested, and what this environment cannot yet test.
+Longer architecture comparisons and deep reviews are welcome when requested;
+brevity must not omit a fact that would change the architect's decision.
+
+## Make important conclusions inspectable
+
+For each direction-changing conclusion in a brief, state its basis and limitation
+in ordinary language: was it observed in real inputs, inferred from documentation,
+or calculated from manually chosen rules? Give enough evidence to judge the claim
+without inspecting code. A report should say "I calculated coverage under these
+assumptions; detection has not been tested", not merely "two probes confirmed it".
+Do not require the architect to uncover hidden premises by auditing command logs.
+When a premise was corrected, name the affected conclusions and what remains valid.
+If progress required the architect to identify the technical method or supply a working
+implementation, distinguish that assistance from independent discovery. Repeated failure
+without a method change, or repeated rediscovery of an available capability, is a research
+process problem even if every record validates. Report its practical cost and the recorded
+method change; do not imply that changing the model alone resolves it. During recovery,
+include relevant reusable capability pointers when available, not just unresolved limits.
 
 ## Items needing the architect
+
+When CURRENT.research_routes exists, include a compact portfolio view: current focus,
+valuable queued alternatives, parked/blocked lines and their wake conditions, and why
+the recorded recommendation should come next. Distinguish AI priorities from architect
+constraints. Flag an apparently satisfied wake condition as a recommendation, not a
+state mutation. No route registry in an older project means "not registered", not that
+all unchosen work is gone or rejected. Do not silently migrate during this read-only query.
+
+Routine state maintenance belongs to the agent on resumption, not in the architect's
+decision list. Disclose integrity problems and their consequences separately; a
+request to resume is not a request for the human to repair an environment ID.
 
 Default to a line stating, in Chinese like the rest of the report, that no architect
 decision is required. A status report that escalates nothing is the normal case.
@@ -147,11 +228,12 @@ physical safety decision, or an unresolved conflict between architect directives
 
 Routine algorithm, model, threshold, and library choices are never listed. If the report
 is surfacing those, the research loop is escalating when it should be researching — say so
-in section 13 rather than presenting them as decisions.
+plainly rather than presenting them as decisions.
 
 ## Continue-research context capsule
 
-Close the report with a compact Chinese capsule:
+Only for an explicitly requested handoff or reusable context snapshot, append a
+compact Chinese capsule. Do not repeat the ordinary brief in every status answer:
 
 ```
 Objective
@@ -176,9 +258,10 @@ that reads the status report and starts editing.
 
 ## Snapshot basis
 
-Sections 1–14 are Chinese prose for the architect. End the report with an **English-keyed
-YAML block** instead of prose, so that a new session parses the state rather than
-re-deriving it from Chinese narration:
+For a requested handoff, audit, or machine-readable snapshot, append this
+**English-keyed YAML block** so a new session can parse the state. Ordinary human
+briefs omit it; they still perform the same integrity check and disclose material
+inconsistencies in plain language:
 
 ```yaml
 generated_at: 2026-09-14T10:22:31+08:00
@@ -206,10 +289,9 @@ integrity:
   findings: []                   # findings[].code verbatim, empty when clean
 ```
 
-Emit it on every report, including — especially — when the state is inconsistent. Then
+Emit it whenever a machine-readable snapshot is requested, even when state is inconsistent. Then
 `integrity.state` is `inconsistent` and `integrity.findings` lists the codes. The block
-is not optional: a capsule with no integrity block reads as clean, which is the one thing
-it must never say by accident.
+is required for a handoff capsule: omitted integrity must never be mistaken for clean.
 
 ## When the state is inconsistent
 
@@ -226,6 +308,12 @@ with the next empirical action instead. Either way the resume protocol still run
 any code is touched.
 
 ## Persisting the report
+
+For a requested dashboard refresh, or an authorized milestone refreshing an existing
+dashboard, follow [dashboard briefing](references/dashboard-brief.md). It writes only
+ignored derived display data, never canonical state. Ordinary status queries still do
+not write by default; an absent or stale web summary is disclosed rather than repaired
+silently. The browser itself is always read-only.
 
 By default, print the report and stop. Write `research/STATUS.md` only when the architect
 explicitly asks to save the current state, or at a declared milestone or checkpoint. When

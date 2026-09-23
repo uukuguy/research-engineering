@@ -71,6 +71,27 @@ overwrite it with a fresh skeleton.
 9. **Hand off.** Leave `ACTIVE.status` at `idle` or `planning_evidence` with a clear next
    empirical action, and continue in `research-engineering`.
 
+## Verify premises that change the research direction
+
+Before declaring supplied data absent/empty or an environment unusable, corroborate
+the exact scope with a second, direct observation. For a supplied filesystem path,
+inspect whether it is a symlink, resolve its target, and list/open the target within
+the authorized input scope. A non-following `find`, a depth limit, ignored files, a
+permission error, or an unsuccessful command is not proof of absence. Distinguish
+missing target, inaccessible target, empty directory, and not yet inspected. Do not
+silently suppress errors in a check used to justify a research constraint.
+
+Retain the path, check result and scope in evidence before using an absence claim
+to abandon real inputs for synthetic work. This does not require reading every
+large asset; an actual directory listing and a representative file can disprove
+"empty" cheaply. Do not generalize a host limitation to all evidence paths.
+
+If TASK or an architect instruction requires investigation followed by architecture
+discussion, preserve that decision gate. Bootstrap completion is not architecture
+approval. Continue the authorized investigation, then report supported alternatives,
+uncertainties and a recommendation before crossing that gate; routine probe choices
+remain autonomous. A run budget ending is not proof the investigation is complete.
+
 ## Worked shape — embodied safety competition
 
 Day 0: a competition statement, a simulation SDK, a baseline, and no system.
@@ -107,6 +128,11 @@ would normally be written here is not written, because the answer to U1 changes 
   found — facts, boundaries, and the first research question — not a planning document.
 
 ## Output and handoff
+
+Use AGENTS.md's plain-language reporting contract. Tell the architect what inputs
+and capabilities actually exist, what is still unknown, and the first useful check.
+Explain the consequence of a missing capability rather than reporting only its
+status code. Do not present initialization or document counts as research success.
 
 Canonical state is English. The visible bootstrap summary to the architect is Chinese,
 keeping technical terms, SDK and library names, and IDs in their original English form,

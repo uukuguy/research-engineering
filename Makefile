@@ -1,6 +1,26 @@
 # Acceptance pipeline — see docs/RE_ACCEPTANCE_CASES.md and
 # tools/run_acceptance.py for the contract.
 
+.PHONY: re-dashboard
+.DEFAULT_GOAL := acceptance
+re-dashboard:
+	python3 tools/researchlog/web.py --root "$(if $(ROOT),$(ROOT),.)"
+
+.PHONY: re-dashboard-text
+re-dashboard-text:
+	python3 tools/re dashboard
+
+.PHONY: re-routes re-route
+.PHONY: re-workers
+re-workers:
+	python3 tools/re delegate list
+
+re-routes:
+	python3 tools/re routes list
+
+re-route:
+	python3 tools/re dashboard --route "$(ROUTE)"
+
 .PHONY: acceptance acceptance-full acceptance-v0 acceptance-v1 acceptance-manual \
         acceptance-list acceptance-scan-docs acceptance-fix-docs \
         acceptance-clean install-global install-global-check

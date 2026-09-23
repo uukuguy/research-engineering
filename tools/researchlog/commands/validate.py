@@ -72,9 +72,12 @@ def run(args: argparse.Namespace) -> Result:
     _check_manifests(ledger, result)
     _check_block(active, ledger, result)
     _check_signals(paths, result)
-    _check_current(paths, result)
+    _check_current(paths, result, ledger)
     _check_environment(paths, result)
     _check_boundaries(paths, result)
+    from researchlog import delegation
+    for finding in delegation.inspect(paths, ledger):
+        result.add(finding)
 
     if args.strict:
         _promote_warnings(result)
@@ -205,7 +208,7 @@ def _check_boundaries(paths: repo.ResearchPaths, result: Result) -> None:
             )
 
 
-def _check_current(paths: repo.ResearchPaths, result: Result) -> None:
+def _check_current(paths: repo.ResearchPaths, result: Result, ledger=None) -> None:
     """The last canonical file to get a reader.
 
     `research:current` had no verb and no validator, which are the same absence twice: the
@@ -237,6 +240,9 @@ def _check_current(paths: repo.ResearchPaths, result: Result) -> None:
         )
         return
     for finding in schema.load_validator("current").check(block):
+        result.add(finding)
+    from researchlog import routes
+    for finding in routes.check(block, set((ledger or state.load_ledger(paths)).records)):
         result.add(finding)
     for finding in schema.version_findings("current", block, where=paths.current.name):
         result.add(finding)

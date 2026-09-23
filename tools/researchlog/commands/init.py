@@ -25,7 +25,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from researchlog import jgit, repo
+from researchlog import ioutil, jgit, repo, schema
 from researchlog.errors import (
     Finding,
     PreconditionMissing,
@@ -79,6 +79,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
 def run(args: argparse.Namespace) -> Result:
     root = (args.root or Path.cwd()).resolve()
     paths = repo.build(root, research_dir=("research" if args.legacy else None))
+    # A default re-init must keep the layout already used by this repository.
+    # Creating .research beside a legacy research would silently hide its history.
+    if not args.legacy and not paths.active.exists():
+        legacy = repo.build(root, research_dir="research")
+        if legacy.active.exists():
+            paths = legacy
     existed = paths.active.exists()
 
     if existed and not args.merge:
@@ -96,18 +102,28 @@ def run(args: argparse.Namespace) -> Result:
             "copy the whole tools/ directory, templates included",
         )
 
+    if existed:
+        document = ioutil.load_json(paths.active)
+        schema.require_writable("active", paths.active, document)
+    if args.submission_budget is not None and paths.boundaries.exists():
+        block = schema.require_block(
+            paths.boundaries.read_text(encoding="utf-8"), "boundaries", source="BOUNDARIES.md"
+        )
+        schema.require_writable("boundaries", paths.boundaries, block)
+
     repo.initialize_dirs(paths)
     written, kept = _copy_skeleton(source, paths, merge=args.merge)
     operator_written, operator_kept = _copy_operator_helpers(root, merge=args.merge)
     written = sorted(written + operator_written)
     kept = sorted(kept + operator_kept)
-    _stamp_active(paths)
+    if not existed:
+        _stamp_active(paths)
     # V1 Block 2 / T5: open the first session event so the cumulative
     # telemetry KPI has an anchor to count from. Append-only: a re-init
     # (`init` without --merge) refuses earlier; `--merge` skips the
     # existing line by leaving the file alone (idempotent on the
     # session log, just like on the canonical markdown files).
-    if not existed or args.merge:
+    if not paths.sessions.exists():
         # Import by absolute module path to avoid re-entering this
         # package's `__init__.py` (which already imports `init` and
         # would self-trigger). The runtime resolver see this as
@@ -122,14 +138,11 @@ def run(args: argparse.Namespace) -> Result:
             paths=paths,
             epoch=epoch,
             kind="started",
-            block_id=active.get("block.id"),
+            block_id=(active.get("block") or {}).get("id"),
         )
-        if "session_epoch" not in active:
+        if not active.get("session_epoch"):
             active["session_epoch"] = epoch
-            paths.active.write_text(
-                json.dumps(active, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
+            ioutil.write_json_atomic(paths.active, active, validator=schema.load_validator("active"))
 
     result = Result(
         payload={
@@ -145,7 +158,7 @@ def run(args: argparse.Namespace) -> Result:
         _set_submission_budget(paths, args.submission_budget)
         result.payload["submission_budget"] = args.submission_budget
 
-    for finding in _guard_gitignore(root):
+    for finding in _guard_gitignore(root, research_dir=paths.research.name):
         result.add(finding)
     if result.payload["already_initialized"] is False and _tree_is_dirty(root):
         result.add(
@@ -224,7 +237,7 @@ def _stamp_active(paths: repo.ResearchPaths) -> None:
     # validate / reconcile against a P2-era schema would refuse the file.
     block = data.setdefault("block", {})
     block.setdefault("reproduction_iterations", 0)
-    paths.active.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    ioutil.write_json_atomic(paths.active, data, validator=schema.load_validator("active"))
 
 
 def _initial_git_state(paths: repo.ResearchPaths) -> dict[str, object]:
@@ -265,11 +278,11 @@ def _set_submission_budget(paths: repo.ResearchPaths, budget: int) -> None:
     paths.boundaries.write_text(schema.replace_block(text, "boundaries", block), encoding="utf-8")
 
 
-def _guard_gitignore(root: Path) -> list[Finding]:
+def _guard_gitignore(root: Path, *, research_dir: str = repo.RESEARCH_DIR) -> list[Finding]:
     """Catch the .gitignore pattern that would swallow run provenance."""
     if not jgit.is_repository(root):
         return []
-    probe = f"{repo.RESEARCH_DIR}/{repo.RUNS_DIR}/EXP-probe/manifest.json"
+    probe = f"{research_dir}/{repo.RUNS_DIR}/EXP-probe/manifest.json"
     pattern = jgit.check_ignore(root, probe)
     if pattern is None:
         return []

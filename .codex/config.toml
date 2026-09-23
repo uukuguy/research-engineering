@@ -1,0 +1,6 @@
+# Project-local default for the independent ESA research sessions.
+# Authentication stays in the existing user-level ChatGPT login.
+model = "gpt-6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"

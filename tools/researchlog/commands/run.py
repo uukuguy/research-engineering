@@ -26,6 +26,9 @@ identity to reconcile against.
 from __future__ import annotations
 
 import argparse
+import math
+import os
+import signal
 import socket
 import subprocess
 import sys
@@ -88,6 +91,8 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> Result:
     paths = repo.require(args.root)
+    if args.timeout is not None and (not math.isfinite(args.timeout) or args.timeout <= 0):
+        raise StateInvalid('--timeout must be a finite positive number of seconds')
     command = _strip_separator(args.child_command)
     if not command:
         raise PreconditionMissing(
@@ -141,8 +146,10 @@ def _supervise(
     stdout_path: Path,
     stderr_path: Path,
 ) -> Result:
+    began = time.monotonic()
     record.set("execution.pid_or_job_id", str(process.pid))
     record.set("execution.pid_started_at", _pid_started_at(process.pid))
+    record.set("execution.process_group_id", str(process.pid) if os.name == 'posix' else None)
     _write_manifest(manifest_path, record)
 
     sinks = _sinks(args)
@@ -160,22 +167,39 @@ def _supervise(
         interval=args.heartbeat_interval,
         stop=lambda: process.poll() is not None,
     )
-    began = time.monotonic()
+    deadline = began + args.timeout if args.timeout is not None else None
     timed_out = False
+    interrupted_by_user = False
     try:
-        child_code = process.wait(timeout=args.timeout)
+        child_code = process.wait(timeout=max(0, deadline - time.monotonic())
+                                  if deadline is not None else None)
+        # A launcher can exit while its descendants still own the output pipes.
+        # The timeout bounds the complete capture, not just the launcher's wait().
+        _join_relays(threads, deadline if deadline is not None else time.monotonic() + 5)
+        if deadline is not None and any(thread.is_alive() for thread in threads):
+            raise subprocess.TimeoutExpired(command, args.timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        process.kill()
+        _terminate_owned(process)
         child_code = process.wait()
+    except KeyboardInterrupt:
+        interrupted_by_user = True
+        _terminate_owned(process)
+        child_code = process.wait()
+    if timed_out or interrupted_by_user:
+        _join_relays(threads, time.monotonic() + 1)
     if heartbeat_thread is not None:
         heartbeat_thread.join(timeout=5.0)
-    for thread in threads:
-        thread.join(timeout=5.0)
-    _close_pipes(process)
+    capture_incomplete = any(thread.is_alive() for thread in threads)
+    _close_pipes(process, threads)
     duration = round(time.monotonic() - began, 3)
 
     status, reason = _classify(child_code, timed_out)
+    if interrupted_by_user:
+        status, reason = 'interrupted', 'process_signal'
+    elif capture_incomplete and not timed_out:
+        status, reason = 'interrupted', 'unknown'
+    record.set('execution.output_capture_complete', not capture_incomplete)
     finished_at = _now()
     record.set("status", status)
     record.set("child_exit_code", child_code)
@@ -220,6 +244,12 @@ def _supervise(
                 "this is session or infrastructure metadata, not a result about the hypothesis",
             )
         )
+    if capture_incomplete:
+        result.add(Finding(
+            'RUN_OUTPUT_CAPTURE_INCOMPLETE', SEVERITY_WARNING, experiment_id,
+            'a process still holds output pipes; capture and descendant liveness are unresolved',
+            'inspect surviving jobs before handoff; detached processes are outside process-group containment',
+        ))
     result.human = _human(result.payload)
     if args.propagate_exit and status == "completed":
         result.exit_code = child_code if 0 <= child_code <= CHILD_CODE_MAX else EXIT_TOOL_INTERNAL
@@ -247,7 +277,28 @@ def _spawn(command: list[str], root: Path) -> subprocess.Popen[str]:
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
+        start_new_session=os.name == 'posix',
     )
+
+
+def _terminate_owned(process: subprocess.Popen[str]) -> None:
+    """Signal only the new group created by _spawn, never the caller's group.
+
+    Ordinary descendants (including uv's Python child) inherit this group. Daemons
+    that deliberately create another session need an external job supervisor.
+    """
+    try:
+        if os.name == 'posix':
+            os.killpg(process.pid, signal.SIGKILL)
+        elif process.poll() is None:
+            process.kill()
+    except ProcessLookupError:
+        pass
+
+
+def _join_relays(threads: list[threading.Thread], deadline: float) -> None:
+    for thread in threads:
+        thread.join(timeout=max(0, deadline - time.monotonic()))
 
 
 def _sinks(args: argparse.Namespace) -> dict[str, TextIO]:
@@ -257,15 +308,16 @@ def _sinks(args: argparse.Namespace) -> dict[str, TextIO]:
     return {"stdout": sys.stdout, "stderr": sys.stderr}
 
 
-def _close_pipes(process: subprocess.Popen[str]) -> None:
+def _close_pipes(process: subprocess.Popen[str], threads: list[threading.Thread]) -> None:
     """Release the child's read ends.
 
-    `_pump` closes the file it writes to, but the pipe it reads *from* is ours and stays
-    open until we say otherwise — one leaked descriptor per run, which a batch of
-    experiments will eventually notice.
+    Relays normally close their own streams. Close any stopped relay's remaining
+    handle, but leave a still-reading relay ownership of its handle until it exits.
     """
-    for stream in (process.stdout, process.stderr):
-        if stream is not None and not stream.closed:
+    for stream, thread in zip((process.stdout, process.stderr), threads):
+        # TextIO.close() waits for the reader lock. Never close under a blocked
+        # relay: that is the unbounded wait this timeout is intended to prevent.
+        if not thread.is_alive() and stream is not None and not stream.closed:
             stream.close()
 
 
@@ -284,6 +336,9 @@ def _pump(stream: Iterable[str] | None, sink: TextIO, path: Path) -> threading.T
                 # The pipe was closed underneath us at shutdown, after a join timed out.
                 # Whatever was read is already on disk; that is the contract.
                 return
+            finally:
+                if hasattr(stream, 'close'):
+                    stream.close()
 
     thread = threading.Thread(target=relay, name=f"relay-{path.name}", daemon=True)
     thread.start()
@@ -359,6 +414,9 @@ def _manifest(
     record.set("execution.heartbeat_or_last_observed_at", started_at)
     record.set("execution.stdout", _relative(stdout_path, paths.root))
     record.set("execution.stderr", _relative(stderr_path, paths.root))
+    record.set("execution.timeout_seconds", args.timeout)
+    record.set("execution.process_group_id", None)
+    record.set("execution.output_capture_complete", None)
     record.set("child_exit_code", None)
     record.delete("interruption_reason")
     _apply_manifest_flags(record, args)

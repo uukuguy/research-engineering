@@ -32,7 +32,8 @@
         "commit": { "type": ["string", "null"] },
         "base_commit": { "type": ["string", "null"] },
         "dirty": { "type": "boolean" },
-        "diff_sha256": { "type": ["string", "null"] }
+        "diff_sha256": { "type": ["string", "null"] },
+        "tree_sha256": { "type": ["string", "null"] }
       }
     },
     "inputs": {

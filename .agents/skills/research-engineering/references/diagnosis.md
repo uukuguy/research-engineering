@@ -1,9 +1,10 @@
 # Diagnosis
 
-Load when a failure has two or more plausible layers, or three similar fixes have failed.
+Load when a failure has two or more plausible layers, or attempts repeat a failure
+without adding information. Failed and uncounted runs can trigger this check.
 
-Applies mainly from E3 onward, where real components interact and a failure can originate
-anywhere along the path.
+Applies to early feasibility work as well as interacting real components: dependency,
+input identity, extraction semantics and interpretation are distinct failure layers.
 
 Triggers:
 
@@ -93,16 +94,20 @@ gets baked into the next three weeks of work.
 is located. A change made before the divergence is known converts a diagnosable failure
 into an undiagnosable one, because now two things have changed.
 
-## The three-strike rule
+## Change method before repeating the failure
 
 ```
-strike 1  diagnose the root cause, apply a targeted fix
-strike 2  change the approach — different instrument, different method
-strike 3  question the assumption the search is built on
-after 3   stop and escalate to the architect with what has been ruled out
+located cause                 apply a targeted fix and check it
+same failure, no new evidence  change instrument or method before another attempt
+method alternatives exhausted question the premise and seek another valid evidence path
+authority or budget boundary  stop and report what is ruled out and what remains
 ```
 
 Never repeat the identical failing action. Each attempt's result is data; keep it.
+There is no automatic three-failure escalation to the architect. A failed reader does
+not refute extractability; verify the exact input and check a supported implementation
+before broadening that conclusion. Select routine alternatives autonomously within the
+block. Budget exhaustion still requires a report, not an unbounded retry loop.
 
 ## Worked shape
 

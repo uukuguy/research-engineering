@@ -114,26 +114,34 @@ def _time_to_first(
             "no session_epoch on ACTIVE; rotate the session at least once before measuring",
         )
     epoch_stamp = _id_to_epoch(epoch_id)
+    if epoch_stamp is None:
+        return _unavailable(f"time_to_first_{target_level.lower()}", "session_epoch has no valid timestamp")
     first: dict[str, Any] | None = None
+    first_dt: datetime | None = None
     for record in ledger.records.values():
         if record.get("evidence_level") != target_level:
+            continue
+        if record.get("session_epoch") not in (None, epoch_id):
             continue
         created_at = record.get("created_at")
         if not created_at:
             continue
-        if first is None or str(created_at) < str(first.get("created_at", "")):
-            first = record
-    if first is None or epoch_stamp is None:
+        try:
+            recorded_at = datetime.fromisoformat(str(created_at))
+        except ValueError:
+            continue
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+        # A previous session's evidence cannot have a negative time-to-first in
+        # this session. Compare parsed instants, not differently offset strings.
+        if recorded_at < epoch_stamp:
+            continue
+        if first_dt is None or recorded_at < first_dt:
+            first, first_dt = record, recorded_at
+    if first is None or first_dt is None:
         return _unavailable(
             f"time_to_first_{target_level.lower()}",
-            f"no {target_level} record yet, or no `created_at` on the first match",
-        )
-    try:
-        first_dt = datetime.fromisoformat(str(first["created_at"]))
-    except ValueError:
-        return _unavailable(
-            f"time_to_first_{target_level.lower()}",
-            f"first {target_level} record has a non-ISO created_at",
+            f"no {target_level} record with a valid created_at in the current session",
         )
     delta_seconds = (first_dt - epoch_stamp).total_seconds()
     return {
@@ -154,10 +162,9 @@ def _cumulative_evidence_iterations(
     A "belief-changing iteration" is a record for which
     `derive_counts_as_evidence_iteration` returns True: completed
     execution, a counted outcome, and either differentiated hypotheses
-    or a non-`none` belief_delta. Each session's records are those with
-    `created_at` in `[event.started_at, next_event.started_at)`. The
-    final session's upper bound is "now" — anything recorded after the
-    last event belongs to the current session.
+    or a non-`none` belief_delta. New records carry their recording session ID;
+    legacy records fall back to `created_at` in the session's time window.
+    IDs disambiguate two sessions starting within the same clock second.
 
     Returns `unavailable` when the log is absent (e.g. a repo that
     pre-dates V1 Block 2 / T5 was rebase-merged) or empty.
@@ -218,13 +225,16 @@ def _cumulative_evidence_iterations(
     ):
         session_count = 0
         for record in ledger.records.values():
+            if not _is_counted_iteration(record):
+                continue
+            if record.get("session_epoch") is not None:
+                session_count += int(record["session_epoch"] == session_epoch)
+                continue
             created_at_raw = record.get("created_at")
             created_at = parse_when(created_at_raw) if created_at_raw else None
             if created_at is None:
                 continue
             if not in_window(start, end, created_at):
-                continue
-            if not _is_counted_iteration(record):
                 continue
             session_count += 1
         per_session.append(

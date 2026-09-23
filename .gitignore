@@ -17,6 +17,7 @@ __pycache__/
 /runs/
 /data/
 /logs/
+/.playwright-cli/
 
 # Inside research/runs, only the heavy artifacts stay out of Git.
 # manifest.json and result.json are tracked.

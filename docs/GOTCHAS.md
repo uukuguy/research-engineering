@@ -17,6 +17,38 @@
 
 ## A. 状态与 `researchlog`
 
+### 自主研究行为验收不能用机械检查代替
+
+ESA b186e29 已部署方法重选、成功能力恢复、分层验证和默认预算修复，删除三次失败
+自动人工接管。未带 delegation 原型，不可用全量升级覆盖这个已定向验收的快照。
+普通研究以项目配置模型完成，不把升级 Astra 当作验收前置。真实独立研究是否
+减少人工技术救援仍待 docs/RE_AUTONOMY_ACCEPTANCE.md 的行为测试；已有 ESA
+会话看过对照方法，其后续成功不能算独立发现。working_pieces/capability notes
+可持久读回，只证明通道，不证明 agent 会正确记录、复用或选方法。
+
+### 独立 daemon 仍不在进程组边界内
+
+run 已用 POSIX 独立进程组处理超时与 Ctrl-C，普通 uv/Python 后代一并收口；
+外层提前退出但后代持有 pipe 也计入同一 timeout。ESA b186e29 已部署并在隔离fixture验证。
+主动 setsid/脱离进程组的 daemon 不受此边界覆盖；若仍持有管道，报告
+RUN_OUTPUT_CAPTURE_INCOMPLETE，handoff 拒绝当前 run 的未完整 capture。SIGKILL/崩溃
+不会走受监督收口，Windows 非 POSIX 后代树未验收。不能据 timeout 参数宣称所有后台
+工作已停止；仍需核实进程/产物，不热更新运行中实验。
+
+### 新默认预算不追溯改写已关闭研究块
+
+ESA 已取消默认两次探针上限，改为单问题与约 30 分钟汇报窗口；无显式证据数
+限制的新块用 null，既有明确限制不变。RB-017 已关闭且保留旧2次限制是正确历史，
+不是升级遗漏。新会话要用新授权创建新块，不能改历史预算或把报告窗口当无限授权。
+
+### 暂停专用检查不是研究有效性判决
+
+`reconcile --handoff` 要求当前 block 计数刷新及恢复文件 checkpoint，普通 reconcile
+不要求正在研究中的文件已提交。暂停用 `active --refresh-counts`，不必为了计数给
+block 强行写 belief_delta。`checkpoint --paths` 现在是排他范围，不可与宽泛 flags 混用。
+CURRENT 含最新 EV ID 只证明存在引用，不证明正确理解；未解决的代码/产物身份、无效
+surrogate、时间预算均仍需如实记录。尚无真实模型跨客户端恢复验收或实时预算强制器。
+
 ### A1. `researchlog` 按 cwd 向上找 `research/`，不看脚本路径
 
 检查一个**副本**（例如演练 repo 里的 `tools/researchlog`）时必须先 `cd` 进去，否则它会去检查你
@@ -42,9 +74,42 @@ grep -rn "paths\.<name>" tools/researchlog/ --include="*.py"    # 零引用即�
 `researchlog record` 会从 `ENVIRONMENT.md` 的 `history` 折叠出当前环境状态写进证据。证据里没有
 这个快照时，`changed` 谓词**永远只能是 `UNRESOLVED`**。
 
+### A5. 已结束的 EXP ID 不是不可覆写的 run archive
+
+`run` 只拒绝仍在飞的 manifest；finalized ID 重跑会覆盖同目录 manifest/log。
+在 immutable-attempt 契约落实前，每次执行使用新 EXP ID，重放也不例外。
+不要把 ledger 的 append-only 承诺误当成所有原始 run 文件都已机械保护。
+
+### A6. JSON 原子恢复不代表所有 canonical markdown 也有同样保障
+
+`current/boundaries/env/findings` 仍有直接 `write_text`；各 verb 的 newer-schema guard 不统一。
+长跑要保留可恢复 checkpoint，不能由一次 validate clean 推断断电/并发写安全。
+
+### A7. CLI session rotation 不是 agent 失忆恢复的验收
+
+`telemetry --report` 中 recovery accuracy 与无 Architect correction 的区分性实验比例尚未实现。
+同输入的独立 CLI 重放只能证明机械路径；fresh model session 能否自主接续要另做实测。
+ESA 静态 metadata 审计同样不能证明 Policy、仿真安全性或任务得分。
+
+### A8. `submission_budget=0` 会让纯本地研究也被报为预算耗尽
+
+reconcile 的 BOUNDARIES_BUDGET_LOW 不区分本次是否要提交。未知官方配额不要臆造数字；
+可留 null，并在 HARD 中明确“本轮未授权任何官方提交”。null 不等于无限授权。
+已知且确实耗尽的预算不能用此方式绕过；该语义边界尚未改动。
+
 ---
 
 ## B. 演练 fixture
+
+### 并行研究原型的验收边界
+
+`delegate` 只是主研究者持久任务工具，尚无模型进程启动/重接 adapter；技能要求使用
+客户端原生 delegation，但未完成真实双 worker 行为验收。不要将机械测试称为并行
+自主研究已验证。prepared 也可能已启动但尚未绑定 identity，恢复必须查客户端记录。
+`delegations/.writer-lock` 中断遗留时先核实没有写进程，查询不自动释放锁。
+返回 artifact 为外部独立工作区绝对路径，需另行归档；记录入 Git 不等于产物跨机可用。
+accepted 是已审查归档，不是支持假说/晋升；worker 实际执行 provenance 不得借用主树。
+本轮原型尚未部署 ESA；只升级 skills 会让旧 runtime 缺少 delegate 命令。
 
 ### B1. 两条铁律，并且让 fixture 自断言
 
@@ -246,6 +311,15 @@ session 顺着链走到最上游，然后（正确地）宣布"没有任何主�
 ---
 
 ## C. 本机环境
+
+### 二进制输出会污染终端；安全预览不是全局拦截
+
+macOS /usr/bin/usdcat 是 Mach-O，不可用 head/cat 当脚本读。实验曾两次输出 SO/SI/ESC
+字节造成终端字符集异常。先 file 识别类型；研究技能带 scripts/safe_preview.py 可安全
+预览文本/hex，但普通 exec 不自动经过它。独立 ESA 已定向部署 PTY 输出字符集过滤，
+只有退出后通过 make re-start/re-status 运行才生效（启动提示 guard=ON），旧会话和直接
+codex 不受它保护。该层保留 TUI 的 CSI/OSC，不是通用 ANSI 安全过滤器；不得承诺任意
+乱码永不发生。模型是否遵守不误读二进制的规则仍需行为验收。
 
 ### C1. RTK 改写 Bash 输出：干净仓库的 `git status` 只剩一个 `ok`
 
@@ -456,4 +530,3 @@ body 抽出,**跨 6 skill 唯一**(29 phrase,`grep -c -iF` 跨 skill 审计 0 un
 **风险**:phrase-list 在 minimax-compat 端点下 false-negative 高于旧 heuristic(模型 paraphrase
 而非 verbatim quote),但 false-positive 为 0(没有"注入"风险)。字面"≥3 routed_correctly"在
 minimax 下仍未达标,故 M6 拆为 M6-pi(M6 内)+ M6-claude-pending(ENV_BLOCKED)。
-

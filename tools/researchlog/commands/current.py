@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from researchlog import repo, schema, state
+from researchlog import repo, routes, schema, state
 from researchlog.errors import SEVERITY_ERROR, Result, StateInvalid
 from researchlog.model import Record
 
@@ -54,6 +54,8 @@ def run(args: argparse.Namespace) -> Result:
     changed: list[str] = []
     for expression in args.assignments:
         field, value = state.parse_assignment(expression, code="CURRENT_SET_MALFORMED")
+        if field.split('.')[0] == 'research_routes':
+            raise StateInvalid('Use routes commands to preserve lifecycle history')
         record.set(field, value)
         changed.append(field)
 
@@ -63,9 +65,11 @@ def run(args: argparse.Namespace) -> Result:
     if errors:
         raise StateInvalid(errors)
 
-    paths.current.write_text(
-        schema.replace_block(text, "current", record.raw), encoding="utf-8"
-    )
+    schema.require_writable('current', paths.current, block)
+    route_errors = routes.check(record.raw)
+    if route_errors:
+        raise StateInvalid(route_errors)
+    routes.write_current(paths.current, text, schema.replace_block(text, "current", record.raw))
 
     result = Result(payload={"path": str(paths.current), "changed": changed})
     for finding in findings:

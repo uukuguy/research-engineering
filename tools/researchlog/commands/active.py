@@ -69,6 +69,8 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "--accept-recovery", action="store_true", help="acknowledge a recovered state"
     )
     parser.add_argument("--rotate-session", action="store_true", help="mint a new session_epoch")
+    parser.add_argument("--refresh-counts", action="store_true",
+                        help="refresh ledger-derived block counts without closing or changing belief")
     parser.add_argument(
         "--show", action="store_true", help="emit the whole document; writes nothing"
     )
@@ -91,10 +93,9 @@ def run(args: argparse.Namespace) -> Result:
 
     if writing:
         schema.require_writable("active", paths.active, record.raw)
-        # Only a close needs the ledger. Loading it on every mutation would make the common
-        # case pay for the rare one, and `_apply` would still have to be told which is which.
+        # Closing or explicitly refreshing counts needs the ledger; ordinary writes do not.
         members: list[Mapping[str, Any]] = []
-        if args.belief_delta is not None:
+        if args.belief_delta is not None or args.refresh_counts:
             members = constraints.block_members(
                 record.get("block.id"), list(state.load_ledger(paths).records.values())
             )
@@ -120,6 +121,7 @@ def _is_writing(args: argparse.Namespace) -> bool:
             args.belief_delta is not None,
             args.accept_recovery,
             args.rotate_session,
+            args.refresh_counts,
         )
     )
 
@@ -131,6 +133,13 @@ def _apply(
     *,
     members: Sequence[Mapping[str, Any]] = (),
 ) -> list[str]:
+    from researchlog import delegation
+    pending_workers = [w for w in delegation.load(paths) if w['status'] in delegation.OPEN]
+    changing_block = any(
+        _parse_assignment(expression)[0] in ('block', 'block.id', 'block.belief_delta')
+        for expression in args.assignments)
+    if pending_workers and (args.close_block or changing_block or args.belief_delta is not None):
+        raise StateInvalid('Review/close outstanding worker packets before closing or replacing the research block')
     if args.close_block and args.belief_delta is None:
         raise StateInvalid(
             [
@@ -153,6 +162,14 @@ def _apply(
         changed.append("status")
     for expression in args.assignments:
         field, value = _parse_assignment(expression)
+        if field == "hypothesis_ids" and isinstance(value, list):
+            # This field is also the validator's project hypothesis registry.
+            # Selecting a new question must not unregister IDs used by immutable
+            # evidence. chosen_hypothesis identifies the current focus.
+            # Leave malformed lists to schema validation rather than normalizing them.
+            previous = record.get("hypothesis_ids") or []
+            if all(isinstance(item, str) for item in [*previous, *value]):
+                value = list(dict.fromkeys([*previous, *value]))
         if field == "block.id" and value != record.get("block.id"):
             # Opening a block resets its summary. `belief_delta` and the derived count
             # describe the block that just ended; carrying them into the next one is how a
@@ -176,9 +193,8 @@ def _apply(
     if args.belief_delta is not None:
         record.set("block.belief_delta", args.belief_delta)
         changed.append("block.belief_delta")
-        # The count is derived, and it is written here, once, with belief_delta: the moment
-        # a block's summary is fixed is the moment its count can be final. Nothing writes it
-        # during the block, because a counter nobody maintains is a counter that lies.
+    if args.belief_delta is not None or args.refresh_counts:
+        # Refreshing progress must not require inventing a block-level belief decision.
         # V1 P2: a separate reproduction bucket is recomputed the same way; the evidence
         # budget check only reads the first of these two.
         record.set("block.completed_evidence_iterations", constraints.count_evidence_iterations(members))

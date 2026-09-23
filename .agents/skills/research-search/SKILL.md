@@ -1,6 +1,7 @@
 ---
 name: research-search
-description: 机制家族本身对不对，要不要换家族——慢循环里"跨家族"那一半。Trigger: no live hypothesis / dominant failure 已移 / phase boundary 8-15 / architect DIRECTION 或 CHALLENGE。不要调我: 测量表面 → `evaluation-design` / 单 run 对照假设 → `experiment-review` / 当前家族内的方向反思 → `retrospective` / claim 落地前 → `scenario-redteam`。
+description: >-
+  机制家族本身对不对，要不要换家族——慢循环里"跨家族"那一半。Trigger: no live hypothesis / dominant failure 已移 / phase boundary 8-15 / architect DIRECTION 或 CHALLENGE。不要调我: 测量表面 → `evaluation-design` / 单 run 对照假设 → `experiment-review` / 当前家族内的方向反思 → `retrospective` / claim 落地前 → `scenario-redteam`。
 ---
 
 # Research search
@@ -23,6 +24,11 @@ the right one at all, and what to swap it for.
 
 ## The questions
 
+Read research-engineering's `references/external-research.md` for bounded external
+search, source comparison and durable reports. Reopening the candidate space should
+use relevant primary sources and implementations, not only alternatives recalled from
+memory. External claims remain provisional for this application until tested.
+
 ```
 What mechanism family has the agent not yet tried?
 What mechanism family has it tried that is no longer worth investing in?
@@ -32,6 +38,10 @@ What is the cheapest probe that discriminates between "new family" and
 ```
 
 ## Relationship to other skills
+
+Persist valuable new families and retained alternatives through the research-routes
+reference in research-engineering. A family not selected this round is queued/parked,
+not silently forgotten or scientifically rejected. Explain the next-route recommendation.
 
 * `experiment-review` is the fast loop within one mechanism family. `research-search`
   decides whether to leave the family.

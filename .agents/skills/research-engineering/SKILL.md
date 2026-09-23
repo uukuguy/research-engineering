@@ -1,6 +1,6 @@
 ---
 name: research-engineering
-description: Use for exploratory applied-AI research where the system, algorithm, architecture, evaluation surface, or research environment is still evolving. Operates the research loop end to end — resume state, pick the cheapest valid evidence, run it, record it, decide what is next. Not for delivery work on an already-promoted baseline.
+description: Run an authorized bounded applied-AI research block, from hypotheses and probes to evidence and conclusions. Use for explicit research/implementation/continuation requests or work within an already-authorized active block; an observation, question, critique or architecture discussion alone does not authorize execution. Not for delivery work on an already-promoted baseline.
 ---
 
 # Research Engineering
@@ -12,7 +12,73 @@ Operate as the lead architect's technical research partner. The stable abstracti
 state file list, and the language policy. This file carries the loop, the block contract,
 and the router. Where the two disagree, `AGENTS.md` wins.
 
-## Mode
+## Explicit entry and ownership
+
+First distinguish discussion from execution using the latest user intent and the
+remaining authorization, not merely the presence of a technical problem. Loading this
+skill automatically is not a user invocation and never grants execution authority.
+At a pause/discussion gate, observations, critiques, requirements clarification and
+"could we consider ...?" call for explanation of application impact, affected claims,
+options and a recommendation, not a new block, experiment, implementation or release
+of the pause. Read-only inspection needed to answer is allowed; do not write canonical
+state just to convert the conversation into an instruction. Do not end every reply
+with a permission question: answer the discussion and leave execution unstarted.
+
+Explicit "fix it", "implement this", "continue as recommended", or a deliberate user
+invocation starts the requested bounded work, subject to existing boundaries. Natural
+language is sufficient; no magic phrase or supplementary prompt is required. A genuinely
+ambiguous request needs one short clarification only when proceeding would mutate state.
+During an already-authorized running block, incorporate in-scope corrections and continue
+within its remaining budget; a correction neither replenishes it nor authorizes a new
+block. A challenge to the application model warrants reassessment before patching the
+latest symptom. If the user switches to discussion or asks to stop, honor that switch.
+
+An explicit user invocation of this skill needs no supplementary prompt. Recover the
+latest task, accepted scope, architect signals and unresolved work from repository
+state and the current conversation. Persist a new direction before using it; do not
+ask the architect to repeat decisions already available. If the latest conversation
+corrects stale CURRENT, reconcile the working model instead of obeying stale text.
+
+Distinguish opening a client (read-only briefing and wait) from the architect invoking
+research-engineering or directing work after that briefing. The latter starts one
+bounded autonomous block within the established scope; it is not a request for another
+permission questionnaire. It does not waive HARD boundaries, explicit approval gates,
+cloud/spend restrictions or ambiguous conflicting instructions. Honor explicit project
+or architect limits. Otherwise use one concrete research question and an approximately
+30-minute reporting window, not a default two-execution or two-evidence cap. Choose
+the necessary probes, reproductions and positive/negative controls autonomously within
+that window. Execution count measures cost; valid evidence count measures learning.
+Neither is a quota to fill, and failed runs still consume time and resources.
+
+Before each substantial run, compare its expected cost and information gain with the
+remaining window. Stop early when the question is answered or repeated attempts add
+no information; change method rather than grinding. Near the reporting point, do not
+start work unlikely to finish within it. Report the result, application consequence,
+unresolved validation and recommended continuation. An already-running bounded check
+may finish slightly beyond this soft reporting point with an explicit progress update;
+this is not permission to launch more probes or silently renew the block. If its finish
+is uncertain, account for the job and report rather than waiting indefinitely. Explicit
+hard deadlines, per-run timeouts, spend/safety limits and a user pause take precedence.
+Allow separate time to record and checkpoint existing work, never to disguise new
+experiments as closing. Further research after the report needs renewed authorization
+unless the architect already authorized multiple blocks.
+
+An application-delivery objective does not disable this evidence-driven loop or imply
+promotion of an untested mechanism. Research serves implementation decisions: inspect
+the inputs, choose a defensible mechanism, build the smallest useful slice, execute,
+interpret failure, correct within budget and report what works. Do not route to generic
+brainstorming/GSD planning merely because the architect says build or deliver. Testing
+and design reasoning remain necessary; repetitive human design approval does not.
+
+Routine controller, library, mock, threshold and test-case choices belong to the agent.
+State a provisional choice and validate it instead of ending with "confirm this design?".
+Ask only when the answer changes an actual authority boundary or strategic commitment
+and cannot be resolved from the available context. A technical unknown normally triggers
+inspection or a probe, not a question. Do not stop after a plan while safe, useful work
+remains inside the authorized block. Report at the agreed milestone or budget boundary;
+do not keep opening blocks indefinitely under a single bounded invocation.
+
+## Research and integration
 
 Research Mode is the default: disposable code, minimal correctness, run early, cheapest
 evidence first. A failure that produces information is a good result.
@@ -65,6 +131,18 @@ never on prose.
 
 ## The loop
 
+At every authorized block entry and close, read `references/research-routes.md` to
+maintain and compare durable research routes. Reuse it when already loaded and unchanged.
+Do not leave valuable unchosen directions only in chat. Recommend the next block yourself;
+routine route selection is not an architect questionnaire. Keep the bounded stop contract.
+
+If a dashboard brief already exists, keep its Chinese view usable at an authorized
+direction change, an architecture-relevant progress update, and block close. Follow
+research-status's `references/dashboard-brief.md` after persisting the underlying state;
+reuse the Chinese progress explanation, not an additional research cycle. A publication
+race is a view-update failure, not a reason to stop valid research or ask the architect
+to run a status skill. Ordinary read-only openings still do not publish automatically.
+
 ```
 current uncertainty
 → competing explanation / mechanism
@@ -94,6 +172,65 @@ Not "what is easiest to write". Three worked answers:
   200-line architecture spikes beat a ten-page design document.
 - If a recovery failure only appears closed-loop, a beautiful component microbenchmark
   cannot replace an E3 slice or an E4 episode.
+
+## Before a conclusion changes direction
+
+### Keep the application question ahead of the current tool
+
+At block entry, recover the application outcome this question enables, the smallest
+useful observable result, and the existing working pieces that can produce it. Put
+that intent in the existing ACTIVE objective/expected_evidence, not a separate plan.
+For extraction or interface probes, bind the actual task object, input identity and
+coordinate/interface contract before interpreting a sample as task evidence.
+
+Keep the user's completion criterion separate from an agent-chosen block milestone.
+For an implementation request, identify the smallest consumer-level check that shows
+the artifact serves its intended use; generating a file or image alone is not enough.
+Do not silently narrow "finish the task" into "finish this probe". A reporting window
+may end before the task is finished: state the stopping reason, delivered capability
+and remaining acceptance gap explicitly. Continue necessary in-scope validation while
+useful time and authorization remain; do not add stronger unrelated qualification or
+cross a pause, resource or safety boundary in order to claim completion.
+
+Before building a workaround in an unfamiliar stack, check relevant project entrypoints,
+ENVIRONMENT capabilities and primary SDK/source examples. An import failure establishes
+only that the current interpreter lacks a dependency, not that the platform cannot use
+it. Try a low-cost isolated compatibility check when authorized. Prefer a supported
+reader to reimplementing its composition semantics, and selective retrieval to a large
+environment download when the question only needs a few files. Respect access, spend,
+isolation and comparison-project restrictions; search is not permission to cross them.
+
+When attempts repeat the same failure without new information, costs grow substantially,
+or an architect reveals a missed existing capability, interrupt the method immediately:
+identify what the attempt actually ruled out, inspect an available alternative, and
+choose the next discriminating action within the remaining authorization. This applies
+to failed and uncounted runs too; do not wait for five valid evidence iterations or
+another human correction. A small repair with a located cause is still appropriate;
+do not turn every syntax error into a strategic review. Method replacement is not a
+change to the application goal. Use diagnosis or external-research only as needed.
+
+Separate the useful result from its qualification: an inspected static representation
+may support local geometry research without proving runtime physical safety. Check the
+causal features required for that narrower use; a disclaimer cannot make a bad surrogate
+valid. Missing higher-level validation blocks the stronger claim, not every lower-level
+experiment. Conversely, finding a working SDK is not completing the application slice.
+
+Model escalation is optional assistance, not a prerequisite or a substitute for this
+loop. Use the configured model and respect model/resource policy; do not silently switch
+models, wait for an unavailable stronger model, or transfer routine technical decisions
+to the architect. Preserve any architect-specified model for comparative evaluation.
+
+For a premise used to block a valid research path, choose a mechanism family, or
+request architecture approval, make a targeted second check against the actual
+input/source or an independent observation. Re-running the same authored rules is
+not independent corroboration. Trace derived numbers to observations versus assumed
+constants; if this distinction is unclear, route to evaluation-design before using
+the result. A record/schema validator checks bookkeeping, not scientific truth.
+
+When evidence is too weak, keep the choice provisional and state the missing test;
+do not promote a caveated assumption into a confirmed hypothesis. If an architect
+has specified an investigation-to-discussion gate, stop there with a recommendation
+instead of silently treating the next autonomous block as approval to implement.
 
 ## Evidence levels
 
@@ -144,16 +281,25 @@ Long autonomous batches are bounded in `ACTIVE.json`:
   during the block, not at its close. Recording more evidence after the block is closed
   still charges it to that block and is reported as drift; the evidence belongs to a new
   block, so open one.
+- For a new block without an explicit evidence-count cap, set
+  `max_evidence_iterations` to `null`; do not inherit the previous block's agent-chosen
+  cap or translate the reporting window into a fixed number of probes. Preserve explicit
+  limits and never relax a running block merely because its allowance is exhausted.
+  `max_wall_clock_minutes=30` represents the default reporting window under this skill,
+  not an operating-system kill timer; persist any stricter architect deadline in the
+  architect/boundary records. The clock starts at authorized research entry, including
+  setup and investigation, not at the first successful run.
 - `completed_evidence_iterations` and `belief_delta` are **derived**. `belief_delta` stays
   `null` for the whole life of an open block and is written once, at close, as `none`,
-  `refined`, or `overturned`; `completed_evidence_iterations` is written at the same
-  moment, by the same command, from the ledger. Nothing maintains a live counter, because
-  a counter nobody maintains is a counter that lies. Do not set either by hand — a
+  `refined`, or `overturned`; counts are refreshed from the ledger at close or independently
+  with `active --refresh-counts`, without changing belief or authorizing more work.
+  Do not set either by hand — a
   hand-set value that disagrees is reported (`EVIDENCE_ITERATION_COUNT_DRIFT`), and the
   per-record form is reported as `EVIDENCE_ITERATION_COUNT_FALSE`.
 - A block whose members changed belief cannot close as `none`.
-- On reaching the limit, synthesize the current belief and open a new block. Do not grind
-  through thirty similar mutations.
+- On reaching the limit, synthesize the current belief and recommend the next block.
+  Open it only within explicit multi-block authorization or after a new instruction.
+  Do not grind through thirty similar mutations.
 
 **`max_tokens` is telemetry.** Token spend lives in the agent runtime, not on the
 filesystem. `researchlog` can record it, reconcile it, and report
@@ -180,6 +326,11 @@ reflects both.
 
 | Observed state | Load |
 |---|---|
+| two independent questions merit parallel work within the authorized block and client delegation is permitted | `references/parallel-research.md`; supervise at most two isolated workers, collect and review evidence before updating conclusions |
+| consequential mechanism/framework choice, unfamiliar domain, or repeated failure requiring outside alternatives | `references/external-research.md`; proactively search primary sources, compare options, then validate locally |
+| repeated attempts (including failed/uncounted runs) add no information, costs balloon, or an existing working method was missed | apply the method reset above now; `references/diagnosis.md` for a located failure, `references/external-research.md` for alternative implementations; do not wait for a counted-iteration threshold |
+| a result changes architecture, mechanism family or a costly assumption | `references/external-research.md` durable-report section; preserve an evidence-linked explanation, not a second canonical conclusion |
+| architect asks to pause, exit, or hand off the session | **skill** `research-pause`; close state without starting another experiment |
 | active experiment has `execution_status != completed` and no `result.json` | not a research problem — reconcile first (`§ Resume comes first`). It *is* a continuity one: `references/session-continuity.md`, which carries what a waiting session must record |
 | an architect message arrived that is not a plain task instruction | `references/architect-signals.md` |
 | choosing the next experiment, or a result's evidence level is not obvious | `references/evidence-model.md` |
@@ -187,7 +338,7 @@ reflects both.
 | a conclusion would rest on a surrogate, mock, replay, or reduced simulator | `references/surrogate-validity.md` (mandatory) |
 | a run just finished and `>= 2` hypotheses are live | **skill** `experiment-review` |
 | a failure has `>= 2` plausible layers, or 3 similar fixes have failed | `references/diagnosis.md` |
-| the last 5 counted iterations all carry `belief_delta: none`, or at a phase boundary | **skill** `retrospective` |
+| 5 or more similar changes make no substantive progress (including uncounted attempts), or a phase boundary warrants reviewing allocation | **skill** `retrospective`; the immediate method-reset alarm above must not wait for this threshold |
 | no evaluator exists, or a local metric rises while E4/E5 or architect observation falls | **skill** `evaluation-design` |
 | no live hypothesis is registered, the dominant failure has moved, or a phase boundary shows the current mechanism family is exhausted | **skill** `research-search` |
 | the most recent record is `promising` / `informative_failure`, or promotion to Integration Mode is imminent | **skill** `scenario-redteam` |
@@ -207,6 +358,18 @@ respective skills; the remaining rows in the router still load a
 `references/<name>.md` file.
 
 ## Tool surface
+
+### Safe file inspection
+
+Before reading an unfamiliar file as text, identify its type (`file -- PATH`). Never
+send executable, archive, binary USD or unknown bytes through cat/head/sed to a terminal
+or tool output. In particular `/usr/bin/usdcat` is an executable, not a Python script;
+inspect its type or help, not `head -1 /usr/bin/usdcat`. A filename extension alone is
+not a type check. Use `scripts/safe_preview.py` beside this skill for bounded escaped
+text or a hex-only binary preview; it emits no raw terminal controls. For binary USD,
+convert to an explicit text output file with a supported tool, verify the output type
+and `#usda` header, then inspect. Never infer conversion success from the output suffix.
+This helper is an opt-in safe reader, not a hook intercepting arbitrary shell commands.
 
 `tools/researchlog` is deterministic bookkeeping. It never chooses a hypothesis, never
 decides keep/revert, never promotes, and never calls a model.
@@ -248,6 +411,24 @@ Three of these encode rules that are easy to get wrong:
 
 ## State writes
 
+ACTIVE is one execution pointer, not a block-wide result accumulator. Before a run,
+bind experiment_id and execution.run_manifest to that run; after inspecting its result,
+align execution.status with that manifest. Keep multi-run conclusions in CURRENT and
+evidence. An idle ACTIVE can retain a completed run pointer, but not an unrelated old
+run with the new run's status. Reconcile this at block close as well as at pause; never
+change historical manifests to make an incorrect pointer look consistent.
+
+`ACTIVE.hypothesis_ids` currently doubles as the project's registered hypothesis
+IDs. Keep historical IDs when changing focus; use chosen_hypothesis and CURRENT for
+the live question. The active mutation tool merges new IDs instead of unregistering
+history. IDs are not proof that a hypothesis is live or supported. If prior state
+already lost registrations, recover the declarations from saved manifests or Git;
+do not edit immutable evidence or declare every arbitrary reference valid.
+
+When stopping for architect direction, persist that wait in ACTIVE.next_action and
+CURRENT.next_empirical_action, with further work conditional on approval. A successful
+red-team review is a recommendation, not architect promotion to Integration Mode.
+
 The canonical machine-readable files each carry one fenced block that is the single
 source of truth:
 
@@ -281,6 +462,13 @@ environment workaround is not on that list, and presenting A/B/C for the archite
 choose is a failure of this mode rather than a courtesy.
 
 ## Language
+
+Architect-facing updates must follow AGENTS.md's plain-language reporting contract.
+At an architect discussion gate, use research-status's application-to-architecture
+reporting obligations. State bookkeeping alone is not an architecture progress report.
+Lead with the actual result, its practical consequence, what remains untested, and
+the next action or decision. Keep protocol bookkeeping in canonical state; do not
+recite it as progress. An ordinary brief does not need a machine-readable appendix.
 
 `AGENTS.md § Language` owns the language routing rule and is not restated here. The
 operational consequence for this skill is that a single iteration routinely produces both

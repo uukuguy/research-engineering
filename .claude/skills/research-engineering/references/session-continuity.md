@@ -40,8 +40,8 @@ reasoning.
   "block": {"id": "RB-024", "objective": "Resolve recovery oscillation",
             "max_evidence_iterations": 6, "max_wall_clock_minutes": 180,
             "max_tokens": 400000, "completed_evidence_iterations": 0,
-            "belief_delta": null,   # both are written together, at close — an open block
-                                    # reads 0 here because nothing has closed it yet
+            "belief_delta": null,   # belief stays null until block close; counts can
+                                    # refresh independently with active --refresh-counts
             "stop_conditions": ["question_resolved", "hard_boundary",
                                 "major_architecture_decision", "no_valid_evidence_path"]},
   "git": {"branch": "research/recovery", "base_commit": "83ab21c",
@@ -216,6 +216,15 @@ A new session reads from the right and descends only on conflict or during diagn
 working pieces, provisional system shape, uncertainties, active research, next action —
 and nothing that belongs in a timeline.
 
+Working pieces must be usable memory, not just completion labels: preserve the relevant
+command/API or script, input/dependency identity, result/evidence location and limits in
+CURRENT.working_pieces and existing ENVIRONMENT capability/harness entries through their
+CLI verbs. Before replacing an environment or rediscovering an interface, follow those
+pointers. Check changed prerequisites, not every unchanged historical artifact. Preserve
+failed methods and the specific reason to change them alongside successful methods;
+compression that keeps only caveats forces the next session to repeat the same search.
+Missing pointers are a stated recovery gap, not permission to invent a successful method.
+
 ## Rotation
 
 Treat the session as disposable compute, not as something to stretch to its limit. Rotate
@@ -224,8 +233,10 @@ a retrospective just rewrote the working model; raw logs have visibly polluted t
 context; or you notice yourself re-deriving context, confusing old hypotheses, or citing
 the wrong `EV-*`.
 
-Rotation does not need a handoff document. Update `ACTIVE`, `CURRENT`, and the evidence
-ledger; make a checkpoint commit if meaningful work is dirty. See
+Rotation does not need a separate handoff document. For a deliberate pause or exit,
+use `research-pause` to check and close the state and issue a readiness receipt.
+Continuous write-ahead persistence remains necessary for abrupt interruptions.
+Update `ACTIVE`, `CURRENT`, and the evidence ledger; make a checkpoint commit if meaningful work is dirty. See
 `git-research-infrastructure.md § Checkpoints`.
 
 ## Interrupted execution

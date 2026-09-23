@@ -11,6 +11,7 @@ first commit, and that must not stop `reconcile` from reporting what it can.
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ class CodeState:
     dirty: bool
     diff_sha256: str | None
     changed_files: tuple[str, ...]
+    tree_sha256: str | None = None
 
     def to_dict(self, *, base_commit: str | None = None) -> dict[str, object]:
         return {
@@ -50,6 +52,7 @@ class CodeState:
             "base_commit": base_commit if base_commit is not None else self.commit,
             "dirty": self.dirty,
             "diff_sha256": self.diff_sha256,
+            "tree_sha256": self.tree_sha256,
         }
 
 
@@ -80,7 +83,8 @@ def head_commit(root: Path) -> str | None:
 
 
 def current_branch(root: Path) -> str | None:
-    result = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root)
+    # symbolic-ref also works before the first commit, when init stamps ACTIVE.
+    result = git(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd=root)
     if not result.ok:
         return None
     name = result.stdout.strip()
@@ -100,16 +104,46 @@ def is_dirty(root: Path, *, exclude: Sequence[str] = ()) -> bool:
     return bool(status_porcelain(root, exclude=exclude))
 
 
+def status_entries(root: Path) -> tuple[tuple[str, str], ...]:
+    """Unquoted status paths, including both sides of a rename."""
+    result = git(["status", "--porcelain", "-z", "--untracked-files=all"], cwd=root)
+    if not result.ok:
+        return ()
+    parts = iter(result.stdout.split("\0"))
+    entries: list[tuple[str, str]] = []
+    for part in parts:
+        if not part:
+            continue
+        status, path = part[:2], part[3:]
+        entries.append((status, path))
+        if "R" in status or "C" in status:
+            original = next(parts, "")
+            if original:
+                entries.append((status, original))
+    return tuple(entries)
+
+
 def diff_sha256(root: Path, *, exclude: Sequence[str] = ()) -> str | None:
     """Hash of the working tree delta, so a dirty run still has a stable code identity."""
     pathspec = _pathspec(exclude)
-    tracked = git(["diff", "HEAD", "--", *pathspec], cwd=root)
-    untracked = git(["ls-files", "--others", "--exclude-standard", "--", *pathspec], cwd=root)
+    tracked = git(["diff", "--binary", "HEAD", "--", *pathspec], cwd=root)
+    untracked = git(["ls-files", "-z", "--others", "--exclude-standard", "--", *pathspec], cwd=root)
     if not tracked.ok and not untracked.ok:
         return None
     digest = hashlib.sha256()
     digest.update(tracked.stdout.encode("utf-8"))
-    digest.update(untracked.stdout.encode("utf-8"))
+    for name in sorted(filter(None, untracked.stdout.split("\0"))):
+        path = root / name
+        digest.update(name.encode("utf-8") + b"\0")
+        # Hash link identity, not an external dataset it happens to point at.
+        if path.is_symlink():
+            digest.update(b"symlink\0" + os.fsencode(os.readlink(path)))
+        else:
+            digest.update(f"file:{path.stat().st_mode & 0o111}\0".encode())
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        digest.update(b"\0")
     return f"sha256:{digest.hexdigest()}"
 
 
@@ -127,7 +161,8 @@ def code_state(root: Path) -> CodeState:
     by `ACTIVE.git.dirty_expected`, which is about uncommitted work of any kind, bookkeeping
     included.
     """
-    exclude = (repo.RESEARCH_DIR,)
+    paths = repo.discover(root)
+    exclude = (paths.research.name,) if paths and paths.root == root.resolve() else ()
     changed = status_porcelain(root, exclude=exclude)
     return CodeState(
         branch=current_branch(root),
@@ -135,7 +170,28 @@ def code_state(root: Path) -> CodeState:
         dirty=bool(changed),
         diff_sha256=diff_sha256(root, exclude=exclude) if changed else None,
         changed_files=changed,
+        tree_sha256=code_tree_sha256(root, exclude=exclude),
     )
+
+
+def code_tree_sha256(root: Path, *, exclude: Sequence[str] = ()) -> str | None:
+    """Content identity of committed code, stable across evidence-only commits."""
+    if not is_repository(root):
+        return None
+    if head_commit(root) is None:
+        return "sha256:" + hashlib.sha256(b"").hexdigest()
+    result = git(["ls-tree", "-r", "-z", "HEAD"], cwd=root)
+    if not result.ok:
+        return None
+    digest = hashlib.sha256()
+    for entry in result.stdout.split("\0"):
+        if not entry:
+            continue
+        _, _, name = entry.partition("\t")
+        if any(name == prefix or name.startswith(prefix + "/") for prefix in exclude):
+            continue
+        digest.update(entry.encode("utf-8") + b"\0")
+    return "sha256:" + digest.hexdigest()
 
 
 def _pathspec(exclude: Sequence[str]) -> list[str]:
@@ -174,7 +230,9 @@ def add_paths(root: Path, paths: Sequence[str]) -> GitResult:
     return git(["add", "--", *paths], cwd=root)
 
 
-def commit_with_message_file(root: Path, message_file: Path) -> GitResult:
+def commit_with_message_file(
+    root: Path, message_file: Path, *, only_paths: Sequence[str] = ()
+) -> GitResult:
     """`git commit -F <message_file>`.
 
     The message is read from a file rather than passed on the command line
@@ -183,7 +241,10 @@ def commit_with_message_file(root: Path, message_file: Path) -> GitResult:
     The caller owns the message file's content; this module never invents a
     subject line on its own.
     """
-    return git(["commit", "-F", str(message_file)], cwd=root)
+    args = ["commit", "-F", str(message_file)]
+    if only_paths:
+        args.extend(["--only", "--", *only_paths])
+    return git(args, cwd=root)
 
 
 def evidence_trailers(root: Path, *, limit: int = 200) -> list[tuple[str, str]]:

@@ -46,6 +46,8 @@ STALE_RUNNING_MINUTES = 120
 
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", type=Path, default=None)
+    parser.add_argument("--handoff", action="store_true",
+                        help="also check current-block counts and local checkpoint prerequisites")
     parser.add_argument(
         "--stale-after",
         type=int,
@@ -65,11 +67,14 @@ def run(args: argparse.Namespace) -> Result:
         result.add(finding)
 
     detectors = (
+        _delegations,
+        _research_routes,
         _orphan_runs,
         _missing_results,
         _stale_running,
         _dangling_evidence,
         _active_git_mismatch,
+        _evidence_removed_from_git,
         _active_manifest_stale,
         _self_referential_commits,
         _superseded_findings_cited,
@@ -85,10 +90,32 @@ def run(args: argparse.Namespace) -> Result:
         for finding in detector(paths, ledger, args):
             result.add(finding)
 
+    if getattr(args, "handoff", False):
+        from researchlog.handoff import inspect
+        for finding in inspect(paths, ledger):
+            result.add(finding)
+
     result.payload["evidence_records"] = len(ledger.records)
     result.payload["manifests"] = len(ledger.manifests)
     result.payload["clean"] = not result.findings
     return result
+
+
+def _delegations(paths, ledger, _args):
+    from researchlog import delegation
+    return delegation.inspect(paths, ledger, pending=True)
+
+
+def _research_routes(paths: repo.ResearchPaths, ledger: state.Ledger, _args: argparse.Namespace) -> list[Finding]:
+    from researchlog import routes
+    try:
+        block = schema.require_block(paths.current.read_text(encoding='utf-8'),
+                                     'current', source=paths.current.name)
+        return routes.check(block, set(ledger.records))
+    except StateInvalid as exc:
+        return list(exc.findings)
+    except OSError as exc:
+        return [Finding('CURRENT_UNREADABLE', SEVERITY_ERROR, paths.current.name, str(exc))]
 
 
 def _active_load_findings(paths: repo.ResearchPaths) -> list[Finding]:
@@ -202,10 +229,19 @@ def _active_git_mismatch(
         active = state.load_active(paths)
     except Exception:  # noqa: BLE001 - a broken ACTIVE is reported by `validate`
         return []
+    findings: list[Finding] = []
+    expected_branch = active.get("git.branch")
+    actual_branch = jgit.current_branch(paths.root)
+    if expected_branch is not None and expected_branch != actual_branch:
+        findings.append(Finding(
+            "ACTIVE_BRANCH_MISMATCH", SEVERITY_ERROR, "ACTIVE.json",
+            f"ACTIVE names branch {expected_branch!r}, but Git is on {actual_branch!r}",
+            "locate the intended worktree or explicitly reconcile the branch before continuing",
+        ))
     expected_dirty = active.get("git.dirty_expected")
-    actual_dirty = jgit.is_dirty(paths.root)
-    if expected_dirty is False and actual_dirty:
-        return [
+    entries = jgit.status_entries(paths.root)
+    if expected_dirty is False and entries:
+        findings.append(
             Finding(
                 "ACTIVE_GIT_MISMATCH",
                 SEVERITY_ERROR,
@@ -213,8 +249,44 @@ def _active_git_mismatch(
                 "ACTIVE expects a clean tree but the working tree is dirty",
                 "reconcile the worktree against ACTIVE before starting new research",
             )
-        ]
-    return []
+        )
+    expected_paths = active.get("git.expected_touched_files") or []
+    if expected_dirty is True and expected_paths:
+        unexpected = sorted({
+            name for _, name in entries
+            if not any(name == expected.rstrip("/") or
+                       name.startswith(expected.rstrip("/") + "/")
+                       for expected in expected_paths)
+        })
+        if unexpected:
+            findings.append(Finding(
+                "ACTIVE_UNEXPECTED_PATHS", SEVERITY_ERROR, "ACTIVE.json",
+                "uncommitted paths outside git.expected_touched_files: " + ", ".join(unexpected),
+                "inspect and preserve these changes; declare their intent before new research",
+            ))
+    return findings
+
+
+def _evidence_removed_from_git(
+    paths: repo.ResearchPaths, _ledger: state.Ledger, _args: argparse.Namespace
+) -> list[Finding]:
+    """Disk-only loading cannot see committed shards removed from the index."""
+    if not jgit.is_repository(paths.root) or not jgit.head_commit(paths.root):
+        return []
+    prefix = paths.ledger.relative_to(paths.root).as_posix()
+    removed: set[str] = set()
+    for args in (
+        ["diff", "--cached", "--name-only", "-z", "--diff-filter=D", "--", prefix],
+        ["diff", "HEAD", "--name-only", "-z", "--diff-filter=D", "--", prefix],
+    ):
+        result = jgit.git(args, cwd=paths.root)
+        if result.ok:
+            removed.update(name for name in result.stdout.split("\0") if name.endswith(".json"))
+    return [Finding(
+        "EVIDENCE_REMOVED_FROM_GIT", SEVERITY_ERROR, name,
+        "a previously committed evidence shard is deleted from the index or working tree",
+        "reconcile the deletion with the architect; raw evidence is append-only",
+    ) for name in sorted(removed)]
 
 
 def _active_manifest_stale(
@@ -224,21 +296,42 @@ def _active_manifest_stale(
         active = state.load_active(paths)
     except Exception:  # noqa: BLE001
         return []
-    if active.get("execution.status") != "running":
-        return []
+    findings = []
+    execution_status = active.get("execution.status")
     experiment_id = active.get("experiment_id")
+    pointer = active.get("execution.run_manifest")
+    if pointer:
+        expected = paths.manifest(str(experiment_id)) if experiment_id else None
+        if expected is None or (paths.root / pointer).resolve() != expected.resolve():
+            findings.append(Finding(
+                "ACTIVE_MANIFEST_POINTER_MISMATCH", SEVERITY_ERROR, "ACTIVE.json",
+                "execution.run_manifest does not identify ACTIVE.experiment_id",
+                "inspect the intended run and update both pointers with active; do not rewrite run history",
+            ))
     manifest = ledger.manifests.get(str(experiment_id)) if experiment_id else None
-    if manifest and manifest.get("status") not in (None, "running"):
-        return [
+    terminal = {"completed", "interrupted", "infra_failed", "env_blocked",
+                "env_unsupported", "resource_exceeded", "invalid"}
+    if experiment_id and manifest is None and execution_status in terminal | {"running"}:
+        findings.append(Finding(
+            "ACTIVE_MANIFEST_MISSING", SEVERITY_ERROR, str(experiment_id),
+            "ACTIVE describes an executed run but its manifest is missing or unreadable",
+            "locate the real manifest before claiming execution or handoff complete",
+        ))
+    manifest_status = manifest.get("status") if manifest else None
+    if manifest_status is not None and (
+        (execution_status == "running" and manifest_status != "running")
+        or (execution_status in terminal and execution_status != manifest_status)
+    ):
+        findings.append(
             Finding(
                 "ACTIVE_MANIFEST_STALE",
                 SEVERITY_ERROR,
                 str(experiment_id),
-                f"ACTIVE still says running but the manifest is {manifest.get('status')!r}",
-                "the run finished while the session was away; review it, do not restart it",
+                f"ACTIVE execution is {execution_status!r} but the manifest is {manifest_status!r}",
+                "review the actual run and reconcile ACTIVE; do not restart or alter historical evidence",
             )
-        ]
-    return []
+        )
+    return findings
 
 
 def _self_referential_commits(
@@ -415,7 +508,7 @@ def _gitignore_guard(
 ) -> list[Finding]:
     if not jgit.is_repository(paths.root):
         return []
-    probe = f"{repo.RESEARCH_DIR}/{repo.RUNS_DIR}/EXP-probe/manifest.json"
+    probe = f"{paths.research.name}/{repo.RUNS_DIR}/EXP-probe/manifest.json"
     pattern = jgit.check_ignore(paths.root, probe)
     if pattern is None:
         return []

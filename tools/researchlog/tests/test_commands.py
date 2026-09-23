@@ -2562,7 +2562,8 @@ class SessionEventLogTests(CommandTestCase):
         self.assertTrue(row["reason"], "unavailable row must carry a reason")
 
     def test_cumulative_kpi_sums_iterations_across_sessions(self) -> None:
-        # Two sessions, two iterations in each — the cumulative KPI
+        # Legacy records without session_epoch: two timestamp windows, two
+        # iterations in each — the cumulative KPI
         # must report 4. Strategy: record 2 iterations, then sleep so
         # the next pair has a later `created_at`, then record 2 more.
         # This is the only way to put records into distinct session
@@ -2623,6 +2624,10 @@ class SessionEventLogTests(CommandTestCase):
         for path in record_paths:
             data = json.loads(path.read_text(encoding="utf-8"))
             created_ats.append(str(data["created_at"]))
+            # This fixture replaces the event log below. Model the old record
+            # format too, rather than leaving IDs pointing at the original log.
+            data.pop("session_epoch", None)
+            path.write_text(json.dumps(data), encoding="utf-8")
         created_ats.sort()
         # boundary = midpoint between record 1 and record 2; add a
         # tiny epsilon to push session 2 strictly past record 1.

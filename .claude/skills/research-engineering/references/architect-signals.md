@@ -9,6 +9,14 @@ scheduler and the agent into a typist.
 
 ## The eight signals
 
+Signal type and permission to execute are separate. At a paused/discussion boundary,
+OBSERVE/SUSPECT/CHALLENGE/DIRECTION or a requirement clarification does not start a
+block. Explain its effect on the application model and existing evidence, recommend
+the next investigation, and remain in discussion. The action defaults below apply
+only inside existing authorization or a clear new execution request. Classifying or
+echoing an utterance cannot manufacture permission. During authorized work, persist
+decision-relevant signals and act within the existing scope and remaining budget.
+
 | Signal | Meaning | Default response | Challengeable |
 |---|---|---|---|
 | `OBSERVE` | a physical / simulation / code phenomenon | treat as evidence; quantify and localize it | not challenged, but its mechanism explanation must be tested |
@@ -104,8 +112,9 @@ So for these four types, state back what you are about to record **before** acti
 > unconditional.
 
 Read the type, the `statement`, the `scope`, the `expiry`, and the retained `source_text`
-back together, in one message. Then execute. Silence is assent — this is not a request for
-permission and not a second guess about whether to comply.
+back together, in one message. Follow an already-explicit instruction within its scope;
+the echo needs no redundant approval. Silence is not new authorization, cannot turn an
+observation into a decision, and cannot release a paused research session.
 
 If you cannot tell a `VETO` from a `CONSTRAINT`, that is a question about the type and it
 is worth asking, because the two differ in whether you may ever ask to amend: guessing
@@ -152,6 +161,15 @@ After that, stop arguing and execute. The decision is recorded with `final: true
 not re-litigated by later evidence — only replaced by a later decision.
 
 ## Autonomy return
+
+This applies only while an authorized research block is still running. If the session
+has stopped for discussion, answer the critique and its architectural consequences;
+do not treat "why did you miss this?" as "start another implementation". Correct the
+working explanation immediately, but start new work only on an explicit work request.
+Restoring autonomy means independent investigation within scope, not implementing each
+architect remark as a new feature. Recheck the application capability and invalidated
+assumptions before choosing another patch. Do not invent competing hypotheses merely
+to turn a straightforward rendering task into a counted research iteration.
 
 ```
 architect intervention

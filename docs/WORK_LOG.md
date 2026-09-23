@@ -4,6 +4,895 @@
 
 ---
 
+## 2026-09-22 — 旧摘要默认展开与独立换线更新缺口修复，已部署
+
+用户截图证明先前“隐藏旧判断+空白卡片”不可用，要求默认展开并修复已知缺陷。
+systematic-debugging将真实renderer回归改为旧内容可见+待更新标签，先红后绿。
+现在只有一个默认open的details摘要面板，stale保留原正文和时间，不标成最新结论；
+用户手动收起不被轮询覆盖，missing/invalid隐藏空卡片，仅保留简短状态提示。
+删除“未生成；不以英文底层字段冒充”等界面开发者说明。
+
+独立research-routes缺少刷新规则（此前只写在主循环），skill-creator窄修：明确换线
+后更新已有中文派生摘要，失败须区分“已换线/摘要失败”；裸查询仍只读，不启动研究。
+更新两客户端技能及参考，定向部署7文件，ESA提交ea8dbda；备份在
+outputs/esa-brief-visible-* /previous.tar.gz。保留用户CURRENT换线未提交改动，不代提交。
+checkpoint仅更新ACTIVE检查点元数据。未改研究代码、证据或焦点，无研究执行。
+
+9项Web定向测试、renderer（stale可读、missing隐藏、手动折叠保留）、技能格式通过；
+冻结清单零差异。Playwright真实页面确认过期摘要默认展开、有来源时间和待更新标签。
+只读核实来源仅新增已授权换线后，重新综合发布摘要：攻击防护active、导航parked，
+原科学证据未变化。独立换线会话是否主动发布仍需正常使用观察，未冒充模型行为通过。
+
+---
+
+## 2026-09-22 — 暂停后 Dashboard / 换线修复已部署 ESA
+
+用户确认 research-pause 后退出。暂停检查点04d91cc，handoff/strict validate通过，
+72条证据、57份manifest。实际最新块已为RB-020（Policy-only防护、本地OpenPI服务及
+逐请求审计），不再沿用RB-018导航或RB-019早期防护判断。
+
+定向提交5e3a113：11文件，包含routes.py、web.py及两网页文件、三个技能文件×两客户端、
+re-install.json；保留安装副本的无delegation形态，未全量升级。旧版备份为
+outputs/esa-dashboard-upgrade-0YSleX/previous.tar.gz（含旧中文摘要）。113项冻结指纹一致。
+从实际安装runtime运行22项路线/Web隔离测试通过；部署前后733个研究/config文件指纹
+相同。checkpoint之后仅ACTIVE的checkpoint_commit与updated_at由工具回写；研究代码、
+证据、CURRENT路线、客户端配置均未修改，既有未跟踪文件保留。
+
+依据最新报告和canonical状态重新发布中文派生摘要：6条路线、31条结论、最近10条
+事件全部有中文；明确保存焦点与实际防护方向不同，不代写路线切换。原dashboard
+进程7491已定向停止，新服务在原http://127.0.0.1:55028/运行；API为current，Playwright
+实际页面显示RB-020防护准备、空闲与新中文判断。浏览器仅favicon404，无应用脚本错误。
+路线状态修复已可用，但历史焦点收口由下一实验会话执行；模型是否主动更新中文仍待
+新会话行为验证。用户下一步为启动客户端后research-resume，只读恢复，等待新授权。
+
+---
+
+## 2026-09-22 — Dashboard 方向/中文失效与历史中断换线锁修复（开发库，待暂停部署）
+
+实查 ESA HTTP 55028 快照：RB-019 已为攻击防护，路线仍导航 active、防护 queued；
+中文摘要停在02:53“缺地图”。网页全局指纹一变就撤销全部中文条目，同时仍把旧摘要
+放在当前判断区。本人先前监测汇报也未追上最新会话，不能用旧阶段代替当前检查。
+
+修复 routes：不再因非当前历史 interrupted 缺 result 永久锁住 lifecycle；保留当前
+未收口、所有 running/pending、未完成输出捕获以及现有 worker 保护，不改历史产物。
+Web：发布时绑定逐条源指纹，未变化中文可继续使用；当前研究块目标单独绑定 id/
+objective/started_at（计数更新不使目标说明失效）；旧总体判断折叠，新/变更条目缺中文
+时给中文待更新提示，英文原始依据保留在详情。不在浏览器调用模型或改变研究状态。
+skill-creator 指导窄修：授权转向先同步焦点，拒绝须明确报告；已有 dashboard 在转向、
+重要进展及收尾时复用中文汇报发布，不要求人手动再调 status。两客户端开发技能同步。
+
+验证：历史锁测试先红；22项路线/Web定向测试通过（含目标身份与计数独立测试）。
+新 Snapshot 只读消费真实 ESA 数据成功：RB-019、6条路线；旧摘要无逐条指纹，因此
+不能凭空沿用中文，部署时必须重新综合发布，不能只给旧摘要换新指纹。
+真实 app.js 的无浏览器 DOM 渲染回归通过（旧结论不占当前区、中文回退、研究块切换）；
+该检查先发现两处遗漏的英文回退并修正。不是浏览器视觉验收，也不是模型行为验收。
+未运行全套、未写 ESA 文件、未改实验方向/证据/代码、未部署或重启实验/dashboard。
+下一步：本轮自然暂停后定向部署 runtime、网页、技能并更新冻结清单，重启 dashboard，
+依据当时最新状态发布中文摘要；路线变更交由实验会话按授权执行，不能由监测方代写。
+
+---
+
+## 2026-09-22 — ESA 暂停后定向升级完成，等待新会话接续
+
+用户确认 pause 后退出。Astra pause 自己修正了旧 Docker run 指针，检查点 bd10b9337675；
+本次不代写研究结论。使用 systematic-debugging 复现 reconcile 只检查 running 的缺口：
+idle/completed 指向 interrupted、错误 manifest 路径、缺失终态 manifest 三例先失败。
+修复后检测三类错误且保持只读；规划未启动无 manifest 不误报，原 running 检查保留。
+不会自动选择“最新 run”或改历史 manifest。skill-creator 用于完成判据和指针对齐修订：
+区分用户目标与本轮里程碑，阶段文件不能替代实际消费验证；汇报停因和未完成验收。
+
+定向部署 19 文件：7 个技能/参考 × 两客户端、run.py/handoff.py/reconcile.py、操作
+说明、冻结清单。带上前两轮预算/方法重选/能力恢复/超时修复；排除 delegation 原型。
+tools/probes/prepare_esa_upgrade.py 只读生成分组补丁，不部署；实际以 apply_patch 应用。
+旧版备份 outputs/esa-re-upgrade-cfc34f26cdc7dc8c/previous.tar.gz；Git 也保留旧版。
+部署提交 b186e29f145f，仅上述19文件，不包含研究代码/原始证据或用户未跟踪文件。
+
+验证：开发17项指针/timeout/pause/能力测试、16项既有run/reconcile/heartbeat/预算测试
+通过；再导入 ESA 安装runtime，子进程入口也指向 ESA，在临时fixture跑16项通过（11.76秒）。
+113项冻结检查、strict validate、最终 reconcile --handoff 全通过：41证据、32manifest。
+部署前后539个研究/config文件指纹一致；提交后只有ACTIVE checkpoint hash与updated_at
+由工具回写。对暂停commit核对研究目录、probes、研究报告、配置和Makefile无提交差异。
+既有未跟踪旧日志/work/.playwright-cli保留。无USD重跑、模型调用、官方提交或push。
+
+下一步用户新会话 research-resume 只读简报，然后按现有上下文授权继续。先保持
+Astra medium（本次没有修改模型配置；新客户端应核对实际选择），消费已保存地图做
+真实尺寸M20/Piper本地路径/扫掠验收，而非重建地图。本次机械验证不代表研究行为已
+验收，更不代表物理运行或整个RE生产可用。已关闭RB-017仍保留原2次预算，新的无显式
+计数上限研究块才用null；不追溯放宽历史预算。
+
+---
+
+## 2026-09-22 — 自主研究退化的协议修复（开发库，待部署与行为验收）
+
+用户指出 ESA 地图研究依赖反复人工技术救援，要求修复，正常使用 Sol 不应依赖
+Astra 可用。只检查公开消息/工具轨迹与代码；对照早期主模型实为 Astra medium，
+实验被审计段 Sol high，不是同模型 A/B。对照确实自主选择 SDK 与几何方法；不能
+用后续人工地图纠偏否定这一点。ESA 经提示和参考代码才进展，不算独立发现。
+
+systematic-debugging 已定位：两次限额打断语法修复后的复跑；diagnosis 写着三次
+失败交给架构师，与主协议冲突；按 counted evidence 触发复盘漏掉大量失败成本；
+已有工具能力在恢复中失去可调用入口。skill-creator 指导针对性修改而非增加表单。
+
+主 skill 增加应用结果/真实输入绑定、现有能力和 SDK 优先检查、无信息失败/成本
+膨胀即重选方法、局部可用性与更强验证分层、模型升级非前置条件。diagnosis 删除
+三次自动升级；retrospective 计入未计数尝试。external-research/session-continuity/
+pause/status 贯通 working_pieces 与 capability notes 的调用入口、输入、产物、限制，
+报告显式区分独立发现与人工救援。复用现有 canonical/CLI，不新增状态或每轮表单。
+
+新增 capability recovery 定向测试：真实 CLI 写状态，新 Python 进程读回方法和限制，
+查询不改变文件；首次测试因测试脚本定位 tools 而不是 researchlog 失败，已修测试路径。
+真实模型行为验收列于 docs/RE_AUTONOMY_ACCEPTANCE.md，尚未执行，机械通过不代表
+Sol 自主研究已修复。用户正在另测模型，不调用额外模型、不改客户端模型配置。
+
+验证：20 项状态/能力/预算定向测试通过（2.68 秒）。技能格式检查发现 retrospective
+既有单行 description 中冒号不合法，改为 folded YAML 后复查。未跑全套研究任务。
+开发库两客户端技能已生成同步。ESA 未改任何文件或研究状态；虽最后记录为暂停，
+用户正测试模型，不能由旧 idle 指针假定当前无人使用。须确认会话停止后，连同前两项
+预算/进程收口修复定向部署，避开未验收 delegation 原型。不要全量升级。
+
+---
+
+## 2026-09-22 — 嵌套子进程 timeout / Ctrl-C 收口修复（开发库，待部署）
+
+按用户“确定可以修复改进的继续”授权，在隔离 fixture 复现 RB-010：0.4 秒 timeout
+只杀 launcher，child 运行到3秒；launcher提前退出时旧工具甚至报 completed。
+systematic-debugging 用真实嵌套进程和日志定位，不跑 USD 或修改 ESA 研究。
+
+run 在 POSIX 新建独立进程组，timeout/Ctrl-C 信号仅发本次组；等待 launcher 与
+output relay 共用 deadline。继承 pipe 的后代被纳入超时，不阻塞 TextIO.close；
+未结束 relay 保有其 stream 所有权，后台残留告警并避免写 completed/result。
+manifest 增加 timeout_seconds / process_group_id / output_capture_complete，未改 schema
+既有字段或科学 outcome。0/负数/NaN/inf timeout 在创建 run 之前拒绝。
+handoff 拒绝当前 manifest 标记 output_capture_complete=false 的未核清交接。
+
+验证覆盖：普通嵌套进程、外层提前退出、无关进程不被误杀、部分日志、主动脱离进程组
+的有限 daemon（报告不完整而非谎称杀掉）、Ctrl-C、非法 timeout；加既有 run/heartbeat
+与 pause 定向回归，最终 20 项通过（17.8 秒），diff 空白检查通过。
+未跑全套、未调用模型或模拟器。主动 daemon/远程任务/SIGKILL/系统
+崩溃/非 POSIX 进程树不在本轮保证内；未称任意进程都能强制收口。
+
+仅开发库 runtime/test 与安装操作文档改变；实验项目正在运行，未部署、未改 canonical。
+下一次 ESA 暂停后与上一条预算政策一起定向部署 run.py、handoff.py 和相关技能/操作
+文档，更新冻结清单并验证；不要全量同步引入 delegation 原型。
+
+---
+
+## 2026-09-22 — 默认研究预算改为问题与汇报窗口，待实验暂停后部署
+
+用户认可：固定两次探针不足以容纳失败复跑、正反对照和独立核验；不能因守次数省掉
+必要对照。research-engineering 取消默认两次执行/两条证据上限：新块无显式计数限制
+时 max_evidence_iterations=null，以明确问题和约 30 分钟汇报窗口约束。接近窗口不
+启动预计无法完成的新工作；已运行的短时有界检查可以说明进度后收完，不得静默续轮。
+明确硬截止、暂停、安全、花费与单次 timeout 优先。收尾只允许记录归档。既有运行块
+和明确的 architect 限制不自动放宽。安装操作文档同步，顺带修正旧计数只在 close
+刷新的技能描述。技能格式检查与开发库双客户端生成同步通过。
+
+重要：ESA Codex 会话 01a0c5a7 在 21:00Z 已获用户再次 research-engineering 授权，
+因此本次没有改实验项目任何文件，没有热更新或替它修改预算。下一次 research-pause
+后仅部署该技能的预算/计数段和 RE_OPERATIONS 对应段，更新冻结清单；不要全量升级
+引入尚未验收的 delegation。用户无需重复给出预算设计。
+
+RB-010 实测约 15 分钟完成：超时复跑后转定向正反对照及场景树，保留地图路线，结论
+限制合理；4 次 EXP 超过当时旧默认2次，但构成合理研究链。上轮审计将 1613 名称数
+误写路径数（实际4170），Codex 已在新证据和当前状态纠正；历史审计原文不改。
+另有明确待修：run timeout 只 kill uv launcher，Python grandchild 留存并持有 pipe，
+_close_pipes 可等待仍阻塞的 relay；需在独立临时 fixture 重现与修复，不能现场改正在
+运行的工具。尚未修复，不以预算政策调整声称解决。Codex 已终止当次残留并记 interrupted。
+
+---
+
+## 2026-09-22 — MiniMax USD 暂停交接修复，待 Codex 实际恢复验收
+
+核对 ESA Claude 会话 5e8789e4：USD flatten 已输出约 11 GiB，库存 4475 条/1613 路径/
+4323 extents，但会话反复用旧零字段结果解释；解析器路径和代码/产物对应关系未解决。
+暂停 5m36，EV 已提交而代码与 run 未跟踪；CURRENT/路线未吸收结果，工具仍报 clean。
+旧计数设计仅在 belief_delta/close 时刷新，暂停时 0 不全是模型漏写。
+
+修复 checkpoint --paths 为排他范围（包含范围内未跟踪文件），与宽泛 inclusion flags
+组合拒绝。active --refresh-counts 独立从账本刷新，不关闭 block、不改变 belief。
+reconcile --handoff 增加当前 block 计数、CURRENT 最新 EV 引用、canonical/当前 run/
+可识别项目脚本/项目内 evidence artifacts 的 HEAD 检查；ACTIVE 只容许 checkpoint
+后 hash+updated_at 两字段差异。普通 reconcile 保持原语义，避免运行中要求全提交。
+这是本机 checkpoint 前提检查，不是语义正确性、跨机可运行或实时预算强制执行。
+research-pause 内置新操作、禁止从空余 iteration 槽推断剩余时间，并要求核对最终文件。
+systematic-debugging 用于复现根因，skill-creator 用于技能小范围更新。
+
+只部署上述变动到 ESA 双客户端，未带 dev delegation 原型；113 文件冻结检查通过。
+部署提交 ce567ea / b741ac8。CURRENT、路线与 ACTIVE 通过工具补齐限制和暂停授权边界；
+计数 1、belief_delta null、路线保留、速度 0.25。原 EV/manifest/result/inventory/probe
+不改，新增 PAUSE_AUDIT.md 说明时间戳疑点及 provenance 未解。研究 checkpoint 6a69392
+归档 8 文件（含 4.7 MB 库存）；11 GiB /tmp 缓存仍在，不承诺跨机恢复。
+strict validate / reconcile --handoff / make re-check 均通过。14 项定向测试通过，未跑全套。
+剩余 dirty 仅预期 ACTIVE checkpoint stamp 和既有 .playwright-cli/、work/，未夹带。
+
+下一步：用户在同实验目录换 Codex，research-resume 只读汇报并等待；需说明库存不可靠、
+旧时间额度不续用，不切路线。新授权研究先审计解析器/路径与产物身份。尚未声称新的
+模型恢复行为、USD 修复、自动时间限额拦截或 RE 整体生产可用通过。
+
+---
+
+## 2026-09-22 — research-resume 统一项目入口，Claude Code 适配部署
+
+用户确认只做薄适配。research-resume 明确直接启动/启动器/clear 同一入口，读取本项目
+同安装的 sibling status；客户端私有聊天、后台工具、子代理身份不可假定移交，同一状态
+单写。Codex 启动器原长恢复提示删除，只发 $research-resume / $research-status。
+新增 re_client.py 选择器与 re_claude.py，仅发 /research-resume 或 /research-status 并
+经过既有 PTY guard。Claude 不注入模型、provider、认证、权限绕过或 fallback，沿用自身
+配置；可在项目 .claude/settings.json 配置 model，未配置则继承。不能假设继承即订阅。
+
+新安装器同时安装 .agents/.claude 两端 skills、CLAUDE.md 导入 AGENTS；Claude settings
+只生成已发现工作流技能的精确 deny/skillOverrides，不修改全局配置，冲突文件拒绝覆盖。
+升级器更新已安装客户端的 skills，不顺便启用缺失客户端。make re-start/re-status 支持
+CLIENT=codex|claude，缺省 codex；恢复逻辑仅在技能。直接启动仍无 PTY 字符集过滤，
+Codex 直接启动仍不带会话级技能 exclusions，文档明确；Claude 策略随新插件需复核。
+
+本机 claude 2.1.278 --help 与官方 skills/settings 文档核对入口配置；未发模型请求。
+skill-creator 用于小范围通用入口语义更新。13 项安装/启动/策略/迁移定向测试通过，
+4 项 PTY guard 测试通过；首轮测试只是 macOS /var 与 /private/var 比较未 resolve 导致
+失败，修正断言后通过。两客户端实际部署 dispatcher 在 mock guard 下验证新会话参数；
+技能 23 文件内容相同（3 个旧 Codex 文件无末尾换行，新 Claude 文件有，不影响指令）。
+不以这些测试声称模型真实恢复、自动选技能或双向研究交接已通过。
+
+ESA 仅复制其现有冻结 Codex 协议到 Claude（更新 resume），不带 dev delegation 原型。
+112 文件冻结核验、strict validate、reconcile 通过；23 文件内容比较通过；canonical 源
+指纹仍 6597b4dce33bf140a2c5ac340feb394114f406b22960675118ed84643f1807c4。
+部署独立提交 739f309，备份 .re-install-history/client-entry-20260922；原 ACTIVE 差异、
+.playwright-cli/、work/ 保留，无 canonical/应用代码改动。根工具开发仓库仍为累计脏树。
+
+下一步真实行为验收：旧 Codex research-pause 后退出，项目根直接 claude，输入
+/research-resume；应恢复 0.25 本地速度决策、地图路线与证据限制并停下，不开实验。
+之后经授权完成有界研究/暂停，再换 Codex $research-resume，验证双向不丢决策与路线。
+想保留 guard 可用 make re-start CLIENT=claude；不用额外附长提示。
+
+---
+
+## 2026-09-22 — 路线编号选择及实验速度决策完成对齐，可重启验收
+
+用户指出实际 research-routes 与描述不同。核对真实会话发现技能从未实现编号表，
+且本会话此前依据旧 route 推荐恢复 0.16 m/s，遗漏了实验会话 18:01:34Z 明确选定
+本地 0.25 m/s 的指令。本轮按用户授权修复，不启动研究。
+
+routes list 增加 choices(number/id/title/status)、portfolio_revision（全路线内容哈希），
+编号按当前焦点优先、再 priority/id 排序；原 routes 数组顺序兼容。--select N 必须携带
+当时 --portfolio-revision，缺失/过期/越界拒绝且不写状态。技能要求裸调用固定中文编号表、
+保留 ID、支持“查看 N / 切换到 N”、使用工具守卫而非凭上下文猜编号。新会话无旧映射
+需重列后再选；多步 wake/activate 先守卫解析，随后沿稳定 ID 执行。切换不授权研究。
+
+实验 ARCHITECT 追加 DEC-20260922-LOCAL-SPEED，原文来自真实用户消息；CURRENT 的
+前沿/不确定性、应用契约路线通过工具修正为固定 0.25 的受控对比。新增受限重解释
+FND-20260921T185214Z-b414 替代旧 builder-defect finding，原 22 EV / 14 manifests 未改。
+中文 dashboard 摘要同步，源指纹 6597b4dce33bf140a2c5ac340feb394114f406b22960675118ed84643f1807c4。
+
+定向部署 routes command 与 skill，不含 delegation 原型，安装 87 文件检查通过。
+部署（含之前 dashboard）独立提交 6fc637b；三份 canonical 决策对齐独立提交 ca33180。
+原 ACTIVE 暂停后 diff、.playwright-cli/、work/ 保留，未混入提交。strict validate 和
+reconcile 均通过，idle/RB-009 不变；未启动实验、未调用新模型会话。
+
+33 项路线相关定向测试通过（含编号解析、旧列表拒绝、范围/缺 revision 拒绝及不写入）；
+安装版本只读实测 3 对应 R-LOCAL-APP-CONTRACT、过期 revision 拒绝；技能格式和双客户端
+生成同步通过。skill-creator 用于约束确切展示及守卫选择流程。模型实际遵循仍由用户
+新会话验收：make re-start → $research-routes。当前编号 1 地图、2 回放、3 应用契约、
+4 官方运行时、5 其余任务；不承诺此顺序跨列表变化永远固定。
+
+---
+
+## 2026-09-22 — 本地网页 dashboard 首版；侧栏改为非模态
+
+后续实用反馈：非模态并排仍让主页面重排，原阅读位置丢失。按 systematic-debugging
+定位到 detail-open 的 main margin / grid 单栏覆盖，删除全部主区覆盖规则，改固定覆盖
+侧栏；overscroll containment 防详情滚动溢出带动主页面。详情打开时暂停自动主区重绘，
+关闭后恢复轮询（手动刷新仍可用）。已定向同步 CSS/JS 与清单；语法、87 文件核验及
+无 detail-open 布局覆盖检查通过，未声称浏览器位置行为已自动实测。
+
+Architect 同意一页本地研究工作台，参考 ESA 回放。核对 00:19 实验会话的实际工具
+调用，确认读取过 visualize SKILL；回放源码为自包含 HTML/SVG、任务选择和时间滑块。
+本轮使用 Sites 页面设计指导（用户要求本地，不注册/部署公网）与 skill-creator。
+
+新增 tools/researchlog/web.py 和 web_assets 三文件，stdlib loopback HTTP + 原生
+HTML/CSS/JS，无模型调用/外部依赖/写 HTTP API。页面呈现应用摘要、当前焦点优先的
+路线、路线纠正与证据时间线、结论及报告。报告只读登记的项目内文本，并对比 SHA256；
+拒绝外部路径和 HTML 执行。限制 Host/Origin、CSP/no-store，poll 5 秒，后端 4 秒缓存。
+来源变化中的混合快照拒绝显示；错误保留旧画面并警告。无进程心跳，不伪造 live。
+
+中文摘要存 ignored .derived/dashboard-brief.json；--basis 在综合前取得 canonical/TASK
+指纹，--publish-brief 拒绝源已变化。原始记录变化会明示摘要过期，路线/结论回退原文。
+指纹不是全工作树/外部产物校验，不是科学正确性证明。首份 ESA 中文摘要已据现有
+记录综合；没有改 canonical/实验代码。后续说“更新 dashboard 摘要”由 status 技能
+发布；普通 status 默认仍不写，持续运行阶段的自动中文摘要刷新尚未行为验收。
+
+仅定向部署网页模块/资源、launcher、status 参考与局部指令、Makefile，清单 87 文件
+通过；未部署 delegation 原型。备份 .re-install-history/web-dashboard-20260922。
+ESA canonical/TASK/ledger/manifests/results 指纹前后相同：5b035a13425b51579d3fb439587792837160b8df5cdeafd8472ed8d5ee0c534b。
+实验 make re-dashboard 启动 http://127.0.0.1:55028/；初始开发服务 54628 仍可访问。
+运行进程不是永久服务，退出后在实验项目 make re-dashboard 重启；终端诊断入口为
+make re-dashboard-text，re-watch 保持终端轮询。部署改动尚未提交，用户原 ACTIVE diff、
+.playwright-cli/、work/ 保留；后续暂停收口时只提交本轮工具文件，不混入实验内容。
+
+7 个 web 定向用例 + 3 个 dashboard finding 用例 + 10 个安装用例通过；JS 语法、技能
+格式、生成副本一致性、HTTP 200、87 文件安装核验通过，未跑全量。没有浏览器视觉 QA。
+用户实用反馈“侧栏锁住主页面”，立即将 showModal 改 show，桌面并排、窄屏非模态
+覆盖，主页面继续交互和刷新，Esc/关闭按钮均可用；已同步两处资源及清单。刷新网页
+生效，不必重启实验会话。后续继续根据真实使用修正密度/摘要质量。
+
+---
+
+## 2026-09-22 — 两项修复定向部署；新增终端字符集输出过滤
+
+用户确认新实验会话仅只读开场。检查 RB-009 idle、明确暂停，strict validate/reconcile
+通过（22 EV、14 manifests）；保留 ACTIVE 的原暂停后差异、.playwright-cli 和 work。
+不再停留在口头“将部署”：定向部署讨论/执行入口、architect-signals、安全文件预览、
+AGENTS 和启动器，不含 parallel-research/delegate 原型。旧文件及清单归档到实验
+.re-install-history/1a1cb0b647522c8b0484adae6c95db3d812e2c427dd9954bbf32f266d8a18ef0-terminal-guard。
+
+新 tools/re_terminal_guard.py 为 POSIX PTY 代理；re_codex.py 默认必须经它运行，不是可选
+safe reader。过滤 SO/SI、ESC 字符集指定/锁定切换、非显示 C0/C1，跨读取块保持解码和
+序列状态。输入直通、窗口尺寸同步，恢复 tty 模式及 ASCII/UTF-8，返回子进程退出码。
+保留 TUI CSI/OSC、颜色/光标；不是通用 ANSI 安全过滤器，不承诺任意显示问题无故障。
+原始客户端日志不变；直接 codex、旧会话、非该启动链路均不受保护。需退出再 make
+re-start（不是 /clear），启动提示 terminal charset guard=ON。完整真人 Codex UI 交互
+仍需用户重启检视，不将 PTY 定向测试说成全流程体验验收。
+
+systematic-debugging 用于追事故字节到显示边界；OpenAI Docs 核查 hooks，但未据未证明的
+流式输出覆盖作假设。skill-creator 保持定向技能变更边界。4 项过滤/PTy测试、5 项安全
+预览、10 项安装/启动器测试通过；部署后的过滤器重放事故归档输出，1/17/4096/65536
+字节分段均去掉致错字符集控制（20970 个过滤项）；中文/TUI 序列保留测试通过。实验
+82 文件快照通过；118 个 canonical 文件前后 SHA256 完全一致。部署变更单独提交，
+不提交用户研究状态和未收口目录。未运行真实模型研究或全量测试。
+
+下一步用户退出当前只读客户端后 make re-start，确认 guard=ON 和开场后仍等待讨论。
+
+---
+
+## 2026-09-22 — 修复讨论误启动研究与二进制终端污染；待实验暂停后同步
+
+核对独立实验会话 01a0c4c4：用户询问回放可能性后 agent 自行宣称获授权；后续架构
+质疑直接变成新一轮地图实现。01:06:55 再次执行 head -1 /usr/bin/usdcat，输出含
+20758 NUL、4 SO、12 SI、2 ESC。file 确认 Mach-O；上次只有诊断，未部署防复发措施。
+
+本轮按 systematic-debugging 的已证实触发链修正，并按 skill-creator 收紧 description、
+入口和 architect-signals：自动加载 skill 不等于用户调用；暂停讨论中的观察/质疑/
+建议先分析应用与架构影响，不自行写状态、开 block 或实现；明确修复/执行/继续指令
+直接授权相应有界工作，不需特定口令和重复确认。研究中的纠偏仅消耗原授权剩余预算。
+去掉 silence-is-assent 的歧义；纠偏后回归自主研究只适用于仍在授权内的运行。
+同时更新开发 AGENTS 和项目安装模板，避免入口文件继续给出无条件自主执行要求。
+
+增加随技能分发的 scripts/safe_preview.py：有界读取常规文件，输出 ASCII JSON，文本
+转义，二进制/控制字节仅给 hex；避免未知文件和 Mach-O 原样进入终端。规则要求先识别
+类型，二进制 USD 转显式文本文件后核对类型/header。它不是全局 shell hook，不能保证
+任意直接 exec 命令都被拦截；当前不修改客户端终端或对全局工具作不可控包装。
+
+5 项安全读取测试通过，实际 /usr/bin/usdcat 有界读取识别 binary_or_control_bytes，
+无原始控制字节输出；技能格式和双客户端副本同步通过。未启动模型行为测试、未全量
+回归。实验仍为 RB-009 planning_evidence 且有未收口用户改动，未热更新或改变其研究
+状态。下一步用户在实验会话 research-pause 后同步这两项修复；不得顺带部署尚未行为
+验收的 parallel-research/delegate 原型。现有整包升级器会包含该原型，需定向迁移。
+
+---
+
+## 2026-09-22 — 多路线并行的受监督任务层原型，未部署实验项目
+
+Architect 同意沿 Iteris 启发推进。本轮在 RE 开发库实现第一层：持久研究路线不等于
+短期 worker；主研究者单写 canonical，worker 独立目录产出，主研究者收回并审查。
+新增 delegate prepare/dispatch/progress/collect/review/cancel/list；任务保存问题、应用价值、
+路线/研究块、授权来源文本、输入 SHA256、写入范围、截止/探针预算、返回要求、worker
+identity、状态历史、原始结果与 artifact 指纹。最多两个 prepared/dispatched 任务；
+拒绝工作区重叠、重复派发、结果身份不符和不合法转换。collect 不写 EV，accepted
+要求引用已登记 EV，且 EV 路径/哈希覆盖返回产物；accepted 仅表示主研究者审查归档，
+不意味着假设成立或架构晋升。环境失败保留独立状态。
+
+未完成任务阻止路线生命周期切换和 block 关闭/替换。validate/reconcile/dashboard 已接线，
+reconcile 明示未收口，dashboard 显示问题/应用价值/交回结果/最近进度说明与时间；不是
+存活监测。make re-workers 为只读入口。恢复/status 检查任务，pause 对未交回/未审查
+工作不能宣称完整交接。无任务的旧项目查询不创建目录或迁移。
+
+skill-creator 用于按需 parallel-research 参考、主循环条件路由及 status/pause 的最小接线。
+客户端原生 delegation 由主 agent 操作；CLI 本身不启动/停止模型或进程、不验证自然语言
+授权真伪、不强制预算、不是沙箱/daemon。保留 launch→绑定 identity 间中断的歧义处理：
+先查客户端历史，不自动重跑。工具串行写锁中断后需要人工核实释放。worker 执行来源
+不能伪装成主仓库 snapshot；缺 provenance adapter 时只登记真实的产物检查层证据。
+
+验收：8 个新增跨进程定向用例；连同路线、dashboard、ACTIVE/CURRENT 回归共 31 项通过，
+另 10 项安装部署测试通过。新增 progress 后重跑 8 项；三个技能格式、双客户端同步检查
+通过。初次自选测试命令遗漏 tools import root，修正调用后执行成功；没有全量测试。
+没有启动真实模型 worker、没有改动 esa-study-independent-01、没有部署或全局安装。
+
+下一步应先做两个真实独立研究 worker 的小规模行为验收（预算内、有对照、原始产物、
+主研究者审查），再测 worker 未交回/已交回时 clear 恢复；重点看不同结论的裁决、
+研究收益与资源成本，不以流程/测试数量宣称自主研究生产可用。通过后在实验自然停点
+迁移 runtime+skills，不仅升级 skills。后续仍缺独立执行 provenance 导入、可恢复启动
+adapter、强制总预算/停止控制与持续存活采集，不先扩成多 agent 平台。
+
+---
+
+## 2026-09-22 — 暂停退出后完成恢复/路线更新部署
+
+Architect 确认实验已暂停退出后检查：RB-007 idle，原有 ACTIVE 未提交差异仅为暂停
+checkpoint_commit 和 updated_at；strict validate/reconcile 通过（21 EV、14 findings、
+13 manifests）。保留该差异，不改授权、实验代码和 canonical。显式同步新 skills 与
+routes runtime、CURRENT schema、校验/终端查询、启动器、Makefile 和操作契约，提交
+实验项目 7f01267；旧 skills/lock 已归档，旧 runtime 由迁移记录指向前一 Git commit。
+
+80 文件部署快照检查通过；部署后 strict validate、reconcile、dashboard、routes list
+均通过。前后 .research 下 111 文件 SHA256 清单完全一致。重跑 9 项路线与 10 项部署
+定向测试通过。研究路线仍 registered=false，恢复只读不迁移；下一次获准研究由实验
+agent 登记。下一步用户 make re-start 验证只读恢复停点，再测 pause/clear/resume 与
+路线自主比较、保留/唤醒；未声称 fresh model 行为验收已完成。
+
+---
+
+## 2026-09-21 — 会话内恢复与多路线生命周期已实现；等待实验自然停点部署
+
+Architect 同意实现，同时继续实验研究。本轮仅修改 RE 开发库及安装模板；未热更新
+esa-study-independent-01、未发送实验指令、未改实验 canonical/代码/证据。
+
+新增 research-resume：裸调用复用 research-status 的轻量只读恢复，汇报后等待；
+pause → clear → resume 无需退出客户端。不是 clear hook，不承诺自动触发。
+新增 research-routes：裸调用只读总览，明确指令可暂存/切换/唤醒，但不启动实验。
+启动模板开场改用 resume；日常 status 仍直接可用。skill-creator 用于精简入口、
+按需加载路线参考，避免复制恢复协议和要求用户附加提示。
+
+CURRENT.research_routes 为唯一组合状态，引用现有 EV，不另建结论库。routes 命令
+提供 list/add/update/park/block/wake/activate/close，保留优先理由、接续位置、下一
+探针、依赖/替代关系和转换历史。一次 CURRENT 原子替换完成旧线暂存/新线选择；
+未登记旧项目只读查询不迁移。current 通用写入不能覆盖路线数组。单写者协议仍适用，
+写前变化检查与原子替换不等于并发事务。ACTIVE 是实际执行指针，路线 active 只是焦点。
+命令拒绝未完成执行下的生命周期切换、未知 EV/路线引用、依赖环、未完成前置路线、
+缺少交接条件；无实测负面证据不能拒绝路线，环境/无效证据不能用于关闭研究路线。
+validate/reconcile/dashboard 接入路线检查；dashboard --route 与 Makefile 入口可检视。
+
+主循环在获准 block 入口/结尾比较路线并主动推荐下一轮，保留未选方向和唤醒条件。
+同步修正旧 block 条款“达到上限自动开新块”与限权停点冲突。规则不构成模型调度器、
+自动触发器或跨 worktree 事务；研究价值、唤醒事实、授权有效性仍由 agent 判断。
+
+验收：9 项路线 CLI 测试覆盖 A→B→新进程读取→新 EV→唤醒 A→切回，历史与证据保留；
+8 项 CURRENT 回归、5 项 dashboard 回归、10 项部署测试，共 32 项定向测试。6 个
+新增/修改技能格式检查通过，双客户端生成副本同步。未运行全套/模型研究验收。
+
+下一步：实验会话 research-pause 后，在自然停点把新 skills 与配套 runtime、CURRENT
+schema、启动器/模板一同显式迁移，不能只跑 skill-only upgrade（旧 runtime 无 routes）。
+第一次获准研究由实验 agent 从本项目事实登记路线；恢复查询不替它编造迁移历史。
+行为验收重点：clear 后只读恢复；无需重述 A 即接续；AI 主动比较并在新证据满足条件时
+重启暂存线；架构师只做真正战略/权限决策。当前不能宣称这些模型行为已获实测证明。
+
+---
+
+## 2026-09-21 — 主动外部研究与高价值报告索引已部署，行为待实测
+
+主循环及 research-search 在关键选型、新方向、陌生领域或重复失败时加载外部研究规则：
+有预算地查一手来源、比较替代与反证，再选择本地验证；区分文献判断与本地测量，不默认
+启用付费 deep-research。通过 skill-creator 的按需引用方式落地，避免每轮加载长调查流程。
+高价值结果形成 docs/research/ 中文版本化报告，经 research-report artifact → EV →
+FINDINGS 关联；不建立第二套 canonical，不改旧证据，不把写报告算新测量。
+
+dashboard 增加结论状态、报告存在性及 --finding 单项检视；make re-finding FINDING=...
+展示影响、局限、证据与替代关系。路径存在不等于哈希核验或科学正确；未关联不编造。
+修正 research-search 原有 YAML description 冒号解析问题，两项技能校验通过；5 项
+dashboard 定向测试和 10 项部署测试通过，生成副本同步校验通过。未运行全套测试。
+
+实验 RB-005 idle 后显式部署，提交 c8b2066；75 文件快照核验、实际单结论查询通过，
+无 canonical state/ledger 改写。现有 11 条结论尚未关联 research-report；不倒填历史。
+新会话仍须仅恢复汇报并等授权。新规则能否促成适当搜索和有价值报告，待下一轮实测，
+不因格式/单测通过宣称行为或生产可用。专用 deep-research 服务未接入。
+
+---
+
+## 2026-09-21 — 轻量恢复与最小只读终端 dashboard 已部署
+
+research-status 增加轻量开场：不因新会话就加载完整主循环，不因 TASK 链接 DOCX 就
+重读文档技能和原始材料，缺失/矛盾/来源变化才深入；只读 reconcile 不需研究授权。
+项目模板和实验 AGENTS 同步解除开场强制加载完整主循环。启动耗时改善尚待实测。
+
+新增 researchlog dashboard（文本/JSON）与 make re-dashboard / make re-watch，后者
+5 秒轮询 Ctrl-C 退出，不启动模型或后台 daemon。直接展示持久目标、状态更新时间、
+AI 记录的进展/下一步、最近证据及运行结果存在性，合并 validate/reconcile 发现。
+心跳/重试 unavailable、进程存活和阻塞持续时间 unknown；不将文件写入当作存活。
+这是状态概览，不是完整事件流或架构师自然语言分析，原始 canonical 字段仍是英文。
+
+两个定向测试验证查询不写状态/Git、损坏证据显式失败；10 项部署测试通过。实验实际
+dashboard 查询已读到 RB-005 从 planning_evidence 到 implementing，返回机器校验
+通过。部署检查时发现用户新一轮已开始；仅定向提交工具/技能/契约/清单，无研究状态
+写入，不夹带正在进行的改动。提交 809fd34 及后续 observation 字段映射修正。
+已部署文件共 74 项，re-check 通过；未运行持续 watch 或声称后台采集已完成。
+
+后续：在自然停点实测开场耗时；补运行事件采集与存活检查后再升级实时监控能力。
+
+---
+
+## 2026-09-21 — pause/re-start 实测：授权停点通过，冷恢复仍偏重
+
+Architect 实测 pause 1m15s、re-start 3m16s。只读核查旧会话收口与新会话
+01a0c45f-ef2a-7fb2-b598-db04ea9292e3：pause 正确区分同工作区记录恢复、外部数据
+绝对链接、跨机器执行未验证、无远程异地备份；没有重复制造 checkpoint。新会话先
+声明只读，恢复后报告应用目标、官方/我方职责、候选链路、当前实现和验证缺口，明确
+等待架构师，没有新实验或状态写入。HEAD 仍 64e9c5d，工作树干净，14 EV/7 manifests
+未增加；独立 strict validate/reconcile 均通过。正常暂停后的同工作区新会话恢复
+取得正面实测，不代表异常中断或异机执行验收通过。
+
+性能缺口：启动逐段加载 status、完整主循环和 documents 技能及读取指南，重新提取
+原始 DOCX、读取 Docker 说明并多次枚举文件；是冷恢复的过量读取，而非研究执行或
+仿真耗时。约 22:32:21 已报告对账完成，22:33:33 才输出最终简报。应针对无来源变化
+的已建立项目采用 TASK+有效方向+canonical+关键证据入口，只有缺失/矛盾才追原件，
+并减少仅开场恢复所需的协议加载。曾口头误称 make re-reconcile 需授权，随后实际
+执行等价只读 CLI；需明确查询工具可在开场运行。未在本轮修改实验状态或启动下一轮。
+
+---
+
+## 2026-09-21 — 及时修复 RB-004 收口缺陷；具备终端概览基础但非完整事件流
+
+Architect 要求发现即修，并询问退出重启和 terminal dashboard。active.hypothesis_ids
+当前同时承担项目注册表；工具写入现在合并已登记 ID，切换焦点不再注销历史，非法
+类型仍拒绝且不写。新增两个回归，21 项 production-boundary 定向测试通过。长期若需
+精确独立的 block hypothesis scope，应拆分 registry，而非靠不断扩大 ACTIVE 定义。
+
+实验恢复登记依据为 Git 9c5d6fd 的 ACTIVE 与两个已保存 manifest；未将任意 EV 引用
+直接当登记、未改证据。ACTIVE/CURRENT 下一步通过工具改为待架构师决策，集成与云端
+执行分别条件授权。实验 strict validate exit 0，reconcile/check 通过；ledger/runs
+相对 03e2fdc 无 diff。已部署此前待迁移的裸 RE 入口及 Codex workflow helper/启动器，
+72 文件快照通过，实际项目启动器 mock 检查通过；运行中客户端需重开才获得 exclusions。
+
+观测盘点：ACTIVE/CURRENT 当前快照、ledger、run manifest/result/logs、sessions.jsonl
+均持久存在；后者仅 started/rotated，不能冒充持续心跳/重试/阻塞事件。当前适合做只读
+terminal 概览，显示数据来源和更新时间、明确存活未知；不应等待完整 dashboard 才看
+状态，也不能将文件最近写入当作进程存活。本轮未构建 dashboard。后续最小范围可为
+单次查询加定时刷新，展示目标/当前阶段/最近证据/运行状态/等待授权/校验异常，然后
+增补 append-only 运行事件；不重放聊天推断为机器事实。
+
+下一操作：当前实验会话 research-pause → 核对可退出回执 → 退出后 make re-start。
+新会话仅汇报；架构师给下一轮方向后再单独 research-engineering，不默认批准集成。
+
+---
+
+## 2026-09-21 — RB-004 阶段验收：有用的可行性成果，状态收口仍有缺陷
+
+只读检查实验 22:16 最终汇报、控制探针、源码合同、Git 和校验结果：本轮自主完成
+固定镜像源码核对、纠正题包参数误判、三题理想二维闭环收敛，并停在建议本地集成处。
+模拟到达时间 Q01 219.0s / Q05 202.0s / Q07 200.3s，有原始日志支持；不等于官方
+运行或生产可用。当前探针只覆盖理想初始位姿与公开路线，到达即返回，未证明实际
+停车输出、噪声/延迟鲁棒性、prompt 路线识别、Policy 服务或隐藏路线能力。
+
+工作树干净，checkpoint 855b35d / metadata 03e2fdc；reconcile 通过但 validate
+exit 2，旧和本轮早期 EV 的 hypothesis references 失效。汇报称“历史注册问题”不完整：
+与本轮前 272b242 对比，ACTIVE.hypothesis_ids 被替换为最新两项，先前保留的历史项
+消失；不是不可变 EV 被改坏，应修复注册表生命周期或校验作用域，不能掩成纯历史遗留。
+同时 ACTIVE.next_action 再次直写 Promote，而聊天明确等架构指令，持久接续授权仍需
+对齐。prompt 选路线只是候选实现，不能从 Runner 不发送 waypoint 推出唯一必要方案。
+
+判定：自主调查—纠正—执行—有边界结论—阶段暂停已有可取实证；本地应用尚未完成，
+RE 生产可用/完整收口不通过。未改实验状态、未代发授权或启动集成。
+
+---
+
+## 2026-09-21 — 持续跟踪运行可观察性，先事件基础再 dashboard
+
+Architect 指示：“这条可观察方向你继续跟踪，合适的时候要可用”。当前实验已有阶段
+成果但耗时检查期间缺少可见进展；不能仅靠增加聊天心跳解决。将运行事件基础列为
+持续验收方向，不打断正在运行的实验，不据此宣称已有后台监控服务。
+
+后续观察阶段切换、执行起止、进度/心跳、阻塞/重试/恢复、阶段结果、等待架构师/暂停
+的覆盖与缺口。工具产生的运行事实与 AI 记录的研究解释须区分来源，具备时间及
+session/block/run 关联，结果引用证据；复用已有 ACTIVE/manifest/evidence/session
+telemetry，不在未盘点前另造重复状态。事件追加持久化，dashboard 和聊天作为展示端。
+
+落地时机：当前实验自然停点先盘点；扩展长批次、后台执行或无人值守运行前，优先补
+最小可用事件链。验收应无需翻完整聊天即可回答“在做什么、最近推进了什么、卡在哪里
+多久、下一步是什么、是否需要架构师”，并区分存活心跳和真正进展；无心跳不得假装
+仍在运行。此次仅登记跟踪与验收要求，未实现事件采集、调度或 dashboard。
+
+---
+
+## 2026-09-21 — 明确 RE 裸入口；Codex 会话级流程隔离实测
+
+Architect 要求继续修复，同时仍在实验会话测试；本轮只改开发库，不热更新正在使用的
+实验快照。research-engineering 单独调用即可从现有上下文恢复目标、近期方向与范围，
+执行一个有边界的自主工作块；不再逐项索要常规技术选择、不因“应用交付”调用通用
+brainstorming/GSD。新客户端打开仅汇报；后续人工明确调用入口或指派任务才启动工作，
+仍保留 HARD、明确批准停点和成本边界。没有预算时默认最多 30 分钟/2 探针，不是配额。
+
+新增项目启动 helper re_workflow_policy.py：精确枚举常见流程技能、动态发现 GSD 与
+superpowers 名称，通过启动器 skills.config 会话覆盖屏蔽，不改全局用户配置。
+systematic-debugging / using-git-worktrees 保留。模板及安装定向测试已更新。
+10 项定向测试通过、skill 格式通过；真实 Codex app-server skills/list（无模型调用）
+确认 brainstorming 和全部发现的 gsd-* enabled=false，research-engineering 与
+systematic-debugging enabled=true。Claude 开发库原有 workflow block 检查通过，
+5 项未分类警告仍保留，未声称全覆盖任意未来插件。
+
+待部署：实验项目下一次暂停后迁移新主循环技能，以及启动器和新 helper，更新清单与
+升级记录。当前实验会话不受这些修改影响；无需中断用户正在做的旧版行为测试。
+修复遵循 skill-creator 的窄范围指令原则，不另加面向人的补充提示词。
+
+---
+
+## 2026-09-21 — 收口增量检查、恢复范围与接续授权修正
+
+首轮 research-pause 耗时约 3 分钟，确实执行了语义维护与 checkpoint，但将记录入 Git
+扩大为“可移植 checkout 恢复”，忽略官方数据仍是外部绝对符号链接；保存的 next_action
+还默认恢复后采集轨迹。按 Architect 授权修复：pause 正常路径复用当前会话已读且文件
+身份未变化的材料，批量检查本次增量；异常才扩大读取并告知原因；无变化不重复校验，
+任何写入/checkpoint 后仍验证最终状态。超过约一分钟须说明余下工作，不以时限跳过检查。
+
+回执分开说明记录恢复、同工作区接续、跨机器实验条件；Git commit 不是异机备份，
+符号链接不是目标数据。明确下一会话先只读恢复并汇报，等待人工指令，实验建议仅为
+条件性下一步。实验 ACTIVE.next_action 与 CURRENT.next_empirical_action 已通过
+工具修正，无新证据、无新实验、无架构批准。技能显式迁移，旧版备份保留。
+
+技能格式校验、9 项定向安装/迁移测试、两客户端副本一致性检查通过。实验 validate、
+snapshot check 和提交后的 reconcile 通过；相对 c51f3bc 的 ledger/runs 无 diff。
+这仅验证部署和状态修正，不证明模型已遵守新指令，也不证明耗时目标实现。
+下一手工操作为退出旧客户端后 make re-start，验收只读汇报停点；不需重复旧版 pause。
+
+---
+
+## 2026-09-21 — 新会话错误自动推进：启动提示被当作架构师授权
+
+上一条答复承诺启动先汇报，但尚未改代码。检查新实验会话
+01a0c3ea-fd71-7560-b3a1-184735821105：20:23:26 将启动器自动传入的
+“Independently select useful research”当作新授权，撤销 C-20260921-001；
+20:35 用户另发“继续”，但晚于撤销暂停和开始探针，不能倒推此前已有人工授权。
+本轮 RB-003 两次真实读取官方 JSON 的探针及一次红队记录，10 EV/4 manifests，
+checkpoint 0cc4328；validate/reconcile 通过不代表授权处理正确。
+
+新版 status 有改善：说明排名仅目标、无可运行系统与实测成绩、不将攻击阶段当作
+Policy 可见性。但仍以环境维护和接口字段为主线，缺系统职责与方案取舍；仅部分达标。
+environment_id 语义不一致和挑战信号 active 仍在，机械检查未捕捉。research-pause
+尚未实测，不能宣称完整跨会话恢复或收口通过。
+
+已修开发模板与实验启动器、AGENTS、Makefile/help 和操作文档：新会话仅最小只读
+恢复、自动 research-status、停下等待后续人工指令；无状态也不自动 bootstrap，
+不修状态、不写证据、不撤销约束。实验冻结哈希同步，提交 7538428；9 项定向测试
+通过，mock 实际项目启动器核对提示与 full-access 参数通过，re-check/reconcile
+通过。没有运行新模型会话，行为仍待独立验收。这是协议和启动提示修复，不是 OS
+只读隔离；Full Access 保留用于随后获授权的研究。没有改写本轮 canonical state
+或撤回已产生材料。下一建议操作为当前会话单独 research-pause，核对收口后再重开。
+
+---
+
+## 2026-09-21 — 补齐实验项目启动权限配置
+
+用户发现重开仍反复权限审批。原因是上轮只迁移 skills，实验 config 只有 model，旧
+tools/re_codex.py 又硬编码 workspace-write/on-request；仅改 config 也不会生效。
+已同时修改实验配置为 gpt-5.6-sol/high/danger-full-access/never，并让启动器读取配置、
+显示参数；更新冻结哈希和升级记录，单独提交。mock 实际项目启动器验证四个参数通过，
+make re-check 与 reconcile 通过。未启动客户端，已有会话必须重启才应用；没有解除研究
+暂停或修改 canonical state。此次是漏部署配置的修正，不是科学实验进展。
+
+---
+
+## 2026-09-21 — 架构汇报与显式收口技能修复；实验快照显式迁移
+
+已按 Architect 授权继续：research-status 现在要求从 TASK/原始目标出发，解释应用能力、
+官方与我方职责、候选方案取舍、实现与验证差距、下一调查如何影响方向及讨论停点。
+缺失研究不能用虚构架构图填充；状态维护不列作架构师技术决策。新增 research-pause，
+单独调用即可核对与落盘、检查任务存活和证据保存、选择性 checkpoint、再次检查后返回
+“可退出/交接未完成”，明确同工作区恢复与可移植恢复的区别。主循环与连续性文档已接入。
+按 skill-creator 约束保留只读 status 与有界写入 pause 的分工，不添加重复交接状态源。
+
+新增 tools/upgrade_re_skills.py，仅显式更新 Codex skills，默认预览；拒绝快照漂移、
+未归属目标覆盖、符号链接和技能删除。备份旧清单与变更前文件，记录每次迁移来源与哈希。
+文件复制不是整体原子事务：中断会保留可检测漂移和备份，不能宣称自动回滚；这是临时
+开发库迁移入口，不是已解决通用安装分发。9 项定向安装/迁移测试通过，3 个修改技能的
+格式检查通过，根目录两客户端生成副本一致；未跑全套回归，未作模型行为通过声明。
+
+实验项目 esa-study-independent-01 在原会话仍停于 19:39 报告时完成显式迁移，提交
+3a01147。70 → 71 个冻结文件，仅 6 个 skill/reference 文件变更；工具运行时、启动器、
+配置未替换。旧版备份在 .re-install-history/e9f1a650c75f74e1de38ea3c11160c744899b1242c3b66be18bf91159dafb15f。
+升级前后 .research 内 28 个文件逐一 SHA256 一致；没有修正其研究状态或解除约束。
+提交后 snapshot check / validate / reconcile 均通过，剩余 dirty 仅原 ACTIVE stamp。
+开发库已有的其他改动保留未提交。本轮未发送实验会话指令，未发起模型实验。
+
+待真实会话验收：新客户端仅从仓库恢复，遵守暂停；research-status 不附加提示词能否给出
+应用与架构判断；research-pause 能否识别现存语义矛盾、不虚报可退出，并在授权范围内收口；
+下一次新会话是否可接续。技能约束不是新的机械完整性交接门禁，以上尚不能记为通过。
+
+---
+
+## 2026-09-21 — research-status 实测：架构师决策支持未达标
+
+Architect 单独调用 research-status 后反馈：“还是偏底层细节，架构及应用层面的信息不足以支撑架构师决策”。
+只读核对独立会话 19:39 的最终报告及 docs/TASK.md：报告准确披露纠偏、证据不足和环境 ID
+不一致，但主体仍是内部 ID、成熟度、findings、交接 capsule 和 YAML。未解释应用任务与
+成功标准、官方系统与我方职责边界、候选方案的应用收益与代价，以及现有实现距离可验证
+任务能力的差距。TASK 的前 3 / 前 10 目标及“深入调查 SOTA 后再讨论具体实现”的停点
+没有成为汇报主线；一般状态维护被列入“需要架构师处理”，掩盖真正需要人的方向判断。
+
+验收结论：只读披露和尊重暂停有体现；架构师决策支持未达标。这次运行的是实验项目冻结
+旧技能，不是已修改开发版的回归测试；开发版仅缩短和去术语也不足以证明解决了内容层级。
+下一步修正应让默认报告回答：应用要达到什么能力、系统如何分工、哪些方案仍待比较、
+实际实现与验证到哪、下一项研究如何影响方向判断。缺失的架构调查必须明说未完成，
+不能靠重排状态字段或补一张想象的架构图冒充结论。常规记录修复属于 AI 后续接续工作，
+不作为架构师技术决策；不要求用户给 skill 附加长提示词。
+
+本轮只记录验收发现，未修改实验文件、解除暂停或向实验会话发送指令。
+
+---
+
+## 2026-09-21 — 架构师入口必须在会话内；纠偏暂停只读验收
+
+Architect 明确：日常通过会话内 skills/自然语言看状态、核对证据、干预、继续研究，
+不要求到会话外执行命令。Makefile 仅用于安装、启动、诊断。后续重点验收这些操作；
+需要人在实验会话输入时，由开发验证会话提供明确文本，不能暗中代发或伪称已有独立
+干预 skill（目前是 research-engineering 内的 architect-signals 协议）。
+
+实验会话纠偏已停下，HEAD 38a6e36，reconcile exit 0；旧 5 条 EV 与纠偏前对比无修改；
+4 份 raw 日志已入 Git。ARCHITECT 保留了用户原始纠偏和“纠正后停下不新增实验”的约束；
+ACTIVE 等待架构师评判；两个旧 findings 被替代，CURRENT 撤回架构倾向并将 2/6
+降为未校准手写规则产物。本轮没有新增 run manifest。可确认“接受纠偏并落实”，
+不能据此判独立首轮成功或新会话恢复通过。
+
+残留风险：ENVIRONMENT.available.data 仍有“empty”旧条目；limitations 仍列旧
+ENV_BLOCKED，另追加 supersedes 更正。CURRENT 已正确，但当前环境列表并未干净地
+区分现行与历史，reconcile 未报出语义矛盾。下一次接续前应核对有效环境状态，而不是
+删除旧 evidence。建议下一手工操作是会话内 research-status 的只读架构汇报验收，
+不提前批准架构、不自动解除暂停约束。实验工作区本轮只读，未发送会话消息。
+
+---
+
+## 2026-09-21 — 优先保证架构师暂停后的四项操作
+
+Architect 要求：会话暂停时能明确掌握项目架构进展、判断方向、发出 RE 干预，
+再由 AI 完成实验验证与代码落实；重点保证这些常用工具符合设计要求。
+
+产品验收优先级调整为：看进展 → 核对依据 → 发干预 → 按边界继续并回报。
+现有入口分别为 research-status / make re-status；experiment-review、scenario-redteam
+及底层 run/evidence/code 检查；architect-signals 协议与自然语言输入；research-engineering
+及 make re-start。后两者不等于已完成用户操作闭环：需验证信号确实落盘、范围不被扩大、
+新会话遵守，以及暂停原因/恢复授权明确。没有新增或声称已有 re-steer/re-review 命令。
+
+优先验收应观察实际行为而非命令退出码：架构师无需读内部状态即可知道架构哪些已决定、
+哪些只是候选、哪些已有实现/验证；关键主张能连到原始观察和实际代码；干预被准确理解
+并落实；AI 在约定边界内自主推进，返回针对该干预的结果，而不是重复一般状态摘要。
+工具 status/synthesize 的机械摘要不能代替架构判断；工具 validate/reconcile 不能证明
+实验有效或方案正确。优先补这四项实际使用质量，不以新增命令数量作为进展。
+
+---
+
+## 2026-09-21 — 已证实的首轮误判：先修协议，保留纠偏观察
+
+独立会话最终报告仍误称官方数据为空。只读核查 `data/question_to_player/` 实为
+可访问的符号链接目标，有 README、发布清单、assets、task；原会话用未跟随链接的
+find 输出作了不存在判断。其 interface_observability 探针只计算手写常量集合，
+不读取任务数据或测量 detector；2/6 不能独立证明假设或架构优劣。reconcile clean
+未发现这两类科学问题。用户已自行向原会话发送纠偏；本会话不代写其研究状态。
+
+本轮仅修 RE 开发版：bootstrap 在关键不存在/不可用判断前要求直接复核入口、链接、
+权限和实际目标，并保存检查依据；evaluation-design 要求追踪数字来自实际观察还是
+手写假设，禁止将重复计算当独立验证；主循环在改变方向前做针对性复核，遵守 TASK
+明确的调查后讨论停点；status 必须说明关键结论的依据、局限及纠正影响。
+
+这属于已知失败的协议修正，不是科学判断的自动门禁；尚无独立新会话验证修复效果。
+后续验收：用包含真实数据链接的不同启动材料检查是否正确发现数据；用手写规则
+矩阵检查是否拒绝从计算一致性推出检测能力；报告应让架构师无需读代码也看清依据。
+实验项目的冻结版本保持不变，以继续观察收到人工纠偏后的恢复行为。
+
+---
+
+## 2026-09-21 — Architect 要求汇报讲人话、讲重点
+
+原始指令：“我长期用 codex/claude code 发现，AI 的汇报黑话极多，很多是让人完全看不懂的，RE 应该能控制向架构师汇报时讲人话讲重点”
+
+已修改根契约与新项目契约模板：先讲实际结果、影响、未验证内容、下一步和需要人的决策；
+必要术语首次解释；事实、推断、建议分开；错误直说，不用协议术语掩饰。
+`research-status` 从默认 15 项和每次必附 YAML 改为简短人读汇报，交接/审计时才展开
+机器状态；原有只读核对与证据可追溯要求保留。bootstrap/main loop 同步引用此规则。
+仅更新 RE 开发库及其客户端生成副本，不更新正在运行的独立 ESA 项目快照。
+这些是输出约束，不声称已由真实独立会话证明可读性改善；后续观察报告是否能让人
+直接理解“发生什么、意味着什么、要决定什么”，不能只用字数或禁词数判通过。
+
+---
+
+## 2026-09-21 — 独立会话已启动；high / Full Access 配置要求
+
+用户手动 `make re-start` 已启动独立会话 `01a0c39e-504b-7a53-81d8-c51d454967c7`。
+只读检查 rollout turn_context：`gpt-5.6-sol`、`medium`、`workspace-write`、
+`on-request`。已开始创建 `.research`。没有向该会话发送研究提示或操作审批。
+
+Architect 要求 high 和 Full Access，避免反复权限审批。开发版启动模板改为读取项目
+`model_reasoning_effort`、`sandbox_mode`、`approval_policy`；新安装默认 high、
+danger-full-access、never。Full Access 不取消研究的付费/提交/数据只读边界，
+但这些边界不再有文件系统写沙箱保护。不承诺它消除策略性澄清或研究协议暂停。
+
+当前实验仍用旧冻结快照，未热更新、未改其配置/lock/研究文件。当前客户端可通过
+`/model`、`/permissions` 调整；运行结束后的显式版本迁移再同步启动器与快照身份。
+已定位会话日志可用于只读观察；CLI 有 queue 入口，但未实测发送，不宣称已获得终端控制。
+
+---
+
+## 2026-09-21 — Architect 部署要求：正式安装需提供通用命令
+
+原始指令：“现在临时用这个 RE 开发库路径的命令，以后安装部署 RE 的时候要考虑通用命令，这个要记一下”
+
+当前允许临时使用本机 RE 开发库绝对路径执行 `tools/init_re_project.py --target .`。
+正式安装/分发时必须提供确定、可直接执行、不依赖开发库位置或个人目录的通用命令；
+不能把 `/path/to/...` 占位符当作用户可执行入口。项目初始化后继续以根 Makefile
+承载常用操作。具体包名、分发渠道与命令名尚未决定，本指令不要求立即实现或发布。
+
+触发点：设计 RE 正式安装、打包或发布流程时，将此项纳入验收，并在没有 RE 开发库
+的环境中验证安装及新项目初始化。当前绝对路径入口不算满足该正式部署要求。
+
+---
+
+## 2026-09-21 — 独立 ESA 项目 RE 部署入口；纠正前轮验收口径
+
+Architect 指出前轮由 RE 开发者所在的同一 Codex 会话执行，不是独立研究 agent。
+前轮原始探针结果有效，但应归类为开发者辅助集成试跑，不能证明自主首轮或跨会话恢复。
+已授权独立 Codex 客户端使用现有 ChatGPT 订阅，项目默认 `gpt-5.6-sol`。
+
+用户已在 `../esa-study-independent-01` 完成原始输入、Git/uv 准备，本轮仅部署 RE：
+新增可复用 `tools/init_re_project.py` 与 `templates/project-install/`，固定复制 tools、
+templates 和 8 个 Codex skills，以 `re-install.json` 保存实际字节哈希（源有未提交修复）。
+不带旧实验/研究状态，不覆盖用户文件，不改全局配置；重复安装只检查快照，不追随源更新。
+项目 Makefile 提供 re-init/check/start/status/state/validate/reconcile/cli。
+`re-start` 新启交互 Codex，读取项目模型并限定 ChatGPT 认证；bootstrap 留给独立会话。
+
+验证：`uv run --python 3.12 python tools/test_init_re_project.py` 5 项通过；真实项目
+re-init/check/help 和本地 researchlog help 通过；re-state 明确返回 STATE_ABSENT。
+临时项目验证 vendored 工具可 init/validate，未在独立 ESA 工作区生成 `.research`。
+无模型调用、无官方提交。uv 首次运行创建 `.venv` 和 `uv.lock`。
+
+仍待：正式自动验收的 supervisor、transcript 留存、有效上下文审计（全局 skills/hooks/
+memory 等）；独立首轮与新会话恢复均未执行。新进程/本地 skills 不能宣称完全上下文隔离。
+交互入口的 block 限制是协议约束，不是硬超时；不把部署校验通过当生产可用。
+
+---
+
+## 2026-09-21 — esa-study 已获准全新重启，首轮 live evidence 闭环完成
+
+Architect 明确：“按全新状态重启，esa项目的启动点文件数据都准备好了”。
+已执行 research-bootstrap → research-engineering；原 ESA HEAD `d0f4eea`
+保留在 `archive/pre-restart-20260921`，新分支 `research/esa-restart-20260921`。
+补 `AGENTS.md` 与本地 `tools/re` 入口，保持原数据/外部项目只读；旧结论不进入新 ledger。
+
+新 ESA ledger 四条记录：输入审阅 `EV-20260921T095345Z-08b7`；发布包 E1
+`EV-20260921T095531Z-39f4`；teacher header E1 `EV-20260921T095828Z-96b1`；
+首轮机制来源研究 E0 `EV-20260921T100005Z-29ff`。2 manifests、2 findings，validate/reconcile 通过。
+metadata 207 项通过、Q17/Q21 内部索引不一致得到 live 重现；新增发现：24 tasks 共用一个 teacher，
+action/state 都为 (177,7)，不是 Policy 的 10D/25D，不能据此直接 padding 或训练。
+
+`research-search` 比较 openpi、GR00T、runtime safeguarding、SafeRL 家族的前提；
+`evaluation-design` 限定 static surface 不承担任务分数；`experiment-review` 对照两个 teacher
+假设排除直接透传。尚未选架构、运行模型或官方仿真，也未做 fresh-agent 恢复验收。
+下一步在 ESA 新 block 追踪官方消息构造、state/action 语义和 safety event/干预点，继续 SOTA 调查。
+具体接续以 `../esa-study/.research/CURRENT.md` 为准，人读摘要 `../esa-study/docs/RESEARCH_START.md`。
+
+本轮新暴露的 RE 边界：`submission_budget=0` 会让纯本地 reconcile 报 BOUNDARIES_BUDGET_LOW；
+未知配额改留 null，HARD 显式禁止未经授权提交。没有把 null 当无限授权，也没修改全局预算语义。
+输出诊断排除了另一个误报：终端合并 stdout/stderr 不是 run --json 污染，代码已把 child 输出导向 stderr。
+RE 实现仍是上一轮未提交修复版本，ESA manifests 钉住 runtime digest；本轮无新 RE 实现变更。
+
+---
+
+## 2026-09-21 — esa-study 生产验证：本地 E1 闭环通过，live 恢复待确认
+
+Architect 指令：“全面理解分析本项目设计和代码实现，目标完成 RE 在 esa-study 的实验推进调试验证 RE 的生产可用。”
+
+真实工作区检查发现 esa-study 的旧 `.research/` 已暂存删除、磁盘上存在空白新状态，
+`AGENTS.md` 删除且新增的是 `AGENETS.md`，`CLAUDE.md` 因此成为悬空链接。
+本轮尚未修改该工作区；已询问以新状态重启还是恢复旧实验，保留全部现存更改。
+该状态下 RE `reconcile` 和 `validate` 均返回 clean，不能据此宣称生产可用。
+
+新增定向 CLI/Git 复现 `tools/researchlog/tests/test_production_boundaries.py`。
+修复前已复现：init 的 epoch 不落 ACTIVE；merge 重写 Git capsule/重复 session、
+绕过 newer-schema guard、遮蔽 legacy state；record 提交无关暂存内容；untracked
+代码内容不参与 fingerprint；legacy state 污染 code identity；reconcile 漏报分支、
+未声明路径和已暂存的证据删除。临时目录路径规范化的测试自身错误已修正并复跑。
+进一步复现并修复：clean commit 的代码变化被 compare 漏判、checkpoint 提交无关暂存内容、
+telemetry 负耗时及同秒 rotation 错分 session。新 EV 加可选 session_epoch，旧记录保留时间回退。
+验证：新增 **19 项**边界测试 + **69 项**相关既有测试通过；未跑全量套件。
+
+真实 ESA 数据已在隔离 Git repo 跑完 baseline / session replay / action-dim 负对照；
+24 tasks、3 scenes、207 项 metadata 校验通过；发现 Q17/Q21 内部 attack profile 索引哈希不一致。
+负对照从 2 项错误增为 26；重放 JSON 一致，compare COMPARABLE，validate/reconcile clean。
+最终 artifact：`outputs/esa-validation-20260921-05/`（本地忽略目录，早期 -01 至 -04 均保留）。
+完整分析、EV IDs、runtime digest、限制和接续动作见 [ESA_PRODUCTION_READINESS.md](ESA_PRODUCTION_READINESS.md)。
+
+当前仍有效的风险：已结束的 EXP ID 复用会覆盖 manifest/log；canonical markdown 尚未统一原子写；
+两项 telemetry KPI 未实现；未做 fresh-agent 恢复和官方 GPU Runner 行为验收。
+这些不等于策略失败，也不能被本轮 E1 通过覆盖。下一步先确认 esa-study 有意重置还是恢复旧实验，
+然后在其 live 状态中继续；目前未改动该工作区。无模型调用、付费计算、官方提交或 push。
+收尾只读复核：修复版 reconcile 对真实 esa-study 返回 exit 2，报告未声明路径与两条
+EVIDENCE_REMOVED_FROM_GIT，不再错误声称 clean。RE 本轮改动尚未提交。
+
+---
+
 ## 2026-09-19 — Handoff:本 session 收工,状态写回磁盘
 
 Architect "handoff" — 当前 session 不再继续,把控制权交给下一 session / 下一 Architect 决策。
